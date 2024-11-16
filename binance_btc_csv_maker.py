@@ -29,7 +29,20 @@ INTERVAL_TIME = {
     "1M": 2592000000000
 }
 CURRENT_TIME = int(time() * 1000)
-COLUMNS = ['time', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore']
+COLUMNS = [
+    'time', # k线开盘时间
+    'open', # 开盘价
+    'high', # 最高价
+    'low', # 最低价
+    'close', # 收盘价
+    'volume', # 成交量
+    'close_time', # k线收盘时间
+    'transaction_volume', # 成交额 
+    'transaction_number', # 成交笔数
+    'active_buying_volume', # 主动买入成交量
+    'active_buying_transaction_volume', # 主动买入成交额
+    'ignore' # 忽略
+]
 SAVE_TIME = 5 # 每5次数据采集保存1次
 # 模式枚举
 class Mode(Enum):
