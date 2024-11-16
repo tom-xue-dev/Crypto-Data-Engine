@@ -133,7 +133,7 @@ def make_csv(interval, mode=Mode.CREATE):
         print(f"模式: UPDATE - 找到文件 {file_name}，从最新一个数据的时间戳: {start_timestamp} 递增 {INTERVAL_TIME[interval]} 后请求")
     try:
         while True:
-            if end_time - INTERVAL_TIME[interval] > CURRENT_TIME:
+            if mode == Mode.UPDATE and end_time - INTERVAL_TIME[interval] > CURRENT_TIME:
                 if new_data != []:
                     _save_new_data(new_data, file_name)
                 print(f"数据已最新")
