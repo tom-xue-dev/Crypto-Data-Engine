@@ -1,4 +1,6 @@
 import pandas as pd
+import json
+import websocket
 from dotenv import load_dotenv
 load_dotenv() # read from local .env file
 
@@ -16,7 +18,8 @@ client = Client(api_key, api_secret, testnet=True)
 #client = Client(api_key, api_secret)
 
 buy_order = client.create_test_order(symbol='BTCUSDT',
-                                     side='BUY',
-                                     type='MARKET',
-                                     quantity=0.05
-                                    )
+                                      side='BUY',
+                                      type='MARKET',
+                                      quantity=0.05
+                                     )
+
