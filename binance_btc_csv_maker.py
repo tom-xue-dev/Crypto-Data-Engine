@@ -131,6 +131,9 @@ def make_csv(interval, mode=Mode.CREATE):
         print(f"模式: CONTINUE - 找到文件 {file_name}，从最后一个数据的时间戳: {start_timestamp} 递减 {INTERVAL_TIME[interval]} 后请求")
     elif mode == Mode.UPDATE and start_timestamp:
         print(f"模式: UPDATE - 找到文件 {file_name}，从最新一个数据的时间戳: {start_timestamp} 递增 {INTERVAL_TIME[interval]} 后请求")
+    else:
+        print(f"未找到文件{file_name}, 请先使用 CREATE 模式创建CSV")
+        return   
     try:
         while True:
             if mode == Mode.UPDATE and end_time - INTERVAL_TIME[interval] > CURRENT_TIME:
