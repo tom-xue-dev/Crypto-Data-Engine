@@ -141,6 +141,8 @@ def make_csv(interval, mode=Mode.CREATE):
             print(f"获取数据，endTime: {utils.timestamp_to_datetime(end_time)}")
             data = _get_klines_data(end_time, interval)
             if not data:
+                if new_data != []:
+                    _save_new_data(new_data, file_name)
                 print("没有更多数据，停止请求。")
                 break
             new_data.extend(data)
