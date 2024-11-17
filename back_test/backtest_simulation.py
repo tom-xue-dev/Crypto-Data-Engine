@@ -1,7 +1,10 @@
+import numpy as np
+
 from Account import Account
 from get_btc_info import get_btc_data
 import strategy
 import matplotlib.pyplot as plt
+
 
 def backtest(dataset, initial_cash=10000):
     """
@@ -20,7 +23,7 @@ def backtest(dataset, initial_cash=10000):
     buy_price = 0  # 记录买入价格（用于计算持仓收益）
     dataset = dataset.sort_index(ascending=False)
     for i in range(len(dataset)):
-        price = dataset['close'].iloc[i]*1.001
+        price = dataset['close'].iloc[i] * 1.001
         signal = dataset['signal'].iloc[i]
 
         # 买入信号：用所有现金买入资产
@@ -59,7 +62,6 @@ def backtest(dataset, initial_cash=10000):
 def plot_with_signals(dataset, length=200):
     """
     绘制 close_price，并标记买入和卖出信号，横轴为 time。
-
     Parameters:
         dataset: pd.DataFrame
             包含 'time'、'close' 和 'signal' 列的数据集。
@@ -68,39 +70,29 @@ def plot_with_signals(dataset, length=200):
     """
     # 确保 length 不超过数据集的长度
     length = min(length, len(dataset))
-
-    # 截取数据范围
+    # create the plot
     data_subset = dataset.iloc[:length]
+    fig, ax = plt.subplots(figsize=(16, 8))
+    ax.plot(data_subset['time'], data_subset['close'], label='Close Price')
 
-    # 设置图表大小（限制最大屏幕显示）
-    plt.figure(figsize=(16, 8))  # 宽16英寸，高8英寸
-
-    # 绘制 close_price，横轴为 time
-    plt.plot(data_subset['time'], data_subset['close'], label='Close Price')
-
-    # 获取买入和卖出信号的索引
     buy_signals = data_subset[data_subset['signal'] == 1]
     sell_signals = data_subset[data_subset['signal'] == -1]
 
-    # 在图上添加买入信号（绿色点）
-    plt.scatter(buy_signals['time'], buy_signals['close'], color='green', marker='^', label='Buy Signal', s=100)
+    # add buy and sell signal in the picture
+    ax.scatter(buy_signals['time'], buy_signals['close'], color='green', marker='^', label='Buy Signal', s=100)
+    ax.scatter(sell_signals['time'], sell_signals['close'], color='red', marker='v', label='Sell Signal', s=100)
+    # set labels and the x axes.
+    ax.xaxis.set_ticks(np.arange(0, length, 50))
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Close Price")
+    ax.set_title("Close Price with Buy/Sell Signals")
 
-    # 在图上添加卖出信号（红色点）
-    plt.scatter(sell_signals['time'], sell_signals['close'], color='red', marker='v', label='Sell Signal', s=100)
-
-    # 添加轴标签和标题
-    plt.xlabel("Time")
-    plt.ylabel("Close Price")
-    plt.title("Close Price with Buy/Sell Signals")
-
-    # 添加图例
-    plt.legend()
-
-    # 显示图形
-    plt.tight_layout()  # 优化布局，防止文字重叠
+    ax.legend()
+    plt.tight_layout()
     plt.show()
 
+
 df = get_btc_data("15m")
-df = strategy.double_moving_average_strategy(3,15,df)
-backtest(df)
+df = strategy.double_moving_average_strategy(3, 15, df)
+print(backtest(df))
 plot_with_signals(df, length=2000)
