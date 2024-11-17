@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 from Account import Account
 from get_btc_info import get_btc_data
@@ -20,20 +21,24 @@ def backtest(dataset, initial_cash=10000):
     cash = initial_cash  # 初始现金
     position = 0  # 初始持仓
     portfolio_value = []  # 每个时间点的总资产价值
+    date_time = []
     buy_price = 0  # 记录买入价格（用于计算持仓收益）
     dataset = dataset.sort_index(ascending=False)
     for i in range(len(dataset)):
-        price = dataset['close'].iloc[i] * 1.001
+        date_time.append(dataset['time'].iloc[i])
+        price = dataset['close'].iloc[i]
         signal = dataset['signal'].iloc[i]
 
         # 买入信号：用所有现金买入资产
         if signal == 1 and cash > 0:
+            price *= 1.001 # 增加千分之1的手续费，相当于提高千分之一的价格
             position = cash / price  # 买入的数量
             cash = 0
             buy_price = price
             print(f"Buy at {price:.2f}, position: {position:.6f}")
         # 卖出信号：卖出所有持仓，转换为现金
         elif signal == -1 and position > 0:
+            price = price * 0.999 #增加千分之一手续费，相当于减少千分之一价格
             cash = position * price  # 卖出的现金
             position = 0
             print(f"Sell at {price:.2f}, cash: {cash:.2f}")
@@ -49,14 +54,14 @@ def backtest(dataset, initial_cash=10000):
     #     (max(portfolio_value) - min(portfolio_value)) / max(portfolio_value) * 100
     #     for i in range(1, len(portfolio_value))
     # )
-
+    result_frame = pd.DataFrame({'value': portfolio_value,'time':date_time})
     # 返回回测结果
     results = {
         "Initial Cash": initial_cash,
         "Final Portfolio Value": final_value,
         "Total Return (%)": total_return,
     }
-    return results
+    return result_frame
 
 
 def plot_with_signals(dataset, length=200):
@@ -91,8 +96,22 @@ def plot_with_signals(dataset, length=200):
     plt.tight_layout()
     plt.show()
 
+def plot_portfolio_value(dataset,length=200):
+    """
+    plot the portfolio value,x-axis is time and y-axis is the value
+    :param dataset: the data that need to be plotted, include time and value column
+    :return: None
+    """
+    fig, ax = plt.subplots(figsize=(16, 8))
+    length = min(len(dataset),length)
+    data_subset = dataset.iloc[:length]
+    ax.plot(data_subset['time'], data_subset['value'], label='Portfolio value')
+    ax.xaxis.set_ticks(np.arange(0, length, 500))
+    plt.show()
 
 df = get_btc_data("15m")
 df = strategy.double_moving_average_strategy(3, 15, df)
-print(backtest(df))
-plot_with_signals(df, length=2000)
+data = backtest(df)
+print(data)
+# plot_with_signals(df, length=2000)
+plot_portfolio_value(data,length=len(data))
