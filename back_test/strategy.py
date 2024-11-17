@@ -39,7 +39,7 @@ def double_moving_average_strategy(short, long, dataset):
 
     # 生成交易信号
     dataset['signal'] = 0  # 初始化信号为 0（保持）
-    dataset.loc[dataset[short_ma_col] > dataset[long_ma_col], 'signal'] = -1  # 短期均线高于长期均线 -> 买入
-    dataset.loc[dataset[short_ma_col] < dataset[long_ma_col], 'signal'] = 1  # 短期均线低于长期均线 -> 卖出
+    dataset.loc[dataset[short_ma_col] > dataset[long_ma_col], 'signal'] = 1  # 短期均线高于长期均线 -> 买入
+    dataset.loc[dataset[short_ma_col] < dataset[long_ma_col], 'signal'] = -1  # 短期均线低于长期均线 -> 卖出
 
     return dataset

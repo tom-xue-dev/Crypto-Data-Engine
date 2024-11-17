@@ -23,7 +23,7 @@ def backtest(dataset, initial_cash=10000):
     portfolio_value = []  # 每个时间点的总资产价值
     date_time = []
     buy_price = 0  # 记录买入价格（用于计算持仓收益）
-    dataset = dataset.sort_index(ascending=False)
+
     for i in range(len(dataset)):
         date_time.append(dataset['time'].iloc[i])
         price = dataset['close'].iloc[i]
@@ -96,22 +96,25 @@ def plot_with_signals(dataset, length=200):
     plt.tight_layout()
     plt.show()
 
-def plot_portfolio_value(dataset,length=200):
+def plot_portfolio_value(original_data,portfolio_data,length=200):
     """
-    plot the portfolio value,x-axis is time and y-axis is the value
+    plot the portfolio value with benchmark,x-axis is time and y-axis is the value
     :param dataset: the data that need to be plotted, include time and value column
     :return: None
     """
     fig, ax = plt.subplots(figsize=(16, 8))
-    length = min(len(dataset),length)
-    data_subset = dataset.iloc[:length]
-    ax.plot(data_subset['time'], data_subset['value'], label='Portfolio value')
+    length = min(len(portfolio_data),length)
+    pdata_subset = portfolio_data.iloc[:length]
+    odata_subset = original_data.iloc[:length]
+    ax.plot(pdata_subset['time'], pdata_subset['value'], label='Portfolio Value', c="blue")
+    ax.plot(pdata_subset['time'], odata_subset['close'], label='benchmark', c="red")
     ax.xaxis.set_ticks(np.arange(0, length, 500))
     plt.show()
 
 df = get_btc_data("15m")
+df = df.sort_index(ascending=False)#重新排序
 df = strategy.double_moving_average_strategy(3, 15, df)
 data = backtest(df)
 print(data)
 # plot_with_signals(df, length=2000)
-plot_portfolio_value(data,length=len(data))
+plot_portfolio_value(df,data,length=len(df))
