@@ -1,3 +1,5 @@
+import pandas as pd
+
 from Account import Account
 from get_btc_info import get_btc_data
 
@@ -41,8 +43,40 @@ def double_moving_average_strategy(short, long, dataset):
     dataset['signal'] = 0  # 初始化信号为 0（保持）
     dataset.loc[dataset[short_ma_col] > dataset[long_ma_col], 'signal'] = 1  # 短期均线高于长期均线 -> 买入
     dataset.loc[dataset[short_ma_col] < dataset[long_ma_col], 'signal'] = -1  # 短期均线低于长期均线 -> 卖出
-
     return dataset
-df = get_btc_data("15m")
-df = calculate_MA(df,20)
-print(df.tail(10))
+def arbitrage_trading_trategy(dataset1,dataset2):
+    """
+
+    :param dataset1:
+    :param dataset2:
+    :return:
+    """
+    dataset1['time'] = pd.to_datetime(dataset1['time'])
+    dataset2['time'] = pd.to_datetime(dataset2['time'])
+
+    # 合并两个 DataFrame，按 'time' 对齐
+    merged = pd.merge(dataset1, dataset2, on='time', suffixes=('_df1', '_df2'))
+    # 计算差值
+    merged['open_diff'] = merged['open_df1'] - merged['open_df2']
+    merged['close_diff'] = merged['close_df1'] - merged['close_df2']
+    merged['high_diff'] = merged['high_df1'] - merged['high_df2']
+    merged['low_diff'] = merged['low_df1'] - merged['low_df2']
+    # initialize signal column
+    merged['signal'] = 0
+    # Condition 1: Arbitrage opportunity for opening long on A and short on B
+    merged.loc[
+        (merged['open_diff'] > 0) & (merged['open_diff'] > merged['close_df1'] * 0.004),
+        'signal'
+    ] = -1
+
+    # Condition 2: Arbitrage opportunity for opening short on A and long on B
+    merged.loc[
+        (merged['open_diff'] < 0) & (merged['open_diff'].abs() > merged['close_df1'] * 0.004),
+        'signal'
+    ] = 1
+    # condition 3,平仓
+    merged.loc[merged['open_diff'].abs() < 10, 'signal'] = 2
+    return merged
+# df = get_btc_data("15m")
+# df = calculate_MA(df,20)
+# print(df.tail(10))
