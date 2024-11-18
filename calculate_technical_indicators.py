@@ -244,5 +244,6 @@ data = pd.read_csv(input_csv)
 updated_dataset = calculate_obv_sma_in_memory(data)
 # Display the updated dataset
 #print(updated_dataset[['time','K','D','J']].tail(20))
-print(updated_dataset.head(20))
+print(updated_dataset[updated_dataset["time"] == '2017-09-17 01:15:00'])
+
 
