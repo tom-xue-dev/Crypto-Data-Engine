@@ -18,7 +18,6 @@ def calculate_sma_in_memory(data, period):
         raise ValueError("The CSV file does not contain the 'close' column required for MA calculation.")
 
     # Ensure the data is sorted by 'time' column
-    data = data.sort_values('time')
 
     # Calculate the moving average (MA)
     column_name = f'MA_{period}'
@@ -27,41 +26,40 @@ def calculate_sma_in_memory(data, period):
     # Return the updated dataset
     return data
 
-def calculate_rsi_in_memory(data, period):
+
+def calculate_rsi_in_memory(data, period=14):
     """
-    Calculate RSI for a dataset with descending timestamp order.
+    计算数据集中 'close' 列的RSI值，使用简单移动平均（SMA）方法，并将结果添加到数据集的新列。
 
-    Args:
-        data (pd.DataFrame): Dataset in descending timestamp order with 'time' and 'close' columns.
-        period (int): RSI calculation period (default is 14).
+    参数:
+        data (pd.DataFrame): 包含 'close' 列的DataFrame。
+        period (int): RSI计算周期，默认14。
 
-    Returns:
-        pd.DataFrame: Dataset with an added 'RSI' column in descending timestamp order.
+    返回:
+        pd.DataFrame: 更新后的DataFrame，包含新增的 'RSI' 列。
     """
-    # Ensure the timestamps are sorted in ascending order for correct RSI calculation
-    data = data.sort_values(by='time', ascending=True)
+    # 定位 'close' 列
+    close = data["close"]
 
-    # Calculate price changes
-    delta = data['close'].diff()
+    # 计算价格变化
+    change = close.diff()
 
-    # Separate upward and downward changes
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
+    # 分别计算涨幅和跌幅
+    gain = change.apply(lambda x: x if x > 0 else 0)
+    loss = change.apply(lambda x: -x if x < 0 else 0)
 
-    # Calculate average gain and loss using rolling mean
-    avg_gain = gain.rolling(window=period, min_periods=1).mean()
-    avg_loss = loss.rolling(window=period, min_periods=1).mean()
+    # 计算简单移动平均
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
 
-    # Calculate RS (Relative Strength) and RSI
+    # 计算RS值
     rs = avg_gain / avg_loss
-    data['RSI'] = 100 - (100 / (1 + rs))
 
-    # Restore the original descending timestamp order
-    data = data.sort_values(by='time', ascending=False)
+    # 计算RSI值
+    data["RSI"] = 100 - (100 / (1 + rs))
 
+    # 返回更新后的数据集
     return data
-
-
 
 
 def calculate_macd_in_memory(data, short_period, long_period, signal_period):
@@ -97,9 +95,6 @@ def calculate_obv_sma_in_memory(data, sma_period=9):
     返回：
         pd.DataFrame: 包含 OBV 和 OBV_SMA 列的更新数据集，恢复为降序排列。
     """
-    # 将数据按时间戳升序排列
-    data = data.sort_values(by='time', ascending=True).reset_index(drop=True)
-
     # 计算 OBV 的方向：1 表示上涨，-1 表示下跌，0 表示持平
     obv_direction = data['close'].diff().apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
 
@@ -108,9 +103,6 @@ def calculate_obv_sma_in_memory(data, sma_period=9):
 
     # 计算 OBV 的简单移动平均
     data['OBV_SMA'] = data['OBV'].rolling(window=sma_period).mean()
-
-    # 恢复为时间戳降序排列
-    data = data.sort_values(by='time', ascending=False).reset_index(drop=True)
 
     return data
 
@@ -167,7 +159,6 @@ def calculate_boll_in_memory(data, period=20, bandwidth=2):
     Returns:
         pd.DataFrame: A DataFrame with added Bollinger Bands columns.
     """
-    data = data.sort_values('time')
     if 'close' not in data.columns:
         raise ValueError("Input data must contain a 'close' column.")
 
@@ -175,7 +166,7 @@ def calculate_boll_in_memory(data, period=20, bandwidth=2):
     data['BOLL_Middle'] = data['close'].rolling(window=period).mean()
 
     # Calculate standard deviation for the same period
-    data['BOLL_Std'] = data['close'].rolling(window=period).std()
+    data['BOLL_Std'] = data['close'].rolling(window=period).apply(lambda x: x.std(ddof=0), raw=True)
 
     # Calculate upper and lower bands
     data['BOLL_Upper'] = data['BOLL_Middle'] + bandwidth * data['BOLL_Std']
@@ -189,18 +180,35 @@ def calculate_boll_in_memory(data, period=20, bandwidth=2):
 
 
 
-def calculate_vwap_in_memory(data):
+def calculate_vwap_in_memory(data, period=14):
     """
-    Calculate Volume Weighted Average Price (VWAP) and add it to the dataset.
+    Calculate Volume Weighted Average Price (VWAP) for a given period.
 
     Args:
-        data (pd.DataFrame): The input dataset.
+        data (pd.DataFrame): The input data with 'high', 'low', 'close', and 'volume' columns.
+        period (int): The time window for VWAP calculation (default is 14).
 
     Returns:
-        pd.DataFrame: Updated dataset with VWAP column.
+        pd.DataFrame: The input data with an additional 'VWAP' column.
     """
+    # Validate input data
+    required_columns = {'high', 'low', 'close', 'volume'}
+    if not required_columns.issubset(data.columns):
+        raise ValueError(f"Input data must contain the following columns: {required_columns}")
+
+    # Calculate Typical Price
     data['Typical_Price'] = (data['high'] + data['low'] + data['close']) / 3
-    data['VWAP'] = (data['Typical_Price'] * data['volume']).cumsum() / data['volume'].cumsum()
+
+    # Calculate Weighted Price and Cumulative Volume
+    data['Weighted_Price'] = data['Typical_Price'] * data['volume']
+    data['Cumulative_Weighted_Price'] = data['Weighted_Price'].rolling(window=period).sum()
+    data['Cumulative_Volume'] = data['volume'].rolling(window=period).sum()
+
+    # Calculate VWAP
+    data['VWAP'] = data['Cumulative_Weighted_Price'] / data['Cumulative_Volume']
+
+    # Drop intermediate columns if not needed
+    data.drop(columns=['Typical_Price', 'Weighted_Price', 'Cumulative_Weighted_Price', 'Cumulative_Volume'], inplace=True)
 
     return data
 
@@ -232,10 +240,9 @@ input_csv = "binance_btc/15m.csv"  # Path to the input CSV file
 period = 7  # Moving average period
 data = pd.read_csv(input_csv)
 # Call the function
-updated_dataset = calculate_boll_in_memory(data)
-
+#updated_dataset = calculate_rsi_in_memory(data,14)
+updated_dataset = calculate_obv_sma_in_memory(data)
 # Display the updated dataset
-print(updated_dataset[['time','close','BOLL_Middle','BOLL_Upper','BOLL_Lower']].tail(20))
-#print(updated_dataset[['close']].tail(20))
-
+#print(updated_dataset[['time','K','D','J']].tail(20))
+print(updated_dataset.head(20))
 
