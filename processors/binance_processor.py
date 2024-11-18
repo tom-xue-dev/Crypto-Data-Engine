@@ -15,11 +15,3 @@ class BinanceProcessor(KLinesProcessor):
         
     def _get_data_list(self, new_data):
         return new_data
-
-
-
-t = BinanceProcessor("BTCUSDT","15m")
-t.set_save_times(100)
-t.make_csv()
-
-    
