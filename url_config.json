@@ -1,0 +1,47 @@
+ {
+    "binance":{
+        "base_url":"https://api.binance.com/api/v3/uiKlines",
+        "symbol":[
+            "BTCUSDT"
+        ],
+        "interval":{
+            "1s": 1000000,
+            "1m": 60000000,
+            "2m": 120000000,
+            "3m": 180000000,
+            "5m": 300000000,
+            "15m": 900000000,
+            "30m": 1800000000,
+            "1H": 3600000000,
+            "2H": 7200000000,
+            "4H": 14400000000,
+            "6H": 21600000000,
+            "8H": 28800000000,
+            "12H": 43200000000,
+            "1D": 86400000000,
+            "3D": 259200000000,
+            "1W": 604800000000,
+            "1M": 2592000000000
+        },
+        "params":{
+            "endTime": "!ET!",
+            "limit": 1000,
+            "symbol": "!S!",
+            "interval": "!I!" 
+        },
+        "columns":[
+            "time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volumn",
+            "close_time",
+            "transaction_volume",
+            "transaction_number",
+            "active_buying_volume",
+            "active_buying_transaction_volume",
+            "ignore"
+        ]
+    }
+}
