@@ -43,3 +43,6 @@ def double_moving_average_strategy(short, long, dataset):
     dataset.loc[dataset[short_ma_col] < dataset[long_ma_col], 'signal'] = -1  # 短期均线低于长期均线 -> 卖出
 
     return dataset
+df = get_btc_data("15m")
+df = calculate_MA(df,20)
+print(df.tail(10))

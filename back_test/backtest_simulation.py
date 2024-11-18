@@ -30,14 +30,14 @@ def backtest(dataset, initial_cash=10000):
         signal = dataset['signal'].iloc[i]
 
         # 买入信号：用所有现金买入资产
-        if signal == 1 and cash > 0:
+        if signal == -1 and cash > 0:
             price *= 1.001 # 增加千分之1的手续费，相当于提高千分之一的价格
             position = cash / price  # 买入的数量
             cash = 0
             buy_price = price
             print(f"Buy at {price:.2f}, position: {position:.6f}")
         # 卖出信号：卖出所有持仓，转换为现金
-        elif signal == -1 and position > 0:
+        elif signal == 1 and position > 0:
             price = price * 0.999 #增加千分之一手续费，相当于减少千分之一价格
             cash = position * price  # 卖出的现金
             position = 0
@@ -111,10 +111,5 @@ def plot_portfolio_value(original_data,portfolio_data,length=200):
     ax.xaxis.set_ticks(np.arange(0, length, 500))
     plt.show()
 
-df = get_btc_data("15m")
-df = df.sort_index(ascending=False)#重新排序
-df = strategy.double_moving_average_strategy(3, 15, df)
-data = backtest(df)
-print(data)
-# plot_with_signals(df, length=2000)
-plot_portfolio_value(df,data,length=len(df))
+df = get_btc_data("15m","binance_btc")
+print(df)
