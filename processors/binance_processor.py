@@ -1,5 +1,5 @@
 import requests
-from KLinesProcessor import KLinesProcessor
+from klines_processor import KLinesProcessor
 
 class BinanceProcessor(KLinesProcessor):
     def __init__(self,symbol,interval) -> None:
@@ -19,7 +19,7 @@ class BinanceProcessor(KLinesProcessor):
 
 
 t = BinanceProcessor("BTCUSDT","15m")
-t.set_save_times(10)
+t.set_save_times(100)
 t.make_csv()
 
     

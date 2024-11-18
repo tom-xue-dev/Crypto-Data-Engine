@@ -1,3 +1,4 @@
+import bisect
 from datetime import datetime
 import json
 from logging.handlers import RotatingFileHandler
@@ -31,7 +32,7 @@ class KLinesProcessor:
         self._delta_time = self.config["interval"][self.interval]
         self._columns = self.config["columns"]
 
-        self._folder_name = os.path.join(name, symbol, interval)
+        self._folder_name = os.path.join("data", name, symbol, interval)
         self._log_file_name = os.path.join(self._folder_name,"log","app.log")
         self._tmp_file_name = os.path.join(self._folder_name, "tmp", interval + ".csv")
         self._make_dir()
@@ -89,7 +90,7 @@ class KLinesProcessor:
         self._logger.info(f"设置分割后的csv文件最大行数未{rows}")
 
     @abstractmethod
-    def _get_data_list(self,new_data):
+    def _get_data_list(self, new_data):
         return new_data
 
     @abstractmethod
@@ -106,7 +107,7 @@ class KLinesProcessor:
         
 
     def _get_data_mode(self):
-        splited_file_name = os.path.join(self._folder_name, self.interval + '0.csv')
+        splited_file_name = os.path.join(self._folder_name, '0.csv')
         if os.path.exists(splited_file_name): # 如果指定文件夹下有一个拆分的csv文件，代表历史数据已收集完成，进行数据更新
             self._logger.info(f"存在已拆分的csv文件{self._tmp_file_name}，自动设置数据模式为UPDATE")
             return KLinesProcessor.Mode.UPDATE
@@ -134,16 +135,16 @@ class KLinesProcessor:
                 self._logger.info(f"获取到数据，endTime: {KLinesProcessor._timestamp_to_datetime(end_time)}")
                 if not data: # 所有数据请求完成
                     self._logger.critical("历史数据已收集完成")
-                    if new_data:
+                    try:
                         self._save_new_data(new_data, self._tmp_file_name)
-                    self._drop_duplicates(self._tmp_file_name)
-                    self._sort_csv(self._tmp_file_name)
-                    if self.check_csv_data_integrity():
-                        self._split_csv(self._tmp_file_name)
-                    # TODO:有缺失时间点补上
-                    else:
-                        pass
-                    break
+                        self._drop_duplicates(self._tmp_file_name)
+                        self._sort_csv(self._tmp_file_name)
+                        splited_file_name = os.path.join(self._folder_name, self.interval + '0.csv')
+                        if self._satisfy_csv_data_integrity(self._tmp_file_name) and not os.path.exists(splited_file_name):
+                            self._split_csv()
+                        break
+                    except KeyboardInterrupt:
+                        break
                 new_data.extend(data)
                 timer = timer + 1
                 end_time = end_time - self._delta_time
@@ -169,7 +170,7 @@ class KLinesProcessor:
         try:
             while True:
                 params = self._make_params(end_time)
-                data = self._get_klines_data(end_time, params)
+                data = self._get_klines_data(params)
                 self._logger.info(f"获取到数据，endTime: {KLinesProcessor._timestamp_to_datetime(end_time)}")
                 if end_time - self._delta_time > KLinesProcessor.CURRENT_TIMESTAMP:
                     self._logger.critical("数据已最新")
@@ -201,30 +202,32 @@ class KLinesProcessor:
         return params
 
     def _split_csv(self):
-        os.makedirs(self._tmp_file_name)
         chunk_size = self.max_rows
         try:
             reader = pd.read_csv(self._tmp_file_name, chunksize=chunk_size)
         except Exception as e:
-            print(f"读取文件时发生错误: {e}")
+            self._logger.error(f"读取文件时发生错误: {e}")
             return
         file_count = 0
         for i, chunk in enumerate(reader):
+            output_file = os.path.join(self._folder_name, f"{file_count}.csv")
             file_count += 1
-            output_file = os.path.join(self._tmp_file_name, f"{file_count}.csv")
             try:
                 chunk.to_csv(output_file, index=False, header=self._columns)
-                print(f"已创建文件: {output_file}，包含 {len(chunk)} 行。")
+                self._logger.info(f"已创建文件: {output_file}，包含 {len(chunk)} 行。")
             except Exception as e:
-                print(f"写入文件 {output_file} 时发生错误: {e}")
+                self._logger.error(f"写入文件 {output_file} 时发生错误: {e}")
                 continue
-        print(f"拆分完成，总共创建了 {file_count} 个文件。")
+        self._logger.critical(f"拆分完成，总共创建了 {file_count} 个文件。")
 
-    def _save_new_data(self, new_data, file_name):
+    def _save_new_data(self, new_data, file_name, transfer_time = True):
+        if len(new_data) == 0:
+            return
         df = pd.DataFrame(self._get_data_list(new_data), columns=self._columns)
-        df['time'] = df['time'].apply(lambda x:KLinesProcessor._timestamp_to_datetime(x))
+        if transfer_time:
+            df['time'] = df['time'].apply(lambda x:KLinesProcessor._timestamp_to_datetime(x))
         df.to_csv(file_name, mode='a', header=not pd.io.common.file_exists(file_name), index=False)
-        self._logger.info(f"对已收集的数据保存到{file_name}")
+        self._logger.info(f"数据保存到 {file_name} ")
 
     def _save_new_data_update_mode(self,new_data):
         csv_files = [f for f in os.listdir(self._folder_name) if f.endswith('.csv')]
@@ -232,39 +235,43 @@ class KLinesProcessor:
         latest_csv_path = os.path.join(self._folder_name, latest_csv)
         latest_csv_len = len(pd.read_csv(latest_csv_path))
         if len(new_data) + latest_csv_len > self.max_rows:
-            self._logger.info(f"{latest_csv_path}中的数据即将超出{self.max_rows}容量限制，对数据进行分割")
+            self._logger.info(f" {latest_csv_path} 中的数据即将超出 {self.max_rows} 容量限制，对数据进行分割")
             # 将数据前半部分存在原csv中
             new_data_part1 = new_data[:self.max_rows - latest_csv_len]
             self._save_new_data(new_data_part1, latest_csv_path)
             self._drop_duplicates(latest_csv_path)
             self._sort_csv(latest_csv_path)
+            self._satisfy_csv_data_integrity(latest_csv_path)
             # 将数据后半部分存在新创建的csv中
             new_data_part2 = new_data[self.max_rows - latest_csv_len + 1:]
-            new_csv_path = os.path.join(self._folder_name,str(latest_csv + 1)+'.csv')
+            new_csv_path = os.path.join(self._folder_name, str(latest_csv + 1)+'.csv')
             self._save_new_data(new_data_part2, new_csv_path)
             self._drop_duplicates(new_csv_path)
             self._sort_csv(new_csv_path)
+            self._satisfy_csv_data_integrity(new_csv_path)
         else:
             self._save_new_data(new_data, latest_csv_path)
             self._drop_duplicates(latest_csv_path)
             self._sort_csv(latest_csv_path)
+            self._satisfy_csv_data_integrity(latest_csv_path)
 
     # def get_klines_data_by_end_time(self,end_time):
     #     params = self._make_params(end_time)
     #     self.get_klines_data(params)
 
-    def check_csv_data_integrity(self):
+    def _satisfy_csv_data_integrity(self, file_name):
         try:
             # 读取时间列，假设时间列为字符串格式
-            self._logger.info(f"检查文件 {self._tmp_file_name} 中的缺失数据...")
-            df_time = pd.read_csv(self._tmp_file_name, usecols=['time'])
+            self._logger.info(f"检查文件 {file_name} 中的缺失数据...")
+            df_time = pd.read_csv(file_name, usecols=['time'])
+            df = pd.read_csv(file_name)
             # 转换为 datetime 类型
             df_time['time'] = pd.to_datetime(df_time['time'], errors='coerce')
             # 确定时间范围
             min_time = df_time['time'].min()
             max_time = df_time['time'].max()
             # TODO:支持所有时间种类的转换
-            freq = str(self.interval).replace('m','T')
+            freq = str(self.interval).replace('m','min')
             # 生成预期的时间序列
             expected_times = pd.date_range(start=min_time, end=max_time, freq=freq)
             # 获取现有的时间点
@@ -275,15 +282,18 @@ class KLinesProcessor:
             if missing_times.empty:
                 self._logger.info("所有预期的时间点数据均存在")
                 return True
-            else:
-                self._logger.warning(f"存在 {len(missing_times)} 个缺失的时间点：")
-                # 根据需要，可以打印所有缺失时间点，或仅打印前N个
-            for i, missing_time in enumerate(missing_times):
-                if i < 100:  # 限制输出前100个缺失时间点
-                    self._logger.warning((missing_time))
-                elif i == 100:
-                    self._logger.warning("更多缺失的时间点省略...")
-                    return False
+            self._logger.warning(f"共缺失{len(missing_times)}个数据，开始用表中数据补齐")
+            new_data = []
+            for missing_time in missing_times:
+                closest_time = df_time['time'].sub(missing_time).abs().idxmin()
+                closest_data = list(df.iloc[closest_time])
+                closest_data[0] = missing_time
+                new_data.append(closest_data)
+                self._logger.warning(f"使用 {closest_data[0]} 的数据代替缺失的时间 {missing_time} 的数据")
+            self._save_new_data(new_data, file_name, False)
+            self._sort_csv(file_name)
+            self._drop_duplicates(file_name)
+            return True    
         except Exception as e:
             self._logger.error(f"检查过程中发生错误：{e}")
             return False
