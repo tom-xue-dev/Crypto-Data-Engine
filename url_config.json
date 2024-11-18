@@ -43,5 +43,28 @@
             "active_buying_transaction_volume",
             "ignore"
         ]
+    },
+    "bybit":{
+        "base_url":"https://api2.bybit.com/spot/api/quote/v2/klines",
+        "symbol":[
+            "BTCUSDT"
+        ],
+        "interval":{
+            "1m": 30000000
+        },
+        "params":{
+            "to": "!ET!",
+            "limit": 500,
+            "symbol": "!S!",
+            "interval": "!I!" 
+        },
+        "columns":[
+            "time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volumn"
+        ]
     }
 }
