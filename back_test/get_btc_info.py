@@ -49,7 +49,6 @@ def get_btc_data(start_date, end_date, timeframe, exchange_name):
 
         # 读取文件内容
         df = pd.read_csv(file_path)
-        print(df)
         # 确保日期列存在并解析为 datetime
         if 'time' in df.columns:
             df['time'] = pd.to_datetime(df['time'])  # 转换为 datetime 对象
@@ -65,3 +64,6 @@ def get_btc_data(start_date, end_date, timeframe, exchange_name):
     # 合并所有筛选后的数据
     result = pd.concat(filtered_data, ignore_index=True)
     return result
+
+
+
