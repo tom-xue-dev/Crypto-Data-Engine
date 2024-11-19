@@ -3,7 +3,7 @@
         "base_url":"https://api.binance.com/api/v3/uiKlines",
         "timestamp_type":"ms",
         "symbol":[
-            "BTCUSDT"
+            "BTCUSDT","ETCUSDT"
         ],
         "interval":{
             "1s": 1000000,
