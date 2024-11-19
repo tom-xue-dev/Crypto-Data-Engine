@@ -432,8 +432,11 @@ class KLinesProcessor:
             self._logger.error(f"检查过程中发生错误：{e}")
             return None, None, None
 
-    def _fix_csv_data_integrity(self, file_name):
+    def _fix_csv_data_integrity(self, file_name, ignore_number = False):
         missing_times, df, df_time = self.get_missing_times_list(file_name)
+        if len(missing_times) and not ignore_number > 1000:
+            self._logger.error("过多的缺失时间点，停止后续操作！")
+            raise RuntimeError()
         new_data = []
         if df is None or df_time is None:
             return False
