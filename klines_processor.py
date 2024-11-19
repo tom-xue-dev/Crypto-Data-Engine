@@ -87,7 +87,7 @@ class KLinesProcessor:
 
     def set_max_rows(self, rows):
         self.max_rows = rows
-        self._logger.info(f"设置分割后的csv文件最大行数未{rows}")
+        self._logger.info(f"设置分割后的csv文件最大行数为{rows}")
 
     @abstractmethod
     def _get_data_list(self, new_data):
