@@ -98,7 +98,7 @@ class KLinesProcessor:
     def _get_klines_data(self, params):
         pass
 
-    def make_csv(self, max_rows = 1000000, save_times = 100, max_threads = 50, mode = None):
+    def make_csv(self, max_rows = 100000, save_times = 100, max_threads = 50, mode = None):
         self.max_rows = max_rows
         self._logger.info(f"设置分割后的csv最大行数为 {max_rows} ")
         self.save_times = save_times
@@ -388,9 +388,10 @@ class KLinesProcessor:
         for missing_time in missing_times:
             closest_time = df_time['time'].sub(missing_time).abs().idxmin()
             closest_data = list(df.iloc[closest_time])
+            origin_time = closest_data[0]
             closest_data[0] = missing_time
             new_data.append(closest_data)
-            self._logger.warning(f"使用 {closest_data[0]} 的数据代替缺失的时间 {missing_time} 的数据")
+            self._logger.warning(f"使用 {origin_time} 的数据代替缺失的时间 {missing_time} 的数据")
         self._save_to_csv(new_data, file_name, False)
         self._sort_csv(file_name)
         self._drop_duplicates(file_name)
