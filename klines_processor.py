@@ -185,7 +185,7 @@ class KLinesProcessor:
                     new_data = []
                     timer = 0
         except KeyboardInterrupt:
-            print("\n手动停止数据采集。")
+            self._logger.warning("\n手动停止数据采集。")
             self._save_new_data_update_mode(new_data)
 
     def _make_params(self, end_time):
