@@ -210,25 +210,79 @@ class KLinesProcessor:
                 f.write(f"{timestamp}\n")
             self._logger.info(f"保存失败的时间戳 {self._timestamp_to_datetime(timestamp)} 到 {self._failed_timestamps_file}")
 
-    def _retry_failed_timestamps(self, file_name):
+    def _retry_failed_timestamps(self, file_name, base_threads = 10):
+        import queue
         if not os.path.exists(self._failed_timestamps_file):
             self._logger.info("没有失败的时间戳需要重试。")
             return
-        self._logger.info("开始重试失败的时间戳请求...")
         with open(self._failed_timestamps_file, 'r') as f:
             timestamps = f.read().splitlines()
-        timestamps = list(set(int(ts) for ts in timestamps))  # 去重并转换为整数
+        timestamps = list(set(int(ts) for ts in timestamps))  
+        if len(timestamps) == 0:
+            self._logger.info("没有失败的时间戳需要重试。")
+            return
+        self._logger.info("开始重试失败的时间戳请求...")
+        timestamp_queue = queue.Queue()
         for ts in timestamps:
-            params = self._make_params(ts)
-            data, flag = self._get_klines_data(params)
-            if flag == KLinesProcessor.KlinesDataFlag.NORMAL:
-                self._logger.info(f"重试成功，获取到数据，time: {self._timestamp_to_datetime(ts)}")
-                self._save_to_csv(data, file_name)
-                self._remove_failed_timestamp(ts)
-            else:
-                self._logger.warning(f"重试失败，time: {self._timestamp_to_datetime(ts)}，将保留时间戳以供下次重试")
+            timestamp_queue.put(ts)
+        max_threads_in_retry = base_threads
+        self._logger.info(f"初始线程数: {max_threads_in_retry}")
+        active_threads = 0
+        threads_lock = threading.Lock()
+        file_lock = threading.Lock()
+        def retry_timestamp():
+            nonlocal active_threads, max_threads_in_retry
+            while True:
+                try:
+                    ts = timestamp_queue.get_nowait()
+                except queue.Empty:
+                    break
+                params = self._make_params(ts)
+                data, flag = self._get_klines_data(params)
+                with threads_lock:
+                    active_threads += 1
+                if flag == KLinesProcessor.KlinesDataFlag.NORMAL:
+                    self._logger.info(f"重试成功，获取到数据，time: {self._timestamp_to_datetime(ts)}")
+                    with file_lock:
+                        self._save_to_csv(data, file_name)
+                        self._remove_failed_timestamp(ts)
+                    with threads_lock:
+                        max_threads_in_retry = min(max_threads_in_retry + 1, base_threads)
+                        self._logger.info(f"成功，增加线程数，当前线程数: {max_threads_in_retry}")
+                else:
+                    self._logger.warning(f"重试失败，time: {self._timestamp_to_datetime(ts)}，将保留时间戳以供下次重试")
+                    with threads_lock:
+                        old_max_threads = max_threads_in_retry
+                        max_threads_in_retry = max(1, max_threads_in_retry // 2)
+                        if max_threads_in_retry != old_max_threads:
+                            self._logger.info(f"失败，减半线程数，从 {old_max_threads} 调整为 {max_threads_in_retry}")
+                timestamp_queue.task_done()
+                with threads_lock:
+                    active_threads -= 1
+        threads = []
+        with threads_lock:
+            for _ in range(max_threads_in_retry):
+                t = threading.Thread(target=retry_timestamp)
+                threads.append(t)
+                t.start()
+
+        while not timestamp_queue.empty() or any(t.is_alive() for t in threads):
+            with threads_lock:
+                current_active_threads = sum(1 for t in threads if t.is_alive())
+                if current_active_threads < max_threads_in_retry:
+                    additional_threads = max_threads_in_retry - current_active_threads
+                    self._logger.info(f"增加 {additional_threads} 个线程，总线程数: {max_threads_in_retry}")
+                    for _ in range(additional_threads):
+                        t = threading.Thread(target=retry_timestamp)
+                        threads.append(t)
+                        t.start()
+            sleep(0.1)
+
+        for t in threads:
+            t.join()
+
         self._drop_duplicates(file_name)
-        self._sort_csv(file_name, False)
+        self._sort_csv(file_name, ascending=False)
 
     def _remove_failed_timestamp(self, timestamp):
         with self._lock:
