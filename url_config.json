@@ -3,7 +3,7 @@
         "base_url":"https://api.binance.com/api/v3/uiKlines",
         "timestamp_type":"ms",
         "symbol":[
-            "BTCUSDT"
+            "BTCUSDT","ETCUSDT","ETHUSDT"
         ],
         "interval":{
             "1s": 1000000,
@@ -49,7 +49,7 @@
         "base_url":"https://api2.bybit.com/spot/api/quote/v2/klines",
         "timestamp_type":"ms",
         "symbol":[
-            "BTCUSDT"
+            "BTCUSDT","ETHUSDT"
         ],
         "interval":{
             "1m": 30000000
@@ -67,6 +67,33 @@
             "low",
             "close",
             "volumn"
+        ]
+    },
+    "okx":{
+        "base_url":"https://www.okx.com/priapi/v5/market/history-candles",
+        "timestamp_type":"ms",
+        "symbol":[
+            "BTC-USDT","ETH-USDT"
+        ],
+        "interval":{
+            "1m": 17940000
+        },
+        "params":{
+            "after": "!ET!",
+            "limit": 1000,
+            "instId": "!S!",
+            "bar": "!I!" 
+        },
+        "columns":[
+            "time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "unknown1",
+            "unknown2",
+            "unknown3",
+            "unknown4"
         ]
     }
 }
