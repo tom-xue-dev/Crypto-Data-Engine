@@ -68,5 +68,32 @@
             "close",
             "volumn"
         ]
+    },
+    "okx":{
+        "base_url":"https://www.okx.com/priapi/v5/market/history-candles",
+        "timestamp_type":"ms",
+        "symbol":[
+            "BTC-USDT","ETH-USDT"
+        ],
+        "interval":{
+            "1m": 17940000
+        },
+        "params":{
+            "after": "!ET!",
+            "limit": 1000,
+            "instId": "!S!",
+            "bar": "!I!" 
+        },
+        "columns":[
+            "time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "unknown1",
+            "unknown2",
+            "unknown3",
+            "unknown4"
+        ]
     }
 }
