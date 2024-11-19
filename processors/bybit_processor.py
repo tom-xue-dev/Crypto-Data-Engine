@@ -6,9 +6,9 @@ class BybitProcessor(KLinesProcessor):
         super().__init__("bybit",symbol,interval)
     
     def _get_klines_data(self, params):
-        response = requests.get(self._base_url, headers=self._get_random_headers(),params=params)
-        time = params["to"]
         try:
+            response = requests.get(self._base_url, headers=self._get_random_headers(),params=params)
+            time = params["to"]
             if response.status_code == 200:
                 data = response.json()
                 if data.get("ret_code") == 0:
