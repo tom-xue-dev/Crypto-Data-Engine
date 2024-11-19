@@ -1,7 +1,7 @@
 from processors.bybit_processor import BybitProcessor
+from processors.binance_processor import BinanceProcessor
 
 
 if __name__ == "__main__":
-    processor1 = BybitProcessor("BTCUSDT","1m")
-    processor1.set_save_times(10)
-    processor1.make_csv()
+    processor1 = BinanceProcessor('BTCUSDT','15m')
+    processor1.make_csv(max_threads=100)
