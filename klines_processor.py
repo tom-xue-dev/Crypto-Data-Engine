@@ -31,6 +31,7 @@ class KLinesProcessor:
         self._params_template = self.config["params"]
         self._delta_time = self.config["interval"][self.interval]
         self._columns = self.config["columns"]
+        self._timestamp_type = self.config["timestamp_type"]
 
         self._folder_name = os.path.join("data", name, symbol, interval)
         self._log_file_name = os.path.join(self._folder_name,"log","app.log")
@@ -125,14 +126,14 @@ class KLinesProcessor:
             end_time = KLinesProcessor.CURRENT_TIMESTAMP
         else:
             df = pd.read_csv(self._tmp_file_name)
-            end_time = KLinesProcessor._datetime_to_timestamp(df.iloc[-1]["time"])
+            end_time = self._datetime_to_timestamp(df.iloc[-1]["time"])
         self._logger.info(f"从{self._timestamp_to_datetime(end_time)}（时间戳：{end_time}）开始获取历史数据...")
         timer = 0
         try:
             while True:
                 params = self._make_params(end_time)
                 data = self._get_klines_data(params)
-                self._logger.info(f"获取到数据，endTime: {KLinesProcessor._timestamp_to_datetime(end_time)}")
+                self._logger.info(f"获取到数据，endTime: {self._timestamp_to_datetime(end_time)}")
                 if not data: # 所有数据请求完成
                     self._logger.critical("历史数据已收集完成")
                     try:
@@ -165,13 +166,13 @@ class KLinesProcessor:
         latest_csv = max(csv_files, key=lambda x: int(x.split('.')[0]))
         latest_csv_path = os.path.join(self._folder_name, latest_csv)
         df = pd.read_csv(latest_csv_path)
-        end_time = KLinesProcessor._datetime_to_timestamp(df.iloc[-1]["time"])
+        end_time = self._datetime_to_timestamp(df.iloc[-1]["time"])
         self._logger.info(f"从{self._timestamp_to_datetime(end_time)}（时间戳：{end_time}）开始获取最新数据...")
         try:
             while True:
                 params = self._make_params(end_time)
                 data = self._get_klines_data(params)
-                self._logger.info(f"获取到数据，endTime: {KLinesProcessor._timestamp_to_datetime(end_time)}")
+                self._logger.info(f"获取到数据，endTime: {self._timestamp_to_datetime(end_time)}")
                 if end_time - self._delta_time > KLinesProcessor.CURRENT_TIMESTAMP:
                     self._logger.critical("数据已最新")
                     self._save_new_data_update_mode(new_data)
@@ -225,7 +226,7 @@ class KLinesProcessor:
             return
         df = pd.DataFrame(self._get_data_list(new_data), columns=self._columns)
         if transfer_time:
-            df['time'] = df['time'].apply(lambda x:KLinesProcessor._timestamp_to_datetime(x))
+            df['time'] = df['time'].apply(lambda x:self._timestamp_to_datetime(x))
         df.to_csv(file_name, mode='a', header=not pd.io.common.file_exists(file_name), index=False)
         self._logger.info(f"数据保存到 {file_name} ")
 
@@ -310,21 +311,20 @@ class KLinesProcessor:
         df.to_csv(file_name, index=False)
         self._logger.info(f"对{file_name}中的数据完成去重")
 
-    @staticmethod
-    def _timestamp_to_datetime(timestamp):
+    def _timestamp_to_datetime(self,timestamp):
         """
         将时间戳（毫秒）转换为系统时间
         :param timestamp: 时间戳（毫秒）
         :return: 转换后的系统时间字符串
         """
+        rate = 1000 if self._timestamp_type == "ms" else 1
         # 将毫秒级时间戳转换为秒级
-        timestamp = timestamp / 1000
+        timestamp = timestamp / rate
         # 使用datetime模块转换
         dt_object = datetime.utcfromtimestamp(timestamp)
         return dt_object.strftime('%Y-%m-%d %H:%M:%S')  # 格式化为“年-月-日 时:分:秒”
 
-    @staticmethod
-    def _datetime_to_timestamp(datetime_str):
+    def _datetime_to_timestamp(self, datetime_str):
         """
         将格式化后的datetime字符串转换为时间戳（毫秒）
         :param datetime_str: 格式化的datetime字符串，例如 '2024-11-15 14:30:00'
@@ -338,7 +338,8 @@ class KLinesProcessor:
         # 将datetime对象转换为UTC时区
         dt_object = utc_tz.localize(dt_object)
         # 获取时间戳（秒），然后乘以1000转换为毫秒
-        timestamp = int(dt_object.timestamp() * 1000)
+        rate = 1000 if self._timestamp_type == "ms" else 1
+        timestamp = int(dt_object.timestamp() * rate)
         return timestamp
     
     @staticmethod

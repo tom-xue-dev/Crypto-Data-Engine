@@ -1,6 +1,7 @@
  {
     "binance":{
         "base_url":"https://api.binance.com/api/v3/uiKlines",
+        "timestamp_type":"ms",
         "symbol":[
             "BTCUSDT"
         ],
@@ -46,6 +47,7 @@
     },
     "bybit":{
         "base_url":"https://api2.bybit.com/spot/api/quote/v2/klines",
+        "timestamp_type":"ms",
         "symbol":[
             "BTCUSDT"
         ],
