@@ -11,13 +11,14 @@ class BybitProcessor(KLinesProcessor):
             if response.status_code == 200:
                 data = response.json()
                 if data.get("ret_code") == 0:
-                    return data.get("result", [])
-                else:
-                    self._logger.error(f"请求时间点为{KLinesProcessor._timestamp_to_datetime(params["to"])}数据时出现错误（时间戳：{params["to"]}），API返回错误代码: {data.get('ret_code')}, 消息: {data.get('ret_msg')}")
-            else:
-                self._logger.error(f"请求时间点为{KLinesProcessor._timestamp_to_datetime(params["to"])}数据时出现错误（时间戳：{params["to"]}），请求失败，状态码: {response.status_code}")
+                    return data.get("result", []), KLinesProcessor.KlinesDataFlag.NORMAL
+                self._logger.error(f"请求时间点为{self._timestamp_to_datetime(params["to"])}数据时出现错误（时间戳：{params["to"]}），API返回错误代码: {data.get('ret_code')}, 消息: {data.get('ret_msg')}")
+                return None, KLinesProcessor.KlinesDataFlag.ERROR
+            self._logger.error(f"请求时间点为{self._timestamp_to_datetime(params["to"])}数据时出现错误（时间戳：{params["to"]}），请求失败，状态码: {response.status_code}")
+            return None, KLinesProcessor.KlinesDataFlag.ERROR
         except requests.exceptions.RequestException as e:
-            self._logger.error(f"请求时间点为{KLinesProcessor._timestamp_to_datetime(params["to"])}数据时出现错误（时间戳：{params["to"]}），请求异常: {e}")
+            self._logger.error(f"请求时间点为{self._timestamp_to_datetime(params["to"])}数据时出现错误（时间戳：{params["to"]}），请求异常: {e}")
+            return None, KLinesProcessor.KlinesDataFlag.ERROR
         
     def _get_data_list(self, new_data):
         return [

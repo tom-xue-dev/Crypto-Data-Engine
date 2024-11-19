@@ -8,10 +8,10 @@ class BinanceProcessor(KLinesProcessor):
     def _get_klines_data(self, params):
         response = requests.get(self._base_url, headers=self._get_random_headers(),params=params)
         if response.status_code == 200:
-            return response.json()
+            return response.json(), KLinesProcessor.KlinesDataFlag.NORMAL
         else:
             self._logger.error(f"请求失败，状态码: {response.status_code}")
-            return []
+            return None, KLinesProcessor.KlinesDataFlag.ERROR
         
     def _get_data_list(self, new_data):
         return new_data
