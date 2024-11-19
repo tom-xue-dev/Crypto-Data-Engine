@@ -1,4 +1,5 @@
 import pandas as pd
+import back_test
 
 
 def calculate_sma_in_memory(data, period):
@@ -84,27 +85,6 @@ def calculate_macd_in_memory(data, short_period, long_period, signal_period):
 
     return data
 
-def calculate_obv_sma_in_memory(data, sma_period=9):
-    """
-    向量化计算时间戳降序数据集的 OBV 和 OBV_SMA。
-
-    参数：
-        data (pd.DataFrame): 时间戳降序排列的数据集，需包含 'time', 'close', 'volume' 列。
-        sma_period (int): OBV 的简单移动平均周期，默认为 9。
-
-    返回：
-        pd.DataFrame: 包含 OBV 和 OBV_SMA 列的更新数据集，恢复为降序排列。
-    """
-    # 计算 OBV 的方向：1 表示上涨，-1 表示下跌，0 表示持平
-    obv_direction = data['close'].diff().apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
-
-    # 计算 OBV（累积成交量变化）
-    data['OBV'] = (obv_direction * data['volume']).cumsum()
-
-    # 计算 OBV 的简单移动平均
-    data['OBV_SMA'] = data['OBV'].rolling(window=sma_period).mean()
-
-    return data
 
 def calculate_kdj_in_memory(data, period=9, k_smooth=3, d_smooth=3):
     """
@@ -213,27 +193,6 @@ def calculate_vwap_in_memory(data, period=14):
     return data
 
 
-def calculate_sma(series, window):
-    """
-    Calculate Simple Moving Average (SMA) for a given Pandas Series.
-
-    Args:
-        series (pd.Series): The input data series (e.g., 'close' prices).
-        window (int): The period for the SMA calculation.
-
-    Returns:
-        pd.Series: A Pandas Series containing the SMA values.
-    """
-    if not isinstance(series, pd.Series):
-        raise ValueError("Input data must be a Pandas Series.")
-
-    if window <= 0:
-        raise ValueError("Window size must be greater than 0.")
-
-    # Calculate the rolling mean (SMA)
-    return series.rolling(window=window, min_periods=1).mean()
-
-
 
 # Example usage
 input_csv = "binance_btc/15m.csv"  # Path to the input CSV file
@@ -241,9 +200,10 @@ period = 7  # Moving average period
 data = pd.read_csv(input_csv)
 # Call the function
 #updated_dataset = calculate_rsi_in_memory(data,14)
-updated_dataset = calculate_obv_sma_in_memory(data)
+updated_dataset = calculate_boll_in_memory(data)
 # Display the updated dataset
 #print(updated_dataset[['time','K','D','J']].tail(20))
-print(updated_dataset[updated_dataset["time"] == '2017-09-17 01:15:00'])
+
+print(updated_dataset[updated_dataset["time"] == '2024-09-17 01:15:00'])
 
 
