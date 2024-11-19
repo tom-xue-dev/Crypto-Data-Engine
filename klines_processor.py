@@ -1,4 +1,3 @@
-import bisect
 from datetime import datetime
 import json
 from logging.handlers import RotatingFileHandler
