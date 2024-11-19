@@ -418,7 +418,7 @@ class KLinesProcessor:
         """
         rate = 1000 if self._timestamp_type == "ms" else 1
         # 将毫秒级时间戳转换为秒级
-        timestamp = timestamp / rate
+        timestamp = int(timestamp) / rate
         # 使用datetime模块转换
         dt_object = datetime.utcfromtimestamp(timestamp)
         return dt_object.strftime('%Y-%m-%d %H:%M:%S')  # 格式化为“年-月-日 时:分:秒”
