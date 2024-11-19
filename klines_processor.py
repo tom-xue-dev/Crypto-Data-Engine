@@ -25,7 +25,7 @@ class KLinesProcessor:
         self._validate_input(symbol, interval)
         self.symbol = symbol
         self.interval = interval
-        self.save_times = -1
+        self.save_times = 100
         self.max_rows = 1000000
         self._base_url = self.config["base_url"]
         self._params_template = self.config["params"]
