@@ -49,7 +49,7 @@
         "base_url":"https://api2.bybit.com/spot/api/quote/v2/klines",
         "timestamp_type":"ms",
         "symbol":[
-            "BTCUSDT"
+            "BTCUSDT","ETHUSDT"
         ],
         "interval":{
             "1m": 30000000
