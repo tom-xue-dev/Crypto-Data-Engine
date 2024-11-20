@@ -29,17 +29,21 @@ class KLinesProcessor:
         self._validate_input(symbol, interval)
         self.symbol = symbol
         self.interval = interval
+        self._interval_mapping = self.config["interval_mapping"] if "interval_mapping" in self.config else None
         self._base_url = self.config["base_url"]
         self._params_template = self.config["params"]
         self._delta_time = self.config["interval"][self.interval]
         self._columns = self.config["columns"]
         self._timestamp_rate = 1000 if self.config["timestamp_type"] == "ms" else 1
 
-        self._work_folder = os.path.join("data", name, symbol, interval)
+        # 标准间隔：见url_config.json 中 "binance" 的 "interval" 键名，用于文件夹命名、频率获取
+        self._standard_interval = self._interval_mapping[self.interval] if self._interval_mapping and self.interval in self._interval_mapping else self.interval
+        self._work_folder = os.path.join("data", self.name, self.symbol, self._standard_interval)
         self._log_folder = os.path.join(self._work_folder, "log")
         self._log_file = os.path.join(self._log_folder, "app.log")
-        self._tmp_csv_file = os.path.join(self._work_folder, "tmp", interval + ".csv")
+        self._tmp_csv_file = os.path.join(self._work_folder, "tmp", self._standard_interval + ".csv")
         self._failed_timestamps_file = os.path.join(self._log_folder, 'failed_timestamps.txt')
+
         self._make_dir()
         self._logger = self._get_logger()
 
@@ -420,10 +424,8 @@ class KLinesProcessor:
             # 确定时间范围
             min_time = df_time['time'].min()
             max_time = df_time['time'].max()
-            # TODO:支持所有时间种类的转换
-            freq = str(self.interval).replace('m', 'min')
             # 生成预期的时间序列
-            expected_times = pd.date_range(start=min_time, end=max_time, freq=freq)
+            expected_times = pd.date_range(start=min_time, end=max_time, freq=self._get_freq())
             # 获取现有的时间点
             existing_times = pd.Series(df_time['time'].unique())
             # 查找缺失的时间点
@@ -441,6 +443,23 @@ class KLinesProcessor:
         except Exception as e:
             self._logger.error(f"检查过程中发生错误：{e}")
             return None, None, None
+        
+    def _get_freq(self):
+        # 提取时间单位（最后一个字符）
+        unit = self._standard_interval[-1]
+        # 对不同的时间单位进行映射
+        if unit == 'm':  
+            return f"{self._standard_interval[:-1]}min"  
+        elif unit == 'h':  # 如果是小时
+            return f"{self._standard_interval[:-1]}H"  
+        elif unit == 'd':  # 如果是天
+            return f"{self._standard_interval[:-1]}D" 
+        elif unit == 'w':  # 如果是周
+            return f"{self._standard_interval[:-1]}W" 
+        elif unit == 'M':  # 如果是月
+            return f"{self._standard_interval[:-1]}M" 
+        else:
+            raise ValueError("Unsupported interval format")
 
     def _fix_csv_data_integrity(self, file_name):
         missing_times, df, df_time = self.get_missing_times_list(file_name)

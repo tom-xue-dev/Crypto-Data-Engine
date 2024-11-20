@@ -82,6 +82,9 @@
             "15m": 269100000,
             "1Dutc": 25800000000
         },
+        "interval_mapping":{
+            "1Dutc":"1d"
+        },
         "params":{
             "after": "!ET!",
             "limit": 1000,
