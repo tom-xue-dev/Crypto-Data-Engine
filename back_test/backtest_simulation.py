@@ -9,7 +9,7 @@ import strategy
 import matplotlib.pyplot as plt
 
 
-def backtest(dataset, initial_cash=10000, leverage=1, hourly_rate=0.00180314):
+def backtest(dataset, initial_cash=10000, leverage=5, hourly_rate=0.00180314):
     """
     根据交易信号进行回测，计算账户的资产变化和策略表现，支持杠杆交易及借贷利息。
 
@@ -224,13 +224,15 @@ def back_test(strategy_results, initial_capital=10000, position_size=1, leverage
 
 
 
-start_date = datetime(2021, 8, 1)
-end_date = datetime(2022, 7, 1)
+start_date = datetime(2023, 8, 1)
+end_date = datetime(2024, 7, 1)
 timeframe = '1m'
-exchange_name1 = 'binance_btc'
-exchange_name2 = 'bybit_btc'
-binance_data = get_btc_data(start_date, end_date, timeframe, exchange_name1)
-bybit_data = get_btc_data(start_date, end_date, timeframe, exchange_name2)
+exchange_name1 = 'binance'
+exchange_name2 = 'bybit'
+crypto_type = 'BTCUSDT'
+binance_data = get_btc_data(start_date, end_date, timeframe, exchange_name1, crypto_type)
+bybit_data = get_btc_data(start_date, end_date, timeframe, exchange_name2, crypto_type)
 df = strategy.arbitrage_trading_trategy(binance_data,bybit_data)
 print(df)
 print(back_test(df))
+

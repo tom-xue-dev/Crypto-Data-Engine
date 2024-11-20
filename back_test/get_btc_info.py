@@ -18,8 +18,11 @@ def get_target_file_path(level, exchange_name, crypto_type):
             "6h", "8h", "12h", "1d", "3d", "1mon")
     if level not in path:
         return None
-    current_path = Path.cwd()
-    target_path = current_path.parent / exchange_name / crypto_type / level
+
+    script_path = Path(__file__).resolve()
+    base_path = script_path.parents[1] / "data"
+    target_path = base_path / exchange_name / crypto_type / level
+    print(target_path)
     if target_path.exists():
         return target_path
     else:
@@ -37,10 +40,10 @@ def get_btc_data(start_date, end_date, timeframe, exchange_name, crypto_type):
     :return: 包含指定时间范围内的数据的 Pandas DataFrame
     """
 
-    directory = get_target_file_path(timeframe, exchange_name,crypto_type)
+    directory = get_target_file_path(timeframe, exchange_name, crypto_type)
     if directory is None:
         raise ValueError("Can't find target directory")
-    all_files = [file for file in os.listdir(directory) if file.startswith("part_") and file.endswith(".csv")]
+    all_files = [file for file in os.listdir(directory) if file.endswith(".csv")]
     if not all_files:
         raise ValueError("No valid files")
 
