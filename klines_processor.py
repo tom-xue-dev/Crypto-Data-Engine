@@ -47,6 +47,7 @@ class KLinesProcessor:
         self._new_data = []
         self._timer = 0
         self._data_collected = False  # 用于指示是否已收集完所有数据
+        self._stop_event = threading.Event()
 
     def _load_config(self):
         with open("url_config.json", "r", encoding="utf-8") as file:
@@ -131,28 +132,34 @@ class KLinesProcessor:
             return KLinesProcessor.DataMode.CREATE
 
     def _make_history_data(self):
-        if self.mode == KLinesProcessor.DataMode.CREATE:
-            self._block_time = KLinesProcessor.CURRENT_TIMESTAMP
-        else:
-            df = pd.read_csv(self._tmp_csv_file)
-            self._block_time = self._datetime_to_timestamp(df.iloc[-1]["time"])
-        self._logger.info(f"从{self._timestamp_to_datetime(self._block_time)}（时间戳：{self._block_time}）开始获取历史数据...")
         if self.max_threads > 0:
+            if self.mode == KLinesProcessor.DataMode.CREATE:
+                self._block_time = KLinesProcessor.CURRENT_TIMESTAMP
+            else:
+                df = pd.read_csv(self._tmp_csv_file)
+                self._block_time = self._datetime_to_timestamp(df.iloc[-1]["time"])
+            self._logger.info(f"从{self._timestamp_to_datetime(self._block_time)}（时间戳：{self._block_time}）开始获取历史数据...")
             threads = []
-            try:
-                for _ in range(self.max_threads):
-                    t = threading.Thread(target=self._worker)
-                    t.start()
-                    threads.append(t)
-                for t in threads:
-                    t.join()
-                # 保存剩余数据
-                with self._lock:              
-                    self._save_to_csv(self._new_data, self._tmp_csv_file)
-                    self._new_data = []
-                    self._timer = 0
-                self._drop_duplicates(self._tmp_csv_file)
-                self._sort_csv(self._tmp_csv_file,False)
+            for _ in range(self.max_threads):
+                t = threading.Thread(target=self._worker)
+                t.start()
+                threads.append(t)
+            while True:
+                alive_threads = [t for t in threads if t.is_alive()]
+                if not alive_threads:
+                    break
+                try:
+                    for t in alive_threads:
+                        t.join(timeout=0.1)
+                except KeyboardInterrupt:
+                    self._logger.warning("手动停止数据收集")
+                    self._stop_event.set()
+                    for t in threads:
+                        t.join()      
+            self._save_to_csv(self._new_data, self._tmp_csv_file)
+            self._drop_duplicates(self._tmp_csv_file)
+            self._sort_csv(self._tmp_csv_file,False)
+            if self._data_collected:
                 attempts = 0
                 while attempts < 3:
                     self._retry_failed_timestamps(self._tmp_csv_file)
@@ -161,25 +168,11 @@ class KLinesProcessor:
                 splited_file_name = os.path.join(self._work_folder, '0.csv')
                 if self._fix_csv_data_integrity(self._tmp_csv_file) and not os.path.exists(splited_file_name):
                     self._split_csv()
-            except KeyboardInterrupt:
-                self._logger.warning("手动停止数据收集")
-                # 停止所有线程
-                with self._lock:
-                    self._data_collected = True
-                for t in threads:
-                    t.join()
-                # 保存剩余数据
-                with self._lock:
-                    self._save_to_csv(self._new_data, self._tmp_csv_file)
-                    self._new_data = []
-                    self._timer = 0
-                self._drop_duplicates(self._tmp_csv_file)
-                self._sort_csv(self._tmp_csv_file, ascending=False)
         else:
             self._logger.error(f"线程数设置错误：{self.max_threads}")
 
     def _worker(self):
-        while True:
+        while not self._stop_event.is_set():
             block_time = self._get_next_block_time()
             if block_time is None:
                 break
