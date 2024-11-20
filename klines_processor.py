@@ -33,7 +33,7 @@ class KLinesProcessor:
         self._params_template = self.config["params"]
         self._delta_time = self.config["interval"][self.interval]
         self._columns = self.config["columns"]
-        self._timestamp_type = self.config["timestamp_type"]
+        self._timestamp_rate = 1000 if self.config["timestamp_type"] == "ms" else 1
 
         self._work_folder = os.path.join("data", name, symbol, interval)
         self._log_folder = os.path.join(self._work_folder, "log")
@@ -304,7 +304,7 @@ class KLinesProcessor:
 
     def _get_next_block_time(self):
         with self._lock:
-            if self._data_collected:
+            if self._data_collected or self._block_time < self._timestamp_rate * 946656000:
                 return None
             current_block_time = self._block_time
             self._block_time -= self._delta_time
@@ -482,9 +482,8 @@ class KLinesProcessor:
         :param timestamp: 时间戳（毫秒）
         :return: 转换后的系统时间字符串
         """
-        rate = 1000 if self._timestamp_type == "ms" else 1
         # 将毫秒级时间戳转换为秒级
-        timestamp = int(timestamp) / rate
+        timestamp = int(timestamp / self._timestamp_rate)
         # 使用datetime模块转换
         dt_object = datetime.utcfromtimestamp(timestamp)
         return dt_object.strftime('%Y-%m-%d %H:%M:%S')  # 格式化为“年-月-日 时:分:秒”
@@ -503,8 +502,7 @@ class KLinesProcessor:
         # 将datetime对象转换为UTC时区
         dt_object = utc_tz.localize(dt_object)
         # 获取时间戳（秒），然后乘以1000转换为毫秒
-        rate = 1000 if self._timestamp_type == "ms" else 1
-        timestamp = int(dt_object.timestamp() * rate)
+        timestamp = int(dt_object.timestamp() * self._timestamp_rate)
         return timestamp
 
     @staticmethod
