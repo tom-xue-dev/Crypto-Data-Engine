@@ -438,14 +438,14 @@ class KLinesProcessor:
 
     def _fix_csv_data_integrity(self, file_name):
         missing_times, df, df_time = self.get_missing_times_list(file_name)
-        if len(missing_times) > self.allow_max_missing_times:
-            self._logger.error("过多的缺失时间点，停止后续操作！")
-            raise RuntimeError()
         new_data = []
         if df is None or df_time is None:
             return False
         if missing_times is None:
             return True
+        if len(missing_times) > self.allow_max_missing_times:
+            self._logger.error("过多的缺失时间点，停止后续操作！")
+            raise RuntimeError()
         for missing_time in missing_times:
             closest_time = df_time['time'].sub(missing_time).abs().idxmin()
             closest_data = list(df.iloc[closest_time])
