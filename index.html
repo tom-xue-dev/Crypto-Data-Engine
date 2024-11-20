@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>KLinesProcessor 类文档</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4 {
+            color: #333;
+        }
+
+        pre {
+            background-color: #eef;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+
+        code {
+            font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .function-block {
+            background-color: #f0f8ff;
+            /* 浅色背景 */
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border: 1px solid #dcdcdc;
+        }
+
+        .note {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+
+    <h1>KLinesProcessor 类文档</h1>
+
+    <h2>概述</h2>
+    <p>
+        <code>KLinesProcessor</code> 是一个抽象基类（Abstract Base Class），用于处理 K
+        线（KLines）数据。该类提供了基础的框架和功能，包括数据获取、处理、存储以及日志记录等。具体的数据获取逻辑需通过继承此类并实现抽象方法 <code>_get_data_list</code> 和
+        <code>_get_klines_data</code> 来完成。
+    </p>
+
+    <h2>类定义</h2>
+    <pre><code>class KLinesProcessor(metaclass=ABCMeta):
+    ...
+    </code></pre>
+
+    <h2>内部枚举类</h2>
+
+    <h3>DataMode</h3>
+    <p>定义数据处理模式。</p>
+    <ul>
+        <li><strong>CREATE</strong>：创建新的数据集。</li>
+        <li><strong>CONTINUE</strong>：继续收集历史数据。</li>
+        <li><strong>UPDATE</strong>：更新已有数据。</li>
+    </ul>
+
+    <h3>KlinesDataFlag</h3>
+    <p>定义数据获取状态标志。</p>
+    <ul>
+        <li><strong>NORMAL</strong>：正常获取数据。</li>
+        <li><strong>ERROR</strong>：获取数据时发生错误。</li>
+    </ul>
+
+    <h2>属性</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>属性名称</th>
+                <th>类型</th>
+                <th>描述</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>name</code></td>
+                <td><code>str</code></td>
+                <td>处理器的名称，用于日志记录和文件夹命名。</td>
+            </tr>
+            <tr>
+                <td><code>config</code></td>
+                <td><code>dict</code></td>
+                <td>从配置文件 <code>url_config.json</code> 加载的配置信息。</td>
+            </tr>
+            <tr>
+                <td><code>symbol</code></td>
+                <td><code>str</code></td>
+                <td>交易对符号（如 BTCUSDT）。</td>
+            </tr>
+            <tr>
+                <td><code>interval</code></td>
+                <td><code>str</code></td>
+                <td>K 线的时间间隔（如 '1m', '5m', '1h'）。</td>
+            </tr>
+            <tr>
+                <td><code>_interval_mapping</code></td>
+                <td><code>dict</code></td>
+                <td>时间间隔的映射关系，根据配置文件中的 <code>interval_mapping</code>。</td>
+            </tr>
+            <tr>
+                <td><code>_base_url</code></td>
+                <td><code>str</code></td>
+                <td>数据获取的基础 URL。</td>
+            </tr>
+            <tr>
+                <td><code>_params_template</code></td>
+                <td><code>dict</code></td>
+                <td>请求参数的模板。</td>
+            </tr>
+            <tr>
+                <td><code>_delta_time</code></td>
+                <td><code>int</code></td>
+                <td>时间间隔对应的时间增量（毫秒）。</td>
+            </tr>
+            <tr>
+                <td><code>_columns</code></td>
+                <td><code>list</code></td>
+                <td>CSV 文件的列名。</td>
+            </tr>
+            <tr>
+                <td><code>_timestamp_rate</code></td>
+                <td><code>int</code></td>
+                <td>时间戳转换比例，1000 表示毫秒，1 表示秒。</td>
+            </tr>
+            <tr>
+                <td><code>_standard_interval</code></td>
+                <td><code>str</code></td>
+                <td>标准化后的时间间隔，用于文件夹命名和数据获取频率。</td>
+            </tr>
+            <tr>
+                <td><code>_work_folder</code></td>
+                <td><code>str</code></td>
+                <td>工作目录路径，用于存储数据和日志。</td>
+            </tr>
+            <tr>
+                <td><code>_log_folder</code></td>
+                <td><code>str</code></td>
+                <td>日志文件夹路径。</td>
+            </tr>
+            <tr>
+                <td><code>_log_file</code></td>
+                <td><code>str</code></td>
+                <td>日志文件路径。</td>
+            </tr>
+            <tr>
+                <td><code>_tmp_csv_file</code></td>
+                <td><code>str</code></td>
+                <td>临时 CSV 文件路径。</td>
+            </tr>
+            <tr>
+                <td><code>_failed_timestamps_file</code></td>
+                <td><code>str</code></td>
+                <td>记录获取失败时间戳的文件路径。</td>
+            </tr>
+            <tr>
+                <td><code>_logger</code></td>
+                <td><code>Logger</code></td>
+                <td>配置好的日志记录器。</td>
+            </tr>
+            <tr>
+                <td><code>max_make_csv_attempt_count</code></td>
+                <td><code>int</code></td>
+                <td><code>make_csv</code> 方法中最大尝试次数。</td>
+            </tr>
+            <tr>
+                <td><code>allow_max_failed_timestamps_number</code></td>
+                <td><code>int</code></td>
+                <td>单次 <code>make_csv</code> 允许的最大失败时间戳数量。</td>
+            </tr>
+            <tr>
+                <td><code>allow_max_failed_timestamps_attempt_time</code></td>
+                <td><code>int</code></td>
+                <td>完成历史数据制作前，允许对请求失败的时间戳再次请求的次数。</td>
+            </tr>
+            <tr>
+                <td><code>allow_max_missing_times</code></td>
+                <td><code>int</code></td>
+                <td>完成历史数据制作前，允许的最大缺失时间点数量。</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>方法</h2>
+
+    <div class="function-block">
+        <h3><code>__init__(self, name, symbol, interval)</code></h3>
+        <p>初始化 <code>KLinesProcessor</code> 实例。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>name</code> (<code>str</code>)：处理器的名称。</li>
+            <li><code>symbol</code> (<code>str</code>)：交易对符号。</li>
+            <li><code>interval</code> (<code>str</code>)：K 线时间间隔。</li>
+        </ul>
+        <h4>异常</h4>
+        <ul>
+            <li><code>ValueError</code>：当输入的 <code>symbol</code> 或 <code>interval</code> 无效时抛出。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_load_config(self) -> dict</code></h3>
+        <p>加载配置文件 <code>url_config.json</code> 中与 <code>name</code> 对应的配置。</p>
+        <h4>返回</h4>
+        <ul>
+            <li><code>dict</code>：配置字典。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_validate_input(self, symbol, interval)</code></h3>
+        <p>验证输入的 <code>symbol</code> 和 <code>interval</code> 是否在配置中有效。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>symbol</code> (<code>str</code>)：交易对符号。</li>
+            <li><code>interval</code> (<code>str</code>)：K 线时间间隔。</li>
+        </ul>
+        <h4>异常</h4>
+        <ul>
+            <li><code>ValueError</code>：当 <code>symbol</code> 或 <code>interval</code> 无效时抛出。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_get_logger(self) -> Logger</code></h3>
+        <p>创建并配置日志记录器。</p>
+        <h4>返回</h4>
+        <ul>
+            <li><code>Logger</code>：配置好的日志记录器。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_make_dir(self)</code></h3>
+        <p>创建必要的目录结构，包括工作目录、日志目录和临时目录。</p>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_get_data_list(self, new_data)</code></h3>
+        <p><strong>抽象方法</strong></p>
+        <p>处理新获取的数据列表。需要在子类中实现。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>new_data</code> (<code>list</code>)：新获取的数据列表。</li>
+        </ul>
+        <h4>返回</h4>
+        <ul>
+            <li><code>list</code>：处理后的数据列表。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_get_klines_data(self, params)</code></h3>
+        <p><strong>抽象方法</strong></p>
+        <p>根据请求参数获取 K 线数据。需要在子类中实现。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>params</code> (<code>dict</code>)：请求参数。</li>
+        </ul>
+        <h4>返回</h4>
+        <ul>
+            <li><code>tuple</code>：包含数据列表和状态标志的元组 (<code>data, flag</code>)。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>make_csv(self, max_rows=100000, save_times=100, max_threads=50, mode=None)</code></h3>
+        <p>生成 CSV 文件的主方法，负责数据收集、处理和存储。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>max_rows</code> (<code>int</code>, 可选)：每个拆分后的 CSV 文件的最大行数。默认 <code>100000</code>。</li>
+            <li><code>save_times</code> (<code>int</code>, 可选)：每 <code>save_times</code> 次查询后保存一次数据到文件。默认
+                <code>100</code>。
+            </li>
+            <li><code>max_threads</code> (<code>int</code>, 可选)：最大线程数。默认 <code>50</code>。</li>
+            <li><code>mode</code> (<code>DataMode</code>, 可选)：数据处理模式。默认 <code>None</code>，自动确定模式。</li>
+        </ul>
+        <h4>异常</h4>
+        <ul>
+            <li><code>RuntimeError</code>：当尝试次数耗尽或数据获取异常终止时抛出。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_initialize_attributes(self)</code></h3>
+        <p>初始化数据收集所需的属性，包括锁、事件、数据列表等。</p>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_get_data_mode(self) -> DataMode</code></h3>
+        <p>确定当前的数据处理模式（<code>CREATE</code>、<code>CONTINUE</code> 或 <code>UPDATE</code>）。</p>
+        <h4>返回</h4>
+        <ul>
+            <li><code>DataMode</code>：当前的数据处理模式。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_make_history_data(self) -> bool</code></h3>
+        <p>生成历史数据，启动工作线程进行数据获取。</p>
+        <h4>返回</h4>
+        <ul>
+            <li><code>bool</code>：成功返回 <code>True</code>，失败返回 <code>False</code>。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_worker(self)</code></h3>
+        <p>工作线程的目标函数，负责获取数据并处理。</p>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_save_failed_timestamp(self, timestamp)</code></h3>
+        <p>保存获取失败的时间戳到文件中。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>timestamp</code> (<code>int</code>)：失败的时间戳。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_retry_failed_timestamps(self, file_name, thread_number) -> bool</code></h3>
+        <p>重试获取失败的时间戳数据。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>file_name</code> (<code>str</code>)：CSV 文件路径。</li>
+            <li><code>thread_number</code> (<code>int</code>)：重试使用的线程数。</li>
+        </ul>
+        <h4>返回</h4>
+        <ul>
+            <li><code>bool</code>：如果没有失败的时间戳需要重试或重试成功，返回 <code>True</code>；否则返回 <code>False</code>。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_remove_failed_timestamp(self, timestamp)</code></h3>
+        <p>移除已成功获取数据的失败时间戳。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>timestamp</code> (<code>int</code>)：已成功的时间戳。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_get_next_block_time(self) -> Optional[int]</code></h3>
+        <p>获取下一个数据块的时间戳。</p>
+        <h4>返回</h4>
+        <ul>
+            <li><code>Optional[int]</code>：下一个时间戳，如果没有则返回 <code>None</code>。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_make_params(self, end_time) -> dict</code></h3>
+        <p>根据模板生成请求参数。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>end_time</code> (<code>int</code>)：结束时间戳。</li>
+        </ul>
+        <h4>返回</h4>
+        <ul>
+            <li><code>dict</code>：请求参数字典。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_split_csv(self)</code></h3>
+        <p>拆分临时 CSV 文件为多个小文件，每个文件最多 <code>max_rows</code> 行。</p>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_save_to_csv(self, new_data, file_name, transfer_time=True, online_data=True)</code></h3>
+        <p>将新数据保存到 CSV 文件。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>new_data</code> (<code>list</code>)：新获取的数据。</li>
+            <li><code>file_name</code> (<code>str</code>)：目标 CSV 文件路径。</li>
+            <li><code>transfer_time</code> (<code>bool</code>, 可选)：是否转换时间戳为日期时间字符串。默认 <code>True</code>。</li>
+            <li><code>online_data</code> (<code>bool</code>, 可选)：是否在线处理数据列表。默认 <code>True</code>。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_save_new_data_update_mode(self, new_data)</code></h3>
+        <p>在更新模式下保存新数据，并处理文件分割和数据完整性。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>new_data</code> (<code>list</code>)：新获取的数据。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_update_data(self)</code></h3>
+        <p>更新已有数据的方法，获取最新的 K 线数据并保存。</p>
+    </div>
+
+    <div class="function-block">
+        <h3><code>get_missing_times_list(self, file_name, output=False) -> Tuple[Optional[pd.Series], Optional[pd.DataFrame], Optional[pd.DataFrame]]</code>
+        </h3>
+        <p>获取 CSV 文件中缺失的时间点列表。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>file_name</code> (<code>str</code>)：CSV 文件路径。</li>
+            <li><code>output</code> (<code>bool</code>, 可选)：是否输出缺失时间点的信息。默认 <code>False</code>。</li>
+        </ul>
+        <h4>返回</h4>
+        <ul>
+            <li><code>Tuple[Optional[pd.Series], Optional[pd.DataFrame], Optional[pd.DataFrame]]</code>：缺失时间点的
+                <code>Series</code>，整个数据的 <code>DataFrame</code>，以及时间列的 <code>DataFrame</code>。如果没有缺失，返回
+                <code>(None, df, df_time)</code>。
+            </li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_get_freq(self) -> str</code></h3>
+        <p>根据标准时间间隔获取 pandas 的频率字符串。</p>
+        <h4>返回</h4>
+        <ul>
+            <li><code>str</code>：pandas 频率字符串（如 <code>'1T'</code>、<code>'1H'</code>）。</li>
+        </ul>
+        <h4>异常</h4>
+        <ul>
+            <li><code>ValueError</code>：如果时间间隔格式不支持。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_fix_csv_data_integrity(self, file_name) -> bool</code></h3>
+        <p>修复 CSV 文件的数据完整性，填补缺失的数据点。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>file_name</code> (<code>str</code>)：CSV 文件路径。</li>
+        </ul>
+        <h4>返回</h4>
+        <ul>
+            <li><code>bool</code>：如果修复成功返回 <code>True</code>，否则返回 <code>False</code>。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_sort_csv(self, file_name, ascending=True)</code></h3>
+        <p>对 CSV 文件中的数据进行排序。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>file_name</code> (<code>str</code>)：CSV 文件路径。</li>
+            <li><code>ascending</code> (<code>bool</code>, 可选)：排序顺序。<code>True</code> 为升序，<code>False</code> 为降序。默认
+                <code>True</code>。
+            </li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_drop_duplicates(self, file_name)</code></h3>
+        <p>去除 CSV 文件中的重复数据。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>file_name</code> (<code>str</code>)：CSV 文件路径。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_timestamp_to_datetime(self, timestamp) -> str</code></h3>
+        <p>将时间戳（毫秒）转换为系统时间字符串。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>timestamp</code> (<code>int</code>)：时间戳（毫秒）。</li>
+        </ul>
+        <h4>返回</h4>
+        <ul>
+            <li><code>str</code>：格式化后的时间字符串（<code>'YYYY-MM-DD HH:MM:SS'</code>）。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_datetime_to_timestamp(self, datetime_str) -> int</code></h3>
+        <p>将格式化后的 datetime 字符串转换为时间戳（毫秒）。</p>
+        <h4>参数</h4>
+        <ul>
+            <li><code>datetime_str</code> (<code>str</code>)：格式化的 datetime 字符串，例如 <code>'2024-11-15 14:30:00'</code>。
+            </li>
+        </ul>
+        <h4>返回</h4>
+        <ul>
+            <li><code>int</code>：对应的时间戳（毫秒）。</li>
+        </ul>
+    </div>
+
+    <div class="function-block">
+        <h3><code>_get_random_headers() -> dict</code></h3>
+        <p>返回一个包含随机 User-Agent 的请求头。</p>
+        <h4>返回</h4>
+        <ul>
+            <li><code>dict</code>：包含随机 User-Agent 的 HTTP 请求头。</li>
+        </ul>
+    </div>
+
+    <h2>使用示例</h2>
+    <p>由于 <code>KLinesProcessor</code> 是一个抽象类，无法直接实例化。需要创建一个子类并实现抽象方法 <code>_get_data_list</code> 和
+        <code>_get_klines_data</code>。
+    </p>
+    <pre><code>
+    import requests
+    from klines_processor import KLinesProcessor
+    
+    class BinanceProcessor(KLinesProcessor):
+        def __init__(self,symbol,interval) -> None:
+            super().__init__("binance",symbol,interval)
+        
+        def _get_klines_data(self, params):
+            response = requests.get(self._base_url, headers=self._get_random_headers(),params=params)
+            if response.status_code == 200:
+                return response.json(), KLinesProcessor.KlinesDataFlag.NORMAL
+            else:
+                self._logger.error(f"请求失败，状态码: {response.status_code}")
+                return None, KLinesProcessor.KlinesDataFlag.ERROR
+            
+        def _get_data_list(self, new_data):
+            return new_data
+
+    if __name__ == "__main__": 
+        processor = BinanceKLinesProcessor(name="binance", symbol="BTCUSDT", interval="1m") 
+        processor.make_csv(max_rows=50000, save_times=50, max_threads=10) 
+    </code></pre>
+    <p><strong>说明</strong></p>
+    <ol>
+        <li><strong>创建子类</strong>：<code>BinanceKLinesProcessor</code> 继承自 <code>KLinesProcessor</code>，并实现了
+            <code>_get_data_list</code> 和 <code>_get_klines_data</code> 方法。
+        </li>
+        <li><strong>处理数据</strong>：在 <code>_get_data_list</code> 方法中，处理 Binance API 返回的原始数据，将其转换为符合 CSV 格式的字典列表。</li>
+        <li><strong>获取数据</strong>：在 <code>_get_klines_data</code> 方法中，使用 <code>requests</code> 库从 Binance API 获取 K
+            线数据，并返回数据和状态标志。</li>
+        <li><strong>运行</strong>：在 <code>main</code> 块中，实例化 <code>BinanceKLinesProcessor</code> 并调用 <code>make_csv</code>
+            方法开始数据收集和处理。</li>
+    </ol>
+
+    <h2>配置文件示例 (<code>url_config.json</code>)</h2>
+    <p>确保在运行代码前，配置文件 <code>url_config.json</code> 中包含相应的配置。例如，对于 Binance：</p>
+    <pre><code>{
+        "binance":{
+            "base_url":"https://api.binance.com/api/v3/uiKlines",
+            "timestamp_type":"ms",
+            "symbol":[
+                "BTCUSDT","ETCUSDT","ETHUSDT"
+            ],
+            "interval":{
+                "1s": 1000000,
+                "1m": 60000000,
+                "2m": 120000000,
+                "3m": 180000000,
+                "5m": 300000000,
+                "15m": 900000000,
+                "30m": 1800000000,
+                "1h": 3600000000,
+                "2h": 7200000000,
+                "4h": 14400000000,
+                "6h": 21600000000,
+                "8h": 28800000000,
+                "12h": 43200000000,
+                "1d": 86400000000,
+                "3d": 259200000000,
+                "1w": 604800000000,
+                "1M": 2592000000000
+            },
+            "params":{
+                "endTime": "!ET!",
+                "limit": 1000,
+                "symbol": "!S!",
+                "interval": "!I!" 
+            },
+            "columns":[
+                "time",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volumn",
+                "close_time",
+                "transaction_volume",
+                "transaction_number",
+                "active_buying_volume",
+                "active_buying_transaction_volume",
+                "ignore"
+            ]
+        }
+    }</code></pre>
+    <p><strong>说明</strong></p>
+    <ul>
+        <li><code>base_url</code>：必须配置，Binance K 线数据 API 的 URL。</li>
+        <li><code>symbol</code>：必须配置，支持的交易对列表。</li>
+        <li><code>interval</code>：必须配置，时间间隔与其对应的请求间隔映射。</li>
+        <li><code>interval_mapping</code>：选择配置，选择时间间隔的标准化映射，用于文件夹命名和数据获取频率。</li>
+        <li><code>params</code>：必须配置，请求参数模板，包含特殊标记（如 <code>!S!</code>、<code>!I!</code>、<code>!ET!</code>）用于动态替换。</li>
+        <li><code>columns</code>：必须配置，CSV 文件的列名，顺序应与 API 返回的数据一致。</li>
+        <li><code>timestamp_type</code>：必须配置，时间戳类型，<code>"ms"</code> 表示毫秒，<code>"s"</code> 表示秒。</li>
+    </ul>
+
+
+
+    <h2>依赖库</h2>
+    <p>确保安装以下 Python 库：</p>
+    <pre><code>pip install pandas pytz fake-useragent requests
+    </code></pre>
+
+
+
+    <h2>日志文件</h2>
+    <p>日志文件存储在 <code>data/&lt;name&gt;/&lt;symbol&gt;/&lt;standard_interval&gt;/log/app.log</code>。日志级别分为：</p>
+    <ul>
+        <li><strong>控制台</strong>：显示 <code>INFO</code> 及以上级别的日志。</li>
+        <li><strong>文件</strong>：记录 <code>DEBUG</code> 及以上级别的日志，支持日志轮转，单个日志文件最大 3MB，保留 3 个备份。</li>
+    </ul>
+
+    <h2>注意事项</h2>
+    <ul>
+        <li><strong>线程数</strong>：合理设置 <code>max_threads</code>，避免过多线程导致系统资源耗尽或 API 限制。</li>
+        <li><strong>异常处理</strong>：当数据获取过程中发生异常时，系统会自动重试，直至达到最大尝试次数。</li>
+        <li><strong>数据完整性</strong>：系统会检查并修复缺失的数据点，确保生成的 CSV 文件数据完整。</li>
+        <li><strong>配置文件</strong>：根据实际使用的交易所和 API，调整 <code>url_config.json</code> 配置文件中的内容。</li>
+    </ul>
+</body>
+
+</html>
