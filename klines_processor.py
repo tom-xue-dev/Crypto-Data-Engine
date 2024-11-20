@@ -186,11 +186,13 @@ class KLinesProcessor:
             self._drop_duplicates(self._tmp_csv_file)
             self._sort_csv(self._tmp_csv_file,False)
             if self._data_collected:
-                attempts = 0
-                while attempts < 3:
-                    self._retry_failed_timestamps(self._tmp_csv_file)
-                    attempts += 1
-                    sleep(1)
+                thread_list = [self.max_threads]
+                while len(thread_list) < 5:
+                    next_threads = min(int(thread_list[-1] / 2),1)  
+                    thread_list.append(next_threads)
+                for thread_number in thread_list:
+                    if self._retry_failed_timestamps(self._tmp_csv_file, thread_number):
+                        break
                 splited_file_name = os.path.join(self._work_folder, '0.csv')
                 if self._fix_csv_data_integrity(self._tmp_csv_file) and not os.path.exists(splited_file_name):
                     self._split_csv()
@@ -236,25 +238,23 @@ class KLinesProcessor:
                     self._stop_event.set()
                     self._is_abnormal_termination = True
 
-    def _retry_failed_timestamps(self, file_name, base_threads=10):
+    def _retry_failed_timestamps(self, file_name, thread_number):
         import queue
         if not os.path.exists(self._failed_timestamps_file):
             self._logger.info("没有失败的时间戳需要重试。")
-            return
+            return True
         with open(self._failed_timestamps_file, 'r') as f:
             timestamps = f.read().splitlines()
         timestamps = list(set(int(ts) for ts in timestamps))
         if len(timestamps) == 0:
             self._logger.info("没有失败的时间戳需要重试。")
-            return
+            return True
         self._logger.info("开始重试失败的时间戳请求...")
         timestamp_queue = queue.Queue()
         for ts in timestamps:
             timestamp_queue.put(ts)
-        max_threads_in_retry = base_threads
-        self._logger.info(f"使用固定的线程数: {max_threads_in_retry}")
+        self._logger.info(f"使用线程数: {thread_number} 进行重试")
         file_lock = threading.Lock()
-
         def retry_timestamp():
             while True:
                 try:
@@ -273,18 +273,13 @@ class KLinesProcessor:
                 timestamp_queue.task_done()
 
         threads = []
-        for _ in range(max_threads_in_retry):
+        for _ in range(thread_number):
             t = threading.Thread(target=retry_timestamp)
             threads.append(t)
             t.start()
-
-        # 等待所有任务完成
         timestamp_queue.join()
-
-        # 等待所有线程完成
         for t in threads:
             t.join()
-
         self._drop_duplicates(file_name)
         self._sort_csv(file_name, ascending=False)
 

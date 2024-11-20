@@ -23,6 +23,3 @@ class OkxProcessor(KLinesProcessor):
         
     def _get_data_list(self, new_data):
         return new_data
-    
-    def _retry_failed_timestamps(self, file_name, base_threads=10):
-        return super()._retry_failed_timestamps(file_name, base_threads=4)
