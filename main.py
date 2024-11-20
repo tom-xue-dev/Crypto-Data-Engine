@@ -35,12 +35,12 @@ def main():
         "输入最大线程数（可选，默认50）:"
     ).ask()
 
-    max_threads = int(max_threads_input) if max_threads_input and max_threads_input.isdigit() else None
+    max_threads = int(max_threads_input) if max_threads_input and max_threads_input.isdigit() else 50
 
     save_times_input = questionary.text(
         "输入每多少次成功请求后保存一次（可选，默认100）"
     ).ask()
-    save_times = int(save_times_input) if save_times_input and save_times_input.isdigit() else None
+    save_times = int(save_times_input) if save_times_input and save_times_input.isdigit() else 100
 
     exchange_processors = {
         'binance': BinanceProcessor,
@@ -56,10 +56,7 @@ def main():
 
     processor = ProcessorClass(selected_symbol, selected_interval)
 
-    if max_threads is not None and save_times is not None:
-        processor.make_csv(max_threads=max_threads, save_times=save_times)
-    else:
-        processor.make_csv()
+    processor.make_csv(max_threads=max_threads, save_times=save_times)
 
 if __name__ == "__main__":
     main()
