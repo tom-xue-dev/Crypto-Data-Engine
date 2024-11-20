@@ -43,11 +43,12 @@ class KLinesProcessor:
         self._make_dir()
         self._logger = self._get_logger()
 
-        self._lock = threading.Lock()
-        self._new_data = []
-        self._timer = 0
-        self._data_collected = False  # 用于指示是否已收集完所有数据
-        self._stop_event = threading.Event()
+        # 最多尝试make_csv的次数
+        self.max_make_csv_attempt_count = 2
+        # 一次make_csv中，允许最多的失败时间戳数量
+        self.allow_max_failed_timestamps_number = 100
+        # 在完成历史数据制作前，允许最多的缺失时间点数量
+        self.allow_max_missing_times = 1000
 
     def _load_config(self):
         with open("url_config.json", "r", encoding="utf-8") as file:
@@ -100,24 +101,45 @@ class KLinesProcessor:
         pass
 
     def make_csv(self, max_rows = 100000, save_times = 100, max_threads = 50, mode = None):
-        self.max_rows = max_rows
-        self._logger.info(f"设置分割后的csv最大行数为 {max_rows} ")
-        self.save_times = save_times
-        self._logger.info(f"设置每 {save_times} 次查询后保存到文件")
-        self.max_threads = max_threads
-        self._logger.info(f"设置最大线程数为 {max_threads}")
-        if mode is None:
-            self.mode = self._get_data_mode()
-        else:
-            self.mode = mode
-            self._logger.warning(f"手动设置模式为 {mode}，请检查逻辑是否正确")
-        if self.mode in [KLinesProcessor.DataMode.CREATE, KLinesProcessor.DataMode.CONTINUE]:
-            self._make_history_data()
-            return
-        if self.mode == KLinesProcessor.DataMode.UPDATE:
-            # self._update_data()
-            self._logger.warning(f"暂不支持 {mode} 模式")
-            return
+        while True:
+            self._initialize_attributes()
+            self.max_rows = max_rows
+            self._logger.info(f"设置分割后的csv最大行数为 {max_rows} ")
+            self.save_times = save_times
+            self._logger.info(f"设置每 {save_times} 次查询后保存到文件")
+            self.max_threads = max_threads
+            self._logger.info(f"设置最大线程数为 {max_threads}")
+            if mode is None:
+                self.mode = self._get_data_mode()
+            else:
+                self.mode = mode
+                self._logger.warning(f"手动设置模式为 {mode}，请检查逻辑是否正确")
+            if self.mode in [KLinesProcessor.DataMode.CREATE, KLinesProcessor.DataMode.CONTINUE]:
+                self._make_history_data()
+            elif self.mode == KLinesProcessor.DataMode.UPDATE:
+                # self._update_data()
+                self._logger.warning(f"暂不支持 {mode} 模式")
+            if self._is_abnormal_termination: # 有异常需要重试
+                self.max_make_csv_attempt_count -= 1
+                if os.path.exists(self._tmp_csv_file):
+                    os.remove(self._tmp_csv_file)
+                if os.path.exists(self._failed_timestamps_file):
+                    os.remove(self._failed_timestamps_file)
+                if self.max_make_csv_attempt_count > 0: # 有异常且有剩余重试次数
+                    self._logger.info(f"剩余尝试次数：{self.max_make_csv_attempt_count}")
+                    max_threads = int(max(max_threads // 2 , 1))
+                    self._logger.info("重试开始，最大线程数减半")
+                else:
+                    self._logger.error("尝试次数耗尽，终止此次数据获取")
+                    raise RuntimeError("异常终止，请查看日志")
+            
+    def _initialize_attributes(self):
+        self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._new_data = []
+        self._timer = 0
+        self._data_collected = False  # 用于指示是否已收集完所有数据
+        self._is_abnormal_termination = False
 
     def _get_data_mode(self):
         splited_file_name = os.path.join(self._work_folder, '0.csv')
@@ -155,7 +177,9 @@ class KLinesProcessor:
                     self._logger.warning("手动停止数据收集")
                     self._stop_event.set()
                     for t in threads:
-                        t.join()      
+                        t.join()
+            if self._is_abnormal_termination:
+                return      
             self._save_to_csv(self._new_data, self._tmp_csv_file)
             self._drop_duplicates(self._tmp_csv_file)
             self._sort_csv(self._tmp_csv_file,False)
@@ -202,15 +226,20 @@ class KLinesProcessor:
             with open(self._failed_timestamps_file, 'a') as f:
                 f.write(f"{timestamp}\n")
             self._logger.info(f"保存失败的时间戳 {self._timestamp_to_datetime(timestamp)} 到 {self._failed_timestamps_file}")
+            with open(self._failed_timestamps_file, 'r') as f:
+                lines = f.readlines()
+                if len(lines) > self.allow_max_failed_timestamps_number:
+                    self._stop_event.set()
+                    self._is_abnormal_termination = True
 
-    def _retry_failed_timestamps(self, file_name, base_threads = 10):
+    def _retry_failed_timestamps(self, file_name, base_threads=10):
         import queue
         if not os.path.exists(self._failed_timestamps_file):
             self._logger.info("没有失败的时间戳需要重试。")
             return
         with open(self._failed_timestamps_file, 'r') as f:
             timestamps = f.read().splitlines()
-        timestamps = list(set(int(ts) for ts in timestamps))  
+        timestamps = list(set(int(ts) for ts in timestamps))
         if len(timestamps) == 0:
             self._logger.info("没有失败的时间戳需要重试。")
             return
@@ -219,12 +248,10 @@ class KLinesProcessor:
         for ts in timestamps:
             timestamp_queue.put(ts)
         max_threads_in_retry = base_threads
-        self._logger.info(f"初始线程数: {max_threads_in_retry}")
-        active_threads = 0
-        threads_lock = threading.Lock()
+        self._logger.info(f"使用固定的线程数: {max_threads_in_retry}")
         file_lock = threading.Lock()
+
         def retry_timestamp():
-            nonlocal active_threads, max_threads_in_retry
             while True:
                 try:
                     ts = timestamp_queue.get_nowait()
@@ -232,45 +259,25 @@ class KLinesProcessor:
                     break
                 params = self._make_params(ts)
                 data, flag = self._get_klines_data(params)
-                with threads_lock:
-                    active_threads += 1
-                if flag == KLinesProcessor.KlinesDataFlag.NORMAL:
+                if flag == KLinesProcessor.KlinesDataFlag.NORMAL and data:
                     self._logger.info(f"重试成功，获取到数据，time: {self._timestamp_to_datetime(ts)}")
                     with file_lock:
                         self._save_to_csv(data, file_name)
                         self._remove_failed_timestamp(ts)
-                    with threads_lock:
-                        max_threads_in_retry = min(max_threads_in_retry + 1, base_threads)
-                        self._logger.info(f"成功，增加线程数，当前线程数: {max_threads_in_retry}")
                 else:
                     self._logger.warning(f"重试失败，time: {self._timestamp_to_datetime(ts)}，将保留时间戳以供下次重试")
-                    with threads_lock:
-                        old_max_threads = max_threads_in_retry
-                        max_threads_in_retry = max(1, max_threads_in_retry // 2)
-                        if max_threads_in_retry != old_max_threads:
-                            self._logger.info(f"失败，减半线程数，从 {old_max_threads} 调整为 {max_threads_in_retry}")
                 timestamp_queue.task_done()
-                with threads_lock:
-                    active_threads -= 1
+
         threads = []
-        with threads_lock:
-            for _ in range(max_threads_in_retry):
-                t = threading.Thread(target=retry_timestamp)
-                threads.append(t)
-                t.start()
+        for _ in range(max_threads_in_retry):
+            t = threading.Thread(target=retry_timestamp)
+            threads.append(t)
+            t.start()
 
-        while not timestamp_queue.empty() or any(t.is_alive() for t in threads):
-            with threads_lock:
-                current_active_threads = sum(1 for t in threads if t.is_alive())
-                if current_active_threads < max_threads_in_retry:
-                    additional_threads = max_threads_in_retry - current_active_threads
-                    self._logger.info(f"增加 {additional_threads} 个线程，总线程数: {max_threads_in_retry}")
-                    for _ in range(additional_threads):
-                        t = threading.Thread(target=retry_timestamp)
-                        threads.append(t)
-                        t.start()
-            sleep(0.1)
+        # 等待所有任务完成
+        timestamp_queue.join()
 
+        # 等待所有线程完成
         for t in threads:
             t.join()
 
@@ -425,9 +432,9 @@ class KLinesProcessor:
             self._logger.error(f"检查过程中发生错误：{e}")
             return None, None, None
 
-    def _fix_csv_data_integrity(self, file_name, ignore_number = False):
+    def _fix_csv_data_integrity(self, file_name):
         missing_times, df, df_time = self.get_missing_times_list(file_name)
-        if len(missing_times) and not ignore_number > 1000:
+        if len(missing_times) > self.allow_max_missing_times:
             self._logger.error("过多的缺失时间点，停止后续操作！")
             raise RuntimeError()
         new_data = []
@@ -447,7 +454,6 @@ class KLinesProcessor:
         self._drop_duplicates(file_name)
         return True
     
-
     def _sort_csv(self, file_name, ascending=True):
         df = pd.read_csv(file_name)
         df.sort_values(by='time', ascending=ascending, inplace=True)
