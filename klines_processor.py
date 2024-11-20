@@ -47,6 +47,8 @@ class KLinesProcessor:
         self.max_make_csv_attempt_count = 2
         # 一次make_csv中，允许最多的失败时间戳数量
         self.allow_max_failed_timestamps_number = 100
+        # 在完成历史数据制作前，允许对请求失败的时间戳再次请求的次数
+        self.allow_max_failed_timestamps_attemp_time = 5
         # 在完成历史数据制作前，允许最多的缺失时间点数量
         self.allow_max_missing_times = 1000
 
@@ -187,12 +189,15 @@ class KLinesProcessor:
             self._sort_csv(self._tmp_csv_file,False)
             if self._data_collected:
                 thread_list = [self.max_threads]
-                while len(thread_list) < 5:
-                    next_threads = min(int(thread_list[-1] / 2),1)  
+                while len(thread_list) < self.allow_max_failed_timestamps_attemp_time:
+                    next_threads = max(int(thread_list[-1] / 2), 1)  
                     thread_list.append(next_threads)
                 for thread_number in thread_list:
                     if self._retry_failed_timestamps(self._tmp_csv_file, thread_number):
                         break
+                if os.path.exists(self._failed_timestamps_file):
+                    self._logger.error("仍存在请求失败的时间戳")
+                    raise RuntimeError("异常终止，请查看日志")
                 splited_file_name = os.path.join(self._work_folder, '0.csv')
                 if self._fix_csv_data_integrity(self._tmp_csv_file) and not os.path.exists(splited_file_name):
                     self._split_csv()
@@ -248,6 +253,8 @@ class KLinesProcessor:
         timestamps = list(set(int(ts) for ts in timestamps))
         if len(timestamps) == 0:
             self._logger.info("没有失败的时间戳需要重试。")
+            if os.path.exists(self._failed_timestamps_file):
+                os.remove(self._failed_timestamps_file)
             return True
         self._logger.info("开始重试失败的时间戳请求...")
         timestamp_queue = queue.Queue()
