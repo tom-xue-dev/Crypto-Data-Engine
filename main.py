@@ -1,10 +1,7 @@
 import json
 import questionary
 
-from processors.binance_processor import BinanceProcessor
-from processors.bybit_processor import BybitProcessor
-from processors.okx_processor import OkxProcessor
-
+from klines_processor import KLinesProcessor
 
 def main():
     with open('url_config.json', 'r') as f:
@@ -42,19 +39,7 @@ def main():
     ).ask()
     save_times = int(save_times_input) if save_times_input and save_times_input.isdigit() else 100
 
-    exchange_processors = {
-        'binance': BinanceProcessor,
-        'okx': OkxProcessor,
-        'bybit': BybitProcessor,
-    }
-
-    ProcessorClass = exchange_processors.get(selected_exchange.lower())
-
-    if not ProcessorClass:
-        print(f"Processor for exchange '{selected_exchange}' is not available.")
-        return
-
-    processor = ProcessorClass(selected_symbol, selected_interval)
+    processor = KLinesProcessor(selected_exchange, selected_symbol, selected_interval)
 
     processor.make_csv(max_threads=max_threads, save_times=save_times)
 

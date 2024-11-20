@@ -1,11 +1,13 @@
- {
-    "binance":{
-        "base_url":"https://api.binance.com/api/v3/uiKlines",
-        "timestamp_type":"ms",
-        "symbol":[
-            "BTCUSDT","ETCUSDT","ETHUSDT"
+{
+    "binance": {
+        "base_url": "https://api.binance.com/api/v3/uiKlines",
+        "timestamp_type": "ms",
+        "symbol": [
+            "BTCUSDT",
+            "ETCUSDT",
+            "ETHUSDT"
         ],
-        "interval":{
+        "interval": {
             "1s": 1000000,
             "1m": 60000000,
             "2m": 120000000,
@@ -24,83 +26,100 @@
             "1w": 604800000000,
             "1M": 2592000000000
         },
-        "params":{
+        "params": {
             "endTime": "!ET!",
             "limit": 1000,
             "symbol": "!S!",
-            "interval": "!I!" 
+            "interval": "!I!"
         },
-        "columns":[
-            "time",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volumn",
-            "close_time",
-            "transaction_volume",
-            "transaction_number",
-            "active_buying_volume",
-            "active_buying_transaction_volume",
-            "ignore"
-        ]
+        "processing_rules": {
+            "field_mappings": {
+                "time": 0,
+                "open": 1,
+                "high": 2,
+                "low": 3,
+                "close": 4,
+                "volume": 5,
+                "close_time": 6,
+                "transaction_volume": 7,
+                "transaction_number": 8,
+                "active_buying_volume": 9,
+                "active_buying_transaction_volume": 10,
+                "ignore": 11
+            },
+            "response_code_field": null,
+            "success_code": null,
+            "result_field": null
+        }
     },
-    "bybit":{
-        "base_url":"https://api2.bybit.com/spot/api/quote/v2/klines",
-        "timestamp_type":"ms",
-        "symbol":[
-            "BTCUSDT","ETHUSDT"
+    "bybit": {
+        "base_url": "https://api2.bybit.com/spot/api/quote/v2/klines",
+        "timestamp_type": "ms",
+        "symbol": [
+            "BTCUSDT",
+            "ETHUSDT"
         ],
-        "interval":{
+        "interval": {
             "1m": 30000000,
             "15m": 449000000,
             "1d": 43100000000
         },
-        "params":{
+        "params": {
             "to": "!ET!",
             "limit": 500,
             "symbol": "!S!",
-            "interval": "!I!" 
+            "interval": "!I!"
         },
-        "columns":[
-            "time",
-            "open",
-            "high",
-            "low",
-            "close",
-            "volumn"
-        ]
+        "processing_rules": {
+            "field_mappings": {
+                "time": "t",
+                "open": "o",
+                "high": "h",
+                "low": "l",
+                "close": "c",
+                "volume": "v"
+            },
+            "response_code_field": "ret_code",
+            "success_code": 0,
+            "result_field": "result"
+        }
     },
-    "okx":{
-        "base_url":"https://www.okx.com/priapi/v5/market/history-candles",
-        "timestamp_type":"ms",
-        "symbol":[
-            "BTC-USDT","ETH-USDT"
+    "okx": {
+        "base_url": "https://www.okx.com/priapi/v5/market/history-candles",
+        "timestamp_type": "ms",
+        "symbol": [
+            "BTC-USDT",
+            "ETH-USDT"
         ],
-        "interval":{
+        "interval": {
             "1m": 17940000,
             "15m": 269100000,
             "1Dutc": 25800000000
         },
-        "interval_mapping":{
-            "1Dutc":"1d"
+        "interval_mapping": {
+            "1Dutc": "1d"
         },
-        "params":{
+        "params": {
             "after": "!ET!",
             "limit": 1000,
             "instId": "!S!",
-            "bar": "!I!" 
+            "bar": "!I!"
         },
-        "columns":[
-            "time",
-            "open",
-            "high",
-            "low",
-            "close",
-            "unknown1",
-            "unknown2",
-            "unknown3",
-            "unknown4"
-        ]
+        "processing_rules": {
+            "field_mappings": {
+                "time": 0,
+                "open": 1,
+                "high": 2,
+                "low": 3,
+                "close": 4,
+                "unknown1": 5,
+                "unknown2": 6,
+                "unknown3": 7,
+                "unknown4": 8
+            },
+            "response_code_field": "code",
+            "success_code": "0",
+            "result_field": "data"
+        }
     }
 }

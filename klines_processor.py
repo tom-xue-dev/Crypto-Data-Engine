@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import threading
-from abc import ABCMeta, abstractmethod
 from datetime import datetime
 from enum import Enum
 from logging.handlers import RotatingFileHandler
@@ -11,9 +10,10 @@ from time import time
 import pandas as pd
 import pytz
 from fake_useragent import UserAgent
+import requests
 
 
-class KLinesProcessor(metaclass=ABCMeta):
+class KLinesProcessor():
     CURRENT_TIMESTAMP = int(time() * 1000)
 
     class DataMode(Enum):
@@ -35,8 +35,9 @@ class KLinesProcessor(metaclass=ABCMeta):
         self._base_url = self.config["base_url"]
         self._params_template = self.config["params"]
         self._delta_time = self.config["interval"][self.interval]
-        self._columns = self.config["columns"]
         self._timestamp_rate = 1000 if self.config["timestamp_type"] == "ms" else 1
+        self._processing_rules = self.config.get("processing_rules", {})
+        self._columns = list(self._processing_rules.get("field_mappings").keys())
 
         # 标准间隔：见 url_config.json 中 "binance" 的 "interval" 键名，用于文件夹命名、频率获取
         if self._interval_mapping and self.interval in self._interval_mapping:
@@ -107,15 +108,42 @@ class KLinesProcessor(metaclass=ABCMeta):
         tmp_folder = os.path.join(self._work_folder, "tmp")
         os.makedirs(tmp_folder, exist_ok=True)
 
-    @abstractmethod
-    def _get_data_list(self, new_data):
-        """抽象方法，用于处理新数据列表"""
-        return new_data
-
-    @abstractmethod
     def _get_klines_data(self, params):
-        """抽象方法，用于获取 K 线数据"""
-        pass
+        """根据配置文件获取 K 线数据"""
+        try:
+            response = requests.get(self._base_url, headers=self._get_random_headers(), params=params)
+            time_name = next((key for key, val in self._params_template.items() if val == "!ET!"), None)
+            time = params.get(time_name)
+            if response.status_code == 200:
+                data = response.json()
+                response_code_field = self._processing_rules.get("response_code_field")
+                success_code = self._processing_rules.get("success_code")
+                result_field = self._processing_rules.get("result_field")
+
+                if response_code_field is not None:
+                    if data.get(response_code_field) == success_code:
+                        result_data = data.get(result_field, [])
+                        return result_data, self.KlinesDataFlag.NORMAL
+                    else:
+                        self._logger.error(
+                            f"请求时间点为{self._timestamp_to_datetime(time)}数据时出现错误（时间戳：{time}），"
+                            f"API返回错误代码: {data.get(response_code_field)}"
+                        )
+                        return None, self.KlinesDataFlag.ERROR
+                else:
+                    # 不需要额外状态码的 API
+                    return data, self.KlinesDataFlag.NORMAL
+            else:
+                self._logger.error(
+                    f"请求时间点为{self._timestamp_to_datetime(time)}数据时出现错误（时间戳：{time}），"
+                    f"请求失败，状态码: {response.status_code}"
+                )
+                return None, self.KlinesDataFlag.ERROR
+        except requests.exceptions.RequestException as e:
+            self._logger.error(
+                f"请求时间点为{self._timestamp_to_datetime(time)}数据时出现错误（时间戳：{time}），请求异常: {e}"
+            )
+            return None, self.KlinesDataFlag.ERROR
 
     def make_csv(self, max_rows=100000, save_times=100, max_threads=50, mode=None):
         """生成 CSV 文件的主方法"""
@@ -391,7 +419,7 @@ class KLinesProcessor(metaclass=ABCMeta):
         if not new_data:
             return
         if online_data:
-            data_list = self._get_data_list(new_data)
+            data_list = self._process_data(new_data)
         else:
             data_list = new_data
         df = pd.DataFrame(data_list, columns=self._columns)
@@ -404,6 +432,20 @@ class KLinesProcessor(metaclass=ABCMeta):
             index=False
         )
         self._logger.info(f"数据保存到 {file_name}")
+
+    def _process_data(self, new_data):
+        """根据配置文件处理新获取的数据"""
+        field_mappings = self._processing_rules.get("field_mappings", {})
+        processed_data = []
+        for item in new_data:
+            processed_item = {}
+            for csv_field, data_field in field_mappings.items():
+                if isinstance(data_field, int):
+                    processed_item[csv_field] = item[data_field]
+                else:
+                    processed_item[csv_field] = item.get(data_field, None)
+            processed_data.append(processed_item)
+        return processed_data
 
     def _save_new_data_update_mode(self, new_data):
         """在更新模式下保存新数据"""
