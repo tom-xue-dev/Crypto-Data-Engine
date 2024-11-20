@@ -483,7 +483,7 @@ class KLinesProcessor:
         :return: 转换后的系统时间字符串
         """
         # 将毫秒级时间戳转换为秒级
-        timestamp = int(timestamp / self._timestamp_rate)
+        timestamp = int(timestamp) / self._timestamp_rate
         # 使用datetime模块转换
         dt_object = datetime.utcfromtimestamp(timestamp)
         return dt_object.strftime('%Y-%m-%d %H:%M:%S')  # 格式化为“年-月-日 时:分:秒”
