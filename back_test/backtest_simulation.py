@@ -29,6 +29,7 @@ def backtest(dataset, initial_cash=10000, leverage=5, hourly_rate=0.00180314):
     buy_price = 0  # 记录买入价格
     borrow_amount = 0  # 记录借入金额
     borrow_start_time = None  # 记录借款时间
+    initial_position_size = 0
 
     for i in range(len(dataset)):
         date_time.append(dataset['time'].iloc[i])
@@ -39,7 +40,8 @@ def backtest(dataset, initial_cash=10000, leverage=5, hourly_rate=0.00180314):
         if signal == -1 and cash > 0:
             price *= 1.001  # 增加千分之1的手续费
             borrow_amount = cash * (leverage - 1)  # 计算借款金额
-            position = (cash + borrow_amount) / price  # 计算总持仓
+            initial_position_size = (cash + borrow_amount) / price  # 初始持仓大小
+            position = initial_position_size  # 计算总持仓
             cash = 0  # 持仓后现金归零
             buy_price = price
             borrow_start_time = dataset['time'].iloc[i]
@@ -57,6 +59,7 @@ def backtest(dataset, initial_cash=10000, leverage=5, hourly_rate=0.00180314):
             cash -= interest  # 扣除借贷利息
             borrow_amount = 0
             borrow_start_time = None
+            initial_position_size = 0  # 重置初始持仓大小
 
             print(f"Sell at {price:.2f}, cash: {cash:.2f}, interest paid: {interest:.2f}")
 
@@ -73,13 +76,15 @@ def backtest(dataset, initial_cash=10000, leverage=5, hourly_rate=0.00180314):
     final_value = cash + position * dataset['close'].iloc[-1]
     total_return = (final_value - initial_cash) / initial_cash * 100
     result_frame = pd.DataFrame({'value': portfolio_value, 'time': date_time})
+
     # 返回回测结果
     results = {
         "Initial Cash": initial_cash,
         "Final Portfolio Value": final_value,
         "Total Return (%)": total_return,
     }
-    return result_frame
+    return result_frame, results
+
 
 
 
@@ -154,55 +159,50 @@ def back_test(strategy_results, initial_capital=10000, position_size=1, leverage
     for index, row in strategy_results.iterrows():
         # 开仓信号处理
         if row['signal'] == 1 and open_position is None:
-            # 在 A 开多，B 开空
             open_position = 'long'
             entry_price_a = row['open_df1']
             entry_price_b = row['open_df2']
             borrow_amount = capital * (leverage - 1)  # 计算借款金额
-            position_size *= leverage  # 调整仓位大小
+            position_size = position_size * leverage  # 调整仓位大小
             borrow_start_time = row['time']  # 记录借款开始时间
-            print(f"Opened long A and short B with leverage: {leverage}, borrowed: {borrow_amount:.2f}")
 
         elif row['signal'] == -1 and open_position is None:
-            # 在 A 开空，B 开多
             open_position = 'short'
             entry_price_a = row['open_df1']
             entry_price_b = row['open_df2']
-            borrow_amount = capital * (leverage - 1)  # 计算借款金额
-            position_size *= leverage  # 调整仓位大小
-            borrow_start_time = row['time']  # 记录借款开始时间
-            print(f"Opened short A and long B with leverage: {leverage}, borrowed: {borrow_amount:.2f}")
+            borrow_amount = capital * (leverage - 1)
+            position_size = position_size * leverage
+            borrow_start_time = row['time']
 
         # 平仓信号处理
         elif row['signal'] == 2 and open_position is not None:
-            # 计算持仓时间
             hours_held = (row['time'] - borrow_start_time).total_seconds() / 3600
-            interest = borrow_amount * hourly_rate * hours_held  # 计算借贷利息
+            interest = borrow_amount * hourly_rate * hours_held
 
             if open_position == 'long':
-                # 平仓：A 平多，B 平空
                 profit_a = (row['close_df1'] - entry_price_a) * position_size
                 profit_b = (entry_price_b - row['close_df2']) * position_size
             elif open_position == 'short':
-                # 平仓：A 平空，B 平多
                 profit_a = (entry_price_a - row['close_df1']) * position_size
                 profit_b = (row['close_df2'] - entry_price_b) * position_size
             else:
                 profit_a = profit_b = 0
 
-            # 总利润扣除借贷利息
-            total_profit = profit_a + profit_b - interest
-            capital += total_profit
-            borrow_amount = 0  # 重置借款金额
-            borrow_start_time = None  # 重置借款时间
+            transaction_fee_rate = 0.001  # 交易费用比例
 
-            if capital <= 0:
+            transaction_fee_a = (entry_price_a + row['close_df1']) * position_size * transaction_fee_rate
+            transaction_fee_b = (entry_price_b + row['close_df2']) * position_size * transaction_fee_rate
+            total_transaction_fee = transaction_fee_a + transaction_fee_b
+            total_profit = profit_a + profit_b - interest - total_transaction_fee
+            capital += total_profit
+            borrow_amount = 0
+            borrow_start_time = None
+            position_size = 1  # 重置仓位大小
+
+            if capital <= 1e-6:
                 print(f"Liquidated at time {row['time']} due to insufficient capital.")
                 break
 
-            print(f"Closed position at time {row['time']} with profit: {total_profit:.2f}, interest: {interest:.2f}, capital: {capital:.2f}")
-
-            # 记录结果
             results.append({
                 'time': row['time'],
                 'signal': 2,
@@ -213,7 +213,6 @@ def back_test(strategy_results, initial_capital=10000, position_size=1, leverage
                 'capital': capital
             })
 
-            # 重置持仓状态
             open_position = None
             entry_price_a = entry_price_b = 0
 
@@ -224,12 +223,12 @@ def back_test(strategy_results, initial_capital=10000, position_size=1, leverage
 
 
 
-start_date = datetime(2023, 8, 1)
-end_date = datetime(2024, 7, 1)
+start_date = datetime(2023, 11, 1)
+end_date = datetime(2024, 11, 1)
 timeframe = '1m'
 exchange_name1 = 'binance'
-exchange_name2 = 'bybit'
-crypto_type = 'BTCUSDT'
+exchange_name2 = 'okx'
+crypto_type = 'ETHUSDT'
 binance_data = get_btc_data(start_date, end_date, timeframe, exchange_name1, crypto_type)
 bybit_data = get_btc_data(start_date, end_date, timeframe, exchange_name2, crypto_type)
 df = strategy.arbitrage_trading_trategy(binance_data,bybit_data)

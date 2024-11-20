@@ -65,13 +65,13 @@ def arbitrage_trading_trategy(dataset1,dataset2):
     merged['signal'] = 0
     # Condition 1: Arbitrage opportunity for opening long on A and short on B
     merged.loc[
-        (merged['open_diff'] > 0) & (merged['open_diff'] > merged['close_df1'] * 0.001),
+        (merged['open_diff'] > 0) & (merged['open_diff'] > merged['close_df1'] * 0.005),
         'signal'
     ] = -1
 
     # Condition 2: Arbitrage opportunity for opening short on A and long on B
     merged.loc[
-        (merged['open_diff'] < 0) & (merged['open_diff'].abs() > merged['close_df1'] * 0.001),
+        (merged['open_diff'] < 0) & (merged['open_diff'].abs() > merged['close_df1'] * 0.005),
         'signal'
     ] = 1
     # condition 3,平仓
