@@ -115,10 +115,12 @@ class KLinesProcessor:
                 self.mode = mode
                 self._logger.warning(f"手动设置模式为 {mode}，请检查逻辑是否正确")
             if self.mode in [KLinesProcessor.DataMode.CREATE, KLinesProcessor.DataMode.CONTINUE]:
-                self._make_history_data()
+                if self._make_history_data():
+                    break
             elif self.mode == KLinesProcessor.DataMode.UPDATE:
                 # self._update_data()
                 self._logger.warning(f"暂不支持 {mode} 模式")
+                break
             if self._is_abnormal_termination: # 有异常需要重试
                 self.max_make_csv_attempt_count -= 1
                 if os.path.exists(self._tmp_csv_file):
@@ -179,7 +181,7 @@ class KLinesProcessor:
                     for t in threads:
                         t.join()
             if self._is_abnormal_termination:
-                return      
+                return False    
             self._save_to_csv(self._new_data, self._tmp_csv_file)
             self._drop_duplicates(self._tmp_csv_file)
             self._sort_csv(self._tmp_csv_file,False)
@@ -192,8 +194,10 @@ class KLinesProcessor:
                 splited_file_name = os.path.join(self._work_folder, '0.csv')
                 if self._fix_csv_data_integrity(self._tmp_csv_file) and not os.path.exists(splited_file_name):
                     self._split_csv()
+            return True
         else:
             self._logger.error(f"线程数设置错误：{self.max_threads}")
+            return False
 
     def _worker(self):
         while not self._stop_event.is_set():
