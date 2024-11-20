@@ -346,10 +346,14 @@ class KLinesProcessor:
                 continue
         self._logger.critical(f"拆分完成，总共创建了 {file_count} 个文件。")
 
-    def _save_to_csv(self, new_data, file_name, transfer_time=True):
+    def _save_to_csv(self, new_data, file_name, transfer_time=True, online_data = True):
         if new_data is None or len(new_data) == 0:
             return
-        df = pd.DataFrame(self._get_data_list(new_data), columns=self._columns)
+        if online_data:
+            data_list = self._get_data_list(new_data)
+        else:
+            data_list = new_data
+        df = pd.DataFrame(data_list, columns=self._columns)
         if transfer_time:
             df['time'] = df['time'].apply(lambda x: self._timestamp_to_datetime(x))
         df.to_csv(file_name, mode='a', header=not pd.io.common.file_exists(file_name), index=False)
@@ -455,7 +459,7 @@ class KLinesProcessor:
             closest_data[0] = missing_time
             new_data.append(closest_data)
             self._logger.warning(f"使用 {origin_time} 的数据代替缺失的时间 {missing_time} 的数据")
-        self._save_to_csv(new_data, file_name, False)
+        self._save_to_csv(new_data, file_name, False, False)
         self._sort_csv(file_name)
         self._drop_duplicates(file_name)
         return True
