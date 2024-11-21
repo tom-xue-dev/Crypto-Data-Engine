@@ -137,7 +137,7 @@ def plot_portfolio_value(original_data,portfolio_data,length=200):
     plt.show()
 
 
-def back_test(strategy_results, initial_capital=10000, position_size=1, leverage=5, hourly_rate=0.00180314):
+def back_test(strategy_results, initial_capital=10000, position_size=1, leverage=3, hourly_rate=0.00180314):
     """
     回测套利策略的收益表现，支持杠杆交易及借贷利率。
 
@@ -148,6 +148,8 @@ def back_test(strategy_results, initial_capital=10000, position_size=1, leverage
     :param hourly_rate: float, 借贷的小时利率。
     :return: tuple (DataFrame, float)，回测结果和最终资金。
     """
+    signal_1_count = (strategy_results['signal'] == 1).sum()
+    print(f"Signal 1 occurred {signal_1_count} times.")
     # 初始化资金、状态和交易记录
     capital = initial_capital
     open_position = None  # 记录当前持仓 ('long' or 'short')
@@ -228,7 +230,7 @@ end_date = datetime(2024, 11, 1)
 timeframe = '1m'
 exchange_name1 = 'binance'
 exchange_name2 = 'okx'
-crypto_type = 'ETHUSDT'
+crypto_type = 'BTCUSDT'
 binance_data = get_btc_data(start_date, end_date, timeframe, exchange_name1, crypto_type)
 bybit_data = get_btc_data(start_date, end_date, timeframe, exchange_name2, crypto_type)
 df = strategy.arbitrage_trading_trategy(binance_data,bybit_data)
