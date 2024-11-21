@@ -121,5 +121,42 @@
             "success_code": "0",
             "result_field": "data"
         }
+    },
+    "kucoin": {
+        "base_url": "https://www.kucoin.com/_api/order-book/candles",
+        "timestamp_type": "s",
+        "symbol": [
+            "BTC-USDT",
+            "ETH-USDT"
+        ],
+        "interval": {
+            "1min": 89000,
+            "15min": 1340000,
+            "1day": 129000000
+        },
+        "interval_mapping": {
+            "1min": "1m",
+            "15min": "15m",
+            "1day": "1d"
+        },
+        "params": {
+            "end": "!ET!",
+            "symbol": "!S!",
+            "type": "!I!"
+        },
+        "processing_rules": {
+            "field_mappings": {
+                "time": 0,
+                "open": 1,
+                "close": 2,
+                "high": 3,
+                "low": 4,
+                "transaction_volume": 5,
+                "transaction_amount": 6
+            },
+            "response_code_field": "success",
+            "success_code": true,
+            "result_field": "data"
+        }
     }
 }
