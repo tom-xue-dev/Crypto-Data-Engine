@@ -7,6 +7,7 @@ from Account import Account
 from get_btc_info import get_btc_data
 import strategy
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 
 def backtest(dataset, initial_cash=10000, leverage=5, hourly_rate=0.00180314):
@@ -102,15 +103,18 @@ def plot_with_signals(dataset, length=200):
     length = min(length, len(dataset))
     # create the plot
     data_subset = dataset.iloc[:length]
+
+    scaled_close = data_subset['close'] / data_subset['close'].iloc[0]
+
     fig, ax = plt.subplots(figsize=(16, 8))
-    ax.plot(data_subset['time'], data_subset['close'], label='Close Price')
+    ax.plot(data_subset['time'], scaled_close, data_subset['close'], label='Close Price')
 
     buy_signals = data_subset[data_subset['signal'] == 1]
     sell_signals = data_subset[data_subset['signal'] == -1]
 
     # add buy and sell signal in the picture
-    ax.scatter(buy_signals['time'], buy_signals['close'], color='green', marker='^', label='Buy Signal', s=100)
-    ax.scatter(sell_signals['time'], sell_signals['close'], color='red', marker='v', label='Sell Signal', s=100)
+    ax.scatter(buy_signals['time'], buy_signals['close'] / data_subset['close'].iloc[0], color='green', marker='^', label='Buy Signal', s=100)
+    ax.scatter(sell_signals['time'], sell_signals['close'] / data_subset['close'].iloc[0], color='red', marker='v', label='Sell Signal', s=100)
     # set labels and the x axes.
     ax.xaxis.set_ticks(np.arange(0, length, 50))
     ax.set_xlabel("Time")
@@ -121,40 +125,63 @@ def plot_with_signals(dataset, length=200):
     plt.tight_layout()
     plt.show()
 
-def plot_portfolio_value(original_data,portfolio_data,length=200):
+def plot_portfolio_value(original_data, portfolio_data, length=200):
     """
-    plot the portfolio value with benchmark,x-axis is time and y-axis is the value
-    :param dataset: the data that need to be plotted, include time and value column
-    :return: None
+    绘制投资组合价值与基准的对比曲线，将值缩放到从 1 开始。
+
+    参数：
+        original_data: pd.DataFrame
+            包含基准数据（'time' 和 'close' 列）的数据集。
+        portfolio_data: pd.DataFrame
+            包含投资组合数据（'time' 和 'value' 列）的数据集。
+        length: int
+            显示的最大数据点数量，默认为 200。
     """
-    fig, ax = plt.subplots(figsize=(16, 8))
-    length = min(len(portfolio_data),length)
+    # 确保 length 不超过数据集总长度
+    length = min(len(portfolio_data), length)
     pdata_subset = portfolio_data.iloc[:length]
     odata_subset = original_data.iloc[:length]
-    ax.plot(pdata_subset['time'], pdata_subset['value'], label='Portfolio Value', c="blue")
-    ax.plot(pdata_subset['time'], odata_subset['close'], label='benchmark', c="red")
-    ax.xaxis.set_ticks(np.arange(0, length, 500))
+
+    # 缩放投资组合价值和基准值
+    scaled_portfolio_value = pdata_subset['value'] / pdata_subset['value'].iloc[0]
+    scaled_benchmark = odata_subset['close'] / odata_subset['close'].iloc[0]
+
+    # 创建图表
+    fig, ax = plt.subplots(figsize=(16, 8))
+    ax.plot(pdata_subset['time'], scaled_portfolio_value, label='投资组合价值（缩放）', c="blue", linewidth=2)
+    ax.plot(odata_subset['time'], scaled_benchmark, label='基准（缩放）', c="red", linestyle='--', linewidth=2)
+
+    # 设置轴标签、标题和图例
+    ax.set_xlabel("时间")
+    ax.set_ylabel("价值（缩放）")
+    ax.set_title("投资组合价值与基准对比（缩放）")
+    ax.legend()
+
+    # 动态格式化时间轴
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d %H:%M"))
+    plt.xticks(rotation=45)
+    ax.grid(True)
+    plt.tight_layout()
     plt.show()
 
 
 def back_test(strategy_results, initial_capital=10000, position_size=1, leverage=3, hourly_rate=0.00180314):
     """
-    回测套利策略的收益表现，支持杠杆交易及借贷利率。
+    回测套利策略的收益表现，支持杠杆交易及借贷利率，且保留收益在各自交易所。
 
-    :param strategy_results: 包含交易信号的 DataFrame，需包含 'time', 'signal', 'open_df1', 'open_df2' 列。
+    :param strategy_results: 包含交易信号的 DataFrame，需包含 'time', 'signal', 'open_df1', 'open_df2', 'close_df1', 'close_df2' 列。
     :param initial_capital: float, 初始资金 (默认 $10,000)。
     :param position_size: float, 每次交易的基础仓位大小 (单位: BTC 或其他资产)。
     :param leverage: float, 杠杆倍数，默认为1（不使用杠杆）。
     :param hourly_rate: float, 借贷的小时利率。
-    :return: tuple (DataFrame, float)，回测结果和最终资金。
+    :return: tuple (DataFrame, float, float)，回测结果和两个交易所的最终资金。
     """
-    signal_1_count = (strategy_results['signal'] == 1).sum()
-    print(f"Signal 1 occurred {signal_1_count} times.")
-    # 初始化资金、状态和交易记录
-    capital = initial_capital
+    capital_a = initial_capital / 2  # A交易所初始资金
+    capital_b = initial_capital / 2  # B交易所初始资金
     open_position = None  # 记录当前持仓 ('long' or 'short')
     entry_price_a = entry_price_b = 0  # 记录开仓价格
-    borrow_amount = 0  # 记录借款金额
+    borrow_amount_a = borrow_amount_b = 0  # 记录每个交易所的借款金额
     borrow_start_time = None  # 记录借款开始时间
     results = []  # 存储回测的每一步结果
 
@@ -164,55 +191,68 @@ def back_test(strategy_results, initial_capital=10000, position_size=1, leverage
             open_position = 'long'
             entry_price_a = row['open_df1']
             entry_price_b = row['open_df2']
-            borrow_amount = capital * (leverage - 1)  # 计算借款金额
-            position_size = position_size * leverage  # 调整仓位大小
+            borrow_amount_a = capital_a * (leverage - 1)  # A交易所借款金额
+            borrow_amount_b = capital_b * (leverage - 1)  # B交易所借款金额
+            position_size *= leverage  # 调整仓位大小
             borrow_start_time = row['time']  # 记录借款开始时间
 
         elif row['signal'] == -1 and open_position is None:
             open_position = 'short'
             entry_price_a = row['open_df1']
             entry_price_b = row['open_df2']
-            borrow_amount = capital * (leverage - 1)
-            position_size = position_size * leverage
+            borrow_amount_a = capital_a * (leverage - 1)
+            borrow_amount_b = capital_b * (leverage - 1)
+            position_size *= leverage
             borrow_start_time = row['time']
 
         # 平仓信号处理
         elif row['signal'] == 2 and open_position is not None:
             hours_held = (row['time'] - borrow_start_time).total_seconds() / 3600
-            interest = borrow_amount * hourly_rate * hours_held
+            interest_a = borrow_amount_a * hourly_rate * hours_held
+            interest_b = borrow_amount_b * hourly_rate * hours_held
 
             if open_position == 'long':
-                profit_a = (row['close_df1'] - entry_price_a) * position_size
-                profit_b = (entry_price_b - row['close_df2']) * position_size
+                profit_a = (row['close_df1'] - entry_price_a) * position_size / 2
+                profit_b = (entry_price_b - row['close_df2']) * position_size / 2
             elif open_position == 'short':
-                profit_a = (entry_price_a - row['close_df1']) * position_size
-                profit_b = (row['close_df2'] - entry_price_b) * position_size
+                profit_a = (entry_price_a - row['close_df1']) * position_size / 2
+                profit_b = (row['close_df2'] - entry_price_b) * position_size / 2
             else:
                 profit_a = profit_b = 0
 
             transaction_fee_rate = 0.001  # 交易费用比例
 
-            transaction_fee_a = (entry_price_a + row['close_df1']) * position_size * transaction_fee_rate
-            transaction_fee_b = (entry_price_b + row['close_df2']) * position_size * transaction_fee_rate
+            transaction_fee_a = (entry_price_a + row['close_df1']) * position_size / 2 * transaction_fee_rate
+            transaction_fee_b = (entry_price_b + row['close_df2']) * position_size / 2 * transaction_fee_rate
             total_transaction_fee = transaction_fee_a + transaction_fee_b
-            total_profit = profit_a + profit_b - interest - total_transaction_fee
-            capital += total_profit
-            borrow_amount = 0
+
+            # 分别更新两个交易所的资金
+            capital_a += profit_a - interest_a - transaction_fee_a
+            capital_b += profit_b - interest_b - transaction_fee_b
+
+            borrow_amount_a = borrow_amount_b = 0
             borrow_start_time = None
             position_size = 1  # 重置仓位大小
 
-            if capital <= 1e-6:
-                print(f"Liquidated at time {row['time']} due to insufficient capital.")
-                break
+            if capital_a <= 1e-6 or capital_b <= 1e-6:
+                print(f"Liquidated at time {row['time']} due to insufficient capital in one exchange.")
+                remaining_capital = max(capital_a, 0) + max(capital_b, 0)
+                capital_a = remaining_capital / 2
+                capital_b = remaining_capital / 2
+                if capital_a <= 1e-6 or capital_b <= 1e-6:
+                    print("No sufficient capital to continue trading. Backtest stopped.")
+                    break
 
             results.append({
                 'time': row['time'],
                 'signal': 2,
                 'profit_a': profit_a,
                 'profit_b': profit_b,
-                'total_profit': total_profit,
-                'interest': interest,
-                'capital': capital
+                'total_profit': profit_a + profit_b - total_transaction_fee,
+                'interest_a': interest_a,
+                'interest_b': interest_b,
+                'capital_a': capital_a,
+                'capital_b': capital_b
             })
 
             open_position = None
@@ -221,7 +261,8 @@ def back_test(strategy_results, initial_capital=10000, position_size=1, leverage
     # 转换结果为 DataFrame
     results_df = pd.DataFrame(results)
 
-    return results_df, capital
+    return results_df, capital_a, capital_b  # 返回两个交易所的独立资金
+
 
 
 
@@ -229,7 +270,7 @@ start_date = datetime(2023, 11, 1)
 end_date = datetime(2024, 11, 1)
 timeframe = '1m'
 exchange_name1 = 'binance'
-exchange_name2 = 'okx'
+exchange_name2 = 'bybit'
 crypto_type = 'BTCUSDT'
 binance_data = get_btc_data(start_date, end_date, timeframe, exchange_name1, crypto_type)
 bybit_data = get_btc_data(start_date, end_date, timeframe, exchange_name2, crypto_type)
