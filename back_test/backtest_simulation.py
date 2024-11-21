@@ -9,12 +9,14 @@ import strategy
 import matplotlib.pyplot as plt
 
 
-def backtest(dataset, initial_cash=10000):
+def backtest(dataset, initial_cash=10000, leverage=5, hourly_rate=0.00180314):
     """
-    根据交易信号进行回测，计算账户的资产变化和策略表现。
+    根据交易信号进行回测，计算账户的资产变化和策略表现，支持杠杆交易及借贷利息。
 
     :param dataset: pd.DataFrame, 数据集，必须包含 'signal' 和 'close' 列
     :param initial_cash: float, 初始资金
+    :param leverage: float, 杠杆倍数，默认为1（不使用杠杆）
+    :param hourly_rate: float, 借贷的小时利率
     :return: dict, 包含回测结果的字典
     """
     if 'signal' not in dataset.columns or 'close' not in dataset.columns:
@@ -24,46 +26,67 @@ def backtest(dataset, initial_cash=10000):
     position = 0  # 初始持仓
     portfolio_value = []  # 每个时间点的总资产价值
     date_time = []
-    buy_price = 0  # 记录买入价格（用于计算持仓收益）
+    buy_price = 0  # 记录买入价格
+    borrow_amount = 0  # 记录借入金额
+    borrow_start_time = None  # 记录借款时间
+    initial_position_size = 0
 
     for i in range(len(dataset)):
         date_time.append(dataset['time'].iloc[i])
         price = dataset['close'].iloc[i]
         signal = dataset['signal'].iloc[i]
 
-        # 买入信号：用所有现金买入资产
+        # 买入信号：用所有现金（加杠杆）买入资产
         if signal == -1 and cash > 0:
-            price *= 1.001 # 增加千分之1的手续费，相当于提高千分之一的价格
-            position = cash / price  # 买入的数量
-            cash = 0
+            price *= 1.001  # 增加千分之1的手续费
+            borrow_amount = cash * (leverage - 1)  # 计算借款金额
+            initial_position_size = (cash + borrow_amount) / price  # 初始持仓大小
+            position = initial_position_size  # 计算总持仓
+            cash = 0  # 持仓后现金归零
             buy_price = price
-            print(f"Buy at {price:.2f}, position: {position:.6f}")
+            borrow_start_time = dataset['time'].iloc[i]
+            print(f"Buy at {price:.2f}, position: {position:.6f}, leverage: {leverage}, borrowed: {borrow_amount:.2f}")
+
         # 卖出信号：卖出所有持仓，转换为现金
         elif signal == 1 and position > 0:
-            price = price * 0.999 #增加千分之一手续费，相当于减少千分之一价格
-            cash = position * price  # 卖出的现金
+            price *= 0.999  # 增加千分之一手续费
+            cash = position * price  # 卖出后获得的现金
             position = 0
-            print(f"Sell at {price:.2f}, cash: {cash:.2f}")
+
+            # 计算借贷利息
+            hours_held = (dataset['time'].iloc[i] - borrow_start_time).total_seconds() / 3600
+            interest = borrow_amount * hourly_rate * hours_held
+            cash -= interest  # 扣除借贷利息
+            borrow_amount = 0
+            borrow_start_time = None
+            initial_position_size = 0  # 重置初始持仓大小
+
+            print(f"Sell at {price:.2f}, cash: {cash:.2f}, interest paid: {interest:.2f}")
 
         # 记录当前资产价值
         total_value = cash + position * price
         portfolio_value.append(total_value)
 
+        # 检测爆仓
+        if total_value <= 0:
+            print(f"Liquidated at time {date_time[-1]} with price {price:.2f}")
+            break
+
     # 计算最终结果
     final_value = cash + position * dataset['close'].iloc[-1]
     total_return = (final_value - initial_cash) / initial_cash * 100
-    # max_drawdown = max(
-    #     (max(portfolio_value) - min(portfolio_value)) / max(portfolio_value) * 100
-    #     for i in range(1, len(portfolio_value))
-    # )
-    result_frame = pd.DataFrame({'value': portfolio_value,'time':date_time})
+    result_frame = pd.DataFrame({'value': portfolio_value, 'time': date_time})
+
     # 返回回测结果
     results = {
         "Initial Cash": initial_cash,
         "Final Portfolio Value": final_value,
         "Total Return (%)": total_return,
     }
-    return result_frame
+    return result_frame, results
+
+
+
 
 
 def plot_with_signals(dataset, length=200):
@@ -114,63 +137,84 @@ def plot_portfolio_value(original_data,portfolio_data,length=200):
     plt.show()
 
 
-def back_test(strategy_results, initial_capital=10000, position_size=1):
+def back_test(strategy_results, initial_capital=10000, position_size=1, leverage=3, hourly_rate=0.00180314):
     """
-    回测套利策略的收益表现，增加对平仓信号的处理。
+    回测套利策略的收益表现，支持杠杆交易及借贷利率。
 
     :param strategy_results: 包含交易信号的 DataFrame，需包含 'time', 'signal', 'open_df1', 'open_df2' 列。
-    :param initial_capital: 初始资金 (默认 $10,000)。
-    :param position_size: 每次交易的仓位大小 (单位: BTC 或其他资产)。
-    :return: 回测结果 DataFrame 和最终资金。
+    :param initial_capital: float, 初始资金 (默认 $10,000)。
+    :param position_size: float, 每次交易的基础仓位大小 (单位: BTC 或其他资产)。
+    :param leverage: float, 杠杆倍数，默认为1（不使用杠杆）。
+    :param hourly_rate: float, 借贷的小时利率。
+    :return: tuple (DataFrame, float)，回测结果和最终资金。
     """
+    signal_1_count = (strategy_results['signal'] == 1).sum()
+    print(f"Signal 1 occurred {signal_1_count} times.")
     # 初始化资金、状态和交易记录
     capital = initial_capital
     open_position = None  # 记录当前持仓 ('long' or 'short')
     entry_price_a = entry_price_b = 0  # 记录开仓价格
+    borrow_amount = 0  # 记录借款金额
+    borrow_start_time = None  # 记录借款开始时间
     results = []  # 存储回测的每一步结果
 
     for index, row in strategy_results.iterrows():
-        # 处理信号逻辑
+        # 开仓信号处理
         if row['signal'] == 1 and open_position is None:
-            # 开仓信号：在 A 开多，B 开空
             open_position = 'long'
             entry_price_a = row['open_df1']
             entry_price_b = row['open_df2']
-            print(f"long A short B,a_price is {entry_price_a},b_price is {entry_price_b}")
+            borrow_amount = capital * (leverage - 1)  # 计算借款金额
+            position_size = position_size * leverage  # 调整仓位大小
+            borrow_start_time = row['time']  # 记录借款开始时间
+
         elif row['signal'] == -1 and open_position is None:
-            # 开仓信号：在 A 开空，B 开多
             open_position = 'short'
             entry_price_a = row['open_df1']
             entry_price_b = row['open_df2']
-            print(f"short A long B,a_price is {entry_price_a},b_price is {entry_price_b}")
+            borrow_amount = capital * (leverage - 1)
+            position_size = position_size * leverage
+            borrow_start_time = row['time']
+
+        # 平仓信号处理
         elif row['signal'] == 2 and open_position is not None:
-            # 平仓信号
+            hours_held = (row['time'] - borrow_start_time).total_seconds() / 3600
+            interest = borrow_amount * hourly_rate * hours_held
+
             if open_position == 'long':
-                # 平仓：A 平多，B 平空
-                profit_a = (row['close_df1'] - entry_price_a) * position_size - row['close_df1'] * 0.001 - entry_price_a * 0.001
-                profit_b = (entry_price_b - row['close_df2']) * position_size - row['close_df2'] * 0.001 - entry_price_b * 0.001
+                profit_a = (row['close_df1'] - entry_price_a) * position_size
+                profit_b = (entry_price_b - row['close_df2']) * position_size
             elif open_position == 'short':
-                # 平仓：A 平空，B 平多
-                profit_a = (entry_price_a - row['close_df1']) * position_size - row['close_df1'] * 0.001 - entry_price_a * 0.001
-                profit_b = (row['close_df2'] - entry_price_b) * position_size - row['close_df2'] * 0.001 - entry_price_b * 0.001
+                profit_a = (entry_price_a - row['close_df1']) * position_size
+                profit_b = (row['close_df2'] - entry_price_b) * position_size
             else:
                 profit_a = profit_b = 0
 
-            # 计算总利润并更新资金
-            total_profit = profit_a + profit_b
-            capital += total_profit
+            transaction_fee_rate = 0.001  # 交易费用比例
 
-            # 记录平仓结果
+            transaction_fee_a = (entry_price_a + row['close_df1']) * position_size * transaction_fee_rate
+            transaction_fee_b = (entry_price_b + row['close_df2']) * position_size * transaction_fee_rate
+            total_transaction_fee = transaction_fee_a + transaction_fee_b
+            total_profit = profit_a + profit_b - interest - total_transaction_fee
+            capital += total_profit
+            borrow_amount = 0
+            borrow_start_time = None
+            position_size = 1  # 重置仓位大小
+
+            if capital <= 1e-6:
+                print(f"Liquidated at time {row['time']} due to insufficient capital.")
+                break
+
             results.append({
                 'time': row['time'],
                 'signal': 2,
                 'profit_a': profit_a,
                 'profit_b': profit_b,
                 'total_profit': total_profit,
+                'interest': interest,
                 'capital': capital
             })
 
-            # 重置持仓状态
             open_position = None
             entry_price_a = entry_price_b = 0
 
@@ -179,13 +223,17 @@ def back_test(strategy_results, initial_capital=10000, position_size=1):
 
     return results_df, capital
 
-start_date = datetime(2021, 8, 1)
-end_date = datetime(2022, 7, 1)
+
+
+start_date = datetime(2023, 11, 1)
+end_date = datetime(2024, 11, 1)
 timeframe = '1m'
-exchange_name1 = 'binance_btc'
-exchange_name2 = 'bybit_btc'
-binance_data = get_btc_data(start_date, end_date, timeframe, exchange_name1)
-bybit_data = get_btc_data(start_date, end_date, timeframe, exchange_name2)
+exchange_name1 = 'binance'
+exchange_name2 = 'okx'
+crypto_type = 'BTCUSDT'
+binance_data = get_btc_data(start_date, end_date, timeframe, exchange_name1, crypto_type)
+bybit_data = get_btc_data(start_date, end_date, timeframe, exchange_name2, crypto_type)
 df = strategy.arbitrage_trading_trategy(binance_data,bybit_data)
 print(df)
 print(back_test(df))
+
