@@ -14,7 +14,6 @@ import requests
 
 
 class KLinesProcessor():
-    CURRENT_TIMESTAMP = int(time() * 1000)
 
     class DataMode(Enum):
         CREATE = 0
@@ -209,7 +208,7 @@ class KLinesProcessor():
         """生成历史数据"""
         if self.max_threads > 0:
             if self.mode == self.DataMode.CREATE:
-                self._block_time = self.CURRENT_TIMESTAMP
+                self._block_time = int(time() * self._timestamp_rate)
             else:
                 df = pd.read_csv(self._tmp_csv_file)
                 self._block_time = self._datetime_to_timestamp(df.iloc[-1]["time"])
@@ -485,7 +484,7 @@ class KLinesProcessor():
                 data, flag = self._get_klines_data(params)
                 if flag == self.KlinesDataFlag.NORMAL:
                     self._logger.info(f"获取到数据，time: {self._timestamp_to_datetime(end_time)}")
-                    if end_time - self._delta_time > self.CURRENT_TIMESTAMP:
+                    if end_time - self._delta_time > int(time() * self._timestamp_rate):
                         self._logger.critical("数据已最新")
                         self._save_new_data_update_mode(new_data)
                         break
