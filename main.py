@@ -28,20 +28,27 @@ def main():
     ).ask()
     selected_interval = interval_answer
 
-    max_threads_input = questionary.text(
-        "输入最大线程数（可选，默认50）:"
-    ).ask()
-
-    max_threads = int(max_threads_input) if max_threads_input and max_threads_input.isdigit() else 50
-
-    save_times_input = questionary.text(
-        "输入每多少次成功请求后保存一次（可选，默认100）"
-    ).ask()
-    save_times = int(save_times_input) if save_times_input and save_times_input.isdigit() else 100
-
     processor = KLinesProcessor(selected_exchange, selected_symbol, selected_interval)
 
-    processor.make_csv(max_threads=max_threads, save_times=save_times)
+    mode_answer = questionary.select(
+        "选择模式",
+        choices=["制作历史数据","更新数据"]
+    ).ask()
+
+    if mode_answer == "制作历史数据":
+
+        max_threads_input = questionary.text(
+            "输入最大线程数:"
+        ).ask()
+
+        max_threads = int(max_threads_input) if max_threads_input and max_threads_input.isdigit() else 0
+
+
+        processor.make_history_data(max_threads=max_threads)
+    
+    else:
+        print("暂不支持更新模式")
+    
 
 if __name__ == "__main__":
     main()
