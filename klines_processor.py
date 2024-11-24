@@ -25,21 +25,20 @@ class KLinesProcessor:
         self._validate_input(symbol, interval)
         self.symbol = symbol
         self.interval = interval
-        self._interval_mapping = self._url_config.get("interval_mapping")
         self._base_url = self._url_config["base_url"]
         self._params_template = self._url_config["params"]
-        self._delta_time = self._url_config["interval"][self.interval]
         self._timestamp_rate = (
-            1000 if self._url_config.get("timestamp_type") == "ms" else 1
+            1 if self._url_config.get("timestamp_type") == "s" else 1000
         )
         self._processing_rules = self._url_config.get("processing_rules", {})
         self._columns = list(self._processing_rules.get("field_mappings").keys())
 
         # 标准间隔：见 url_config.json 中 "binance" 的 "interval" 键名，用于文件夹命名、频率获取
-        if self._interval_mapping and self.interval in self._interval_mapping:
-            self._standard_interval = self._interval_mapping[self.interval]
-        else:
-            self._standard_interval = self.interval
+        self._standard_interval = (
+            self._url_config["interval"][self.interval]
+            if self._url_config["interval"][self.interval] is not None
+            else self.interval
+        )
 
         self._work_folder = os.path.join(
             "data", self.name, self.symbol, self._standard_interval
@@ -84,6 +83,7 @@ class KLinesProcessor:
 
         if max_threads > 0:
             self._max_threads = max_threads
+        self._initialize_delta_time()
         while True:
             self._logger.info(f"设置最大线程数为 {self._max_threads}")
             self._initialize_attributes()
@@ -421,6 +421,41 @@ class KLinesProcessor:
         self._logger.info(
             f"从 {self._failed_timestamps_file} 中删除已成功获取数据的时间戳 {self._timestamp_to_datetime(timestamp)}"
         )
+
+    def _initialize_delta_time(self):
+        mapping = {
+            "1s": 1,
+            "1m": 60,
+            "2m": 120,
+            "3m": 180,
+            "5m": 300,
+            "15m": 900,
+            "30m": 1800,
+            "1h": 3600,
+            "2h": 7200,
+            "4h": 14400,
+            "6h": 21600,
+            "8h": 28800,
+            "12h": 43200,
+            "1d": 86400,
+            "3d": 259200,
+            "1w": 604800,
+            "1M": 2592000,
+        }
+        test_time = int((time() - mapping[self.interval]) * self._timestamp_rate)
+        params = self._make_params(test_time)
+        test_raw_data, flag = self._get_klines_data(params)
+        if flag == self.KlinesDataFlag.NORMAL and test_raw_data is not None and len(test_raw_data) > 0:
+            test_data = self._process_data(test_raw_data)
+            delta_time = int(
+                abs(int(test_data[0].get("time")) - int(test_data[-1].get("time")))
+                - mapping[self.interval] * self._timestamp_rate
+            )
+            self._logger.info(f"设置delta_time为 {delta_time} ")
+            self._delta_time = delta_time
+        else:
+            self._logger.error("设置delta_time时出现错误")
+            raise RuntimeError("异常终止，请查看日志")
 
     def _get_next_block_time(self):
         """获取下一个数据块的时间戳"""

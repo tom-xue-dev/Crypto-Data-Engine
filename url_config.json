@@ -1,30 +1,29 @@
 {
     "binance": {
         "base_url": "https://api.binance.com/api/v3/uiKlines",
-        "timestamp_type": "ms",
         "symbol": [
             "BTCUSDT",
             "ETCUSDT",
             "ETHUSDT"
         ],
         "interval": {
-            "1s": 1000000,
-            "1m": 60000000,
-            "2m": 120000000,
-            "3m": 180000000,
-            "5m": 300000000,
-            "15m": 900000000,
-            "30m": 1800000000,
-            "1h": 3600000000,
-            "2h": 7200000000,
-            "4h": 14400000000,
-            "6h": 21600000000,
-            "8h": 28800000000,
-            "12h": 43200000000,
-            "1d": 86400000000,
-            "3d": 259200000000,
-            "1w": 604800000000,
-            "1M": 2592000000000
+            "1s": null,
+            "1m": null,
+            "2m": null,
+            "3m": null,
+            "5m": null,
+            "15m": null,
+            "30m": null,
+            "1h": null,
+            "2h": null,
+            "4h": null,
+            "6h": null,
+            "8h": null,
+            "12h": null,
+            "1d": null,
+            "3d": null,
+            "1w": null,
+            "1M": null
         },
         "params": {
             "endTime": "!ET!",
@@ -54,15 +53,14 @@
     },
     "bybit": {
         "base_url": "https://api2.bybit.com/spot/api/quote/v2/klines",
-        "timestamp_type": "ms",
         "symbol": [
             "BTCUSDT",
             "ETHUSDT"
         ],
         "interval": {
-            "1m": 30000000,
-            "15m": 449000000,
-            "1d": 43100000000
+            "1m": null,
+            "15m": null,
+            "1d": null
         },
         "params": {
             "to": "!ET!",
@@ -86,17 +84,13 @@
     },
     "okx": {
         "base_url": "https://www.okx.com/priapi/v5/market/history-candles",
-        "timestamp_type": "ms",
         "symbol": [
             "BTC-USDT",
             "ETH-USDT"
         ],
         "interval": {
-            "1m": 17940000,
-            "15m": 269100000,
-            "1Dutc": 25800000000
-        },
-        "interval_mapping": {
+            "1m": null,
+            "15m": null,
             "1Dutc": "1d"
         },
         "params": {
@@ -130,11 +124,6 @@
             "ETH-USDT"
         ],
         "interval": {
-            "1min": 89000,
-            "15min": 1340000,
-            "1day": 129000000
-        },
-        "interval_mapping": {
             "1min": "1m",
             "15min": "15m",
             "1day": "1d"
