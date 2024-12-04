@@ -259,14 +259,14 @@ class KLinesProcessor:
     def _get_klines_data(self, params):
         """根据配置文件获取 K 线数据"""
         try:
-            response = requests.get(
-                self._base_url, headers=self._get_random_headers(), params=params
-            )
             time_name = next(
                 (key for key, val in self._params_template.items() if val == "!ET!"),
                 None,
             )
             time = params.get(time_name)
+            response = requests.get(
+                self._base_url, headers=self._get_random_headers(), params=params
+            )
             if response.status_code == 200:
                 data = response.json()
                 response_code_field = self._processing_rules.get("response_code_field")
@@ -447,7 +447,7 @@ class KLinesProcessor:
             "1w": 604800,
             "1M": 2592000,
         }
-        test_time = int((time() - mapping[self.interval]) * self._timestamp_rate)
+        test_time = int((time() - mapping[self._standard_interval]) * self._timestamp_rate)
         params = self._make_params(test_time)
         test_raw_data, flag = self._get_klines_data(params)
         if (
@@ -458,7 +458,7 @@ class KLinesProcessor:
             test_data = self._process_data(test_raw_data)
             delta_time = int(
                 abs(int(test_data[0].get("time")) - int(test_data[-1].get("time")))
-                - mapping[self.interval] * self._timestamp_rate
+                - mapping[self._standard_interval] * self._timestamp_rate
             )
             self._logger.info(f"设置delta_time为 {delta_time} ")
             self._delta_time = delta_time
