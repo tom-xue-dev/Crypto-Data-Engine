@@ -272,10 +272,14 @@ class KLinesProcessor:
                 response_code_field = self._processing_rules.get("response_code_field")
                 success_code = self._processing_rules.get("success_code")
                 result_field = self._processing_rules.get("result_field")
+                result_field_2 = self._processing_rules.get("result_field_2")
 
                 if response_code_field is not None:
                     if data.get(response_code_field) == success_code:
-                        result_data = data.get(result_field, [])
+                        if result_field_2 is not None:
+                            result_data = data.get(result_field, {}).get(result_field_2, [])
+                        else:
+                            result_data = data.get(result_field, [])
                         return result_data, self.KlinesDataFlag.NORMAL
                     else:
                         self._logger.error(
