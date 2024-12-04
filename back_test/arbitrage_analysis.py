@@ -5,13 +5,15 @@ from matplotlib import pyplot as plt
 
 from get_btc_info import get_btc_data
 
-start_date = datetime(2021, 1, 1)
-end_date = datetime(2022, 1, 31)
+start_date = datetime(2023, 11, 1)
+end_date = datetime(2024, 11, 1)
 timeframe = '1m'
-exchange_name1 = 'binance_btc'
-exchange_name2 = 'bybit_btc'
-binance_data = get_btc_data(start_date, end_date, timeframe, exchange_name1)
-bybit_data = get_btc_data(start_date, end_date, timeframe, exchange_name2)
+crypto = "BTCUSDT"
+exchange_name1 = 'bybit'
+exchange_name2 = 'okx'
+
+binance_data = get_btc_data(start_date, end_date, timeframe, exchange_name1, crypto)
+bybit_data = get_btc_data(start_date, end_date, timeframe, exchange_name2, crypto)
 
 def compare_dataframes(df1, df2):
     """
@@ -47,7 +49,7 @@ def compare_dataframes(df1, df2):
     print(f"high_diff: {high_diff_count}")
     print(f"low_diff: {low_diff_count}")
     # 返回包含时间和差值的 DataFrame
-    return merged[['time', 'open_diff', 'close_diff', 'high_diff', 'low_diff']]
+    return merged[['time', 'open_diff', 'close_diff', 'high_diff', 'low_diff','open_df1']]
 
 
 def plot_diff_distribution(diff_df):
@@ -79,3 +81,6 @@ def plot_diff_distribution(diff_df):
 result = compare_dataframes(binance_data, bybit_data)
 plot_diff_distribution(result)
 print(result)
+filtered_result = result[abs(result["open_diff"]) > result["open_df1"] * 0.002]
+pd.set_option('display.max_columns', None)
+print(filtered_result)

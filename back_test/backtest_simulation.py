@@ -166,19 +166,18 @@ def plot_portfolio_value(original_data, portfolio_data, length=200):
     plt.show()
 
 
-def back_test(strategy_results, initial_capital=10000, position_size=1, leverage=3, hourly_rate=0.00180314):
+def back_test(strategy_results, initial_capital=10000, position_size=1, leverage=5, hourly_rate=0.00180314):
     """
-    回测套利策略的收益表现，支持杠杆交易及借贷利率，且保留收益在各自交易所。
+    回测套利策略的收益表现，支持杠杆交易及借贷利率。
 
     :param strategy_results: 包含交易信号的 DataFrame，需包含 'time', 'signal', 'open_df1', 'open_df2', 'close_df1', 'close_df2' 列。
     :param initial_capital: float, 初始资金 (默认 $10,000)。
     :param position_size: float, 每次交易的基础仓位大小 (单位: BTC 或其他资产)。
     :param leverage: float, 杠杆倍数，默认为1（不使用杠杆）。
     :param hourly_rate: float, 借贷的小时利率。
-    :return: tuple (DataFrame, float, float)，回测结果和两个交易所的最终资金。
+    :return: tuple (DataFrame, float)，回测结果和最终资金。
     """
-    capital_a = initial_capital / 2  # A交易所初始资金
-    capital_b = initial_capital / 2  # B交易所初始资金
+    capital_per_exchange = initial_capital / 2  # 每个交易所初始资金的一半
     open_position = None  # 记录当前持仓 ('long' or 'short')
     entry_price_a = entry_price_b = 0  # 记录开仓价格
     borrow_amount_a = borrow_amount_b = 0  # 记录每个交易所的借款金额
@@ -191,8 +190,8 @@ def back_test(strategy_results, initial_capital=10000, position_size=1, leverage
             open_position = 'long'
             entry_price_a = row['open_df1']
             entry_price_b = row['open_df2']
-            borrow_amount_a = capital_a * (leverage - 1)  # A交易所借款金额
-            borrow_amount_b = capital_b * (leverage - 1)  # B交易所借款金额
+            borrow_amount_a = capital_per_exchange * (leverage - 1)  # A交易所借款金额
+            borrow_amount_b = capital_per_exchange * (leverage - 1)  # B交易所借款金额
             position_size *= leverage  # 调整仓位大小
             borrow_start_time = row['time']  # 记录借款开始时间
 
@@ -200,8 +199,8 @@ def back_test(strategy_results, initial_capital=10000, position_size=1, leverage
             open_position = 'short'
             entry_price_a = row['open_df1']
             entry_price_b = row['open_df2']
-            borrow_amount_a = capital_a * (leverage - 1)
-            borrow_amount_b = capital_b * (leverage - 1)
+            borrow_amount_a = capital_per_exchange * (leverage - 1)
+            borrow_amount_b = capital_per_exchange * (leverage - 1)
             position_size *= leverage
             borrow_start_time = row['time']
 
@@ -225,34 +224,26 @@ def back_test(strategy_results, initial_capital=10000, position_size=1, leverage
             transaction_fee_a = (entry_price_a + row['close_df1']) * position_size / 2 * transaction_fee_rate
             transaction_fee_b = (entry_price_b + row['close_df2']) * position_size / 2 * transaction_fee_rate
             total_transaction_fee = transaction_fee_a + transaction_fee_b
-
-            # 分别更新两个交易所的资金
-            capital_a += profit_a - interest_a - transaction_fee_a
-            capital_b += profit_b - interest_b - transaction_fee_b
-
+            total_profit = profit_a + profit_b - interest_a - interest_b - total_transaction_fee
+            capital_per_exchange += total_profit / 2  # 将收益平分到两个交易所资金中
             borrow_amount_a = borrow_amount_b = 0
             borrow_start_time = None
             position_size = 1  # 重置仓位大小
 
-            if capital_a <= 1e-6 or capital_b <= 1e-6:
+            if capital_per_exchange <= 1e-6:
                 print(f"Liquidated at time {row['time']} due to insufficient capital in one exchange.")
-                remaining_capital = max(capital_a, 0) + max(capital_b, 0)
-                capital_a = remaining_capital / 2
-                capital_b = remaining_capital / 2
-                if capital_a <= 1e-6 or capital_b <= 1e-6:
-                    print("No sufficient capital to continue trading. Backtest stopped.")
-                    break
+                break
 
             results.append({
                 'time': row['time'],
                 'signal': 2,
                 'profit_a': profit_a,
                 'profit_b': profit_b,
-                'total_profit': profit_a + profit_b - total_transaction_fee,
+                'total_profit': total_profit,
                 'interest_a': interest_a,
                 'interest_b': interest_b,
-                'capital_a': capital_a,
-                'capital_b': capital_b
+                'capital_a': capital_per_exchange,
+                'capital_b': capital_per_exchange
             })
 
             open_position = None
@@ -261,7 +252,8 @@ def back_test(strategy_results, initial_capital=10000, position_size=1, leverage
     # 转换结果为 DataFrame
     results_df = pd.DataFrame(results)
 
-    return results_df, capital_a, capital_b  # 返回两个交易所的独立资金
+    return results_df, capital_per_exchange * 2  # 返回两个交易所总资金的和
+
 
 
 

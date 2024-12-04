@@ -44,6 +44,8 @@ def double_moving_average_strategy(short, long, dataset):
     dataset.loc[dataset[short_ma_col] > dataset[long_ma_col], 'signal'] = 1  # 短期均线高于长期均线 -> 买入
     dataset.loc[dataset[short_ma_col] < dataset[long_ma_col], 'signal'] = -1  # 短期均线低于长期均线 -> 卖出
     return dataset
+
+
 def arbitrage_trading_trategy(dataset1,dataset2):
     """
 
@@ -65,17 +67,17 @@ def arbitrage_trading_trategy(dataset1,dataset2):
     merged['signal'] = 0
     # Condition 1: Arbitrage opportunity for opening long on A and short on B
     merged.loc[
-        (merged['open_diff'] > 0) & (merged['open_diff'] > merged['close_df1'] * 0.002),
+        (merged['open_diff'] > 0) & (merged['open_diff'] > merged['close_df1'] * 0.001),
         'signal'
     ] = -1
 
     # Condition 2: Arbitrage opportunity for opening short on A and long on B
     merged.loc[
-        (merged['open_diff'] < 0) & (merged['open_diff'].abs() > merged['close_df1'] * 0.002),
+        (merged['open_diff'] < 0) & (merged['open_diff'].abs() > merged['close_df1'] * 0.001),
         'signal'
     ] = 1
     # condition 3,平仓
-    merged.loc[merged['open_diff'].abs() < 10, 'signal'] = 2
+    merged.loc[merged['open_diff'].abs() < 2, 'signal'] = 2
     return merged
 # df = get_btc_data("15m")
 # df = calculate_MA(df,20)
