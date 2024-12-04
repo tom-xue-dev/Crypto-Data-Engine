@@ -222,25 +222,29 @@ class KLinesProcessor:
         """获取配置好的日志记录器"""
         logger = logging.getLogger(f"{self.name}_{self.symbol}_{self.interval}")
         logger.setLevel(logging.DEBUG)
+        if not logger.handlers:
 
-        # 创建控制台处理器，设置日志级别为 INFO
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
+            # 创建控制台处理器，设置日志级别为 INFO
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(logging.INFO)
 
-        # 创建文件处理器，设置日志级别为 DEBUG
-        file_handler = RotatingFileHandler(
-            self._log_file, maxBytes=3 * 1024 * 1024, backupCount=3, encoding="utf-8"
-        )
-        file_handler.setLevel(logging.DEBUG)
+            # 创建文件处理器，设置日志级别为 DEBUG
+            file_handler = RotatingFileHandler(
+                self._log_file,
+                maxBytes=3 * 1024 * 1024,
+                backupCount=3,
+                encoding="utf-8",
+            )
+            file_handler.setLevel(logging.DEBUG)
 
-        # 创建日志格式
-        formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-        console_handler.setFormatter(formatter)
-        file_handler.setFormatter(formatter)
+            # 创建日志格式
+            formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+            console_handler.setFormatter(formatter)
+            file_handler.setFormatter(formatter)
 
-        # 添加处理器到日志记录器
-        logger.addHandler(console_handler)
-        logger.addHandler(file_handler)
+            # 添加处理器到日志记录器
+            logger.addHandler(console_handler)
+            logger.addHandler(file_handler)
 
         return logger
 
@@ -445,7 +449,11 @@ class KLinesProcessor:
         test_time = int((time() - mapping[self.interval]) * self._timestamp_rate)
         params = self._make_params(test_time)
         test_raw_data, flag = self._get_klines_data(params)
-        if flag == self.KlinesDataFlag.NORMAL and test_raw_data is not None and len(test_raw_data) > 0:
+        if (
+            flag == self.KlinesDataFlag.NORMAL
+            and test_raw_data is not None
+            and len(test_raw_data) > 0
+        ):
             test_data = self._process_data(test_raw_data)
             delta_time = int(
                 abs(int(test_data[0].get("time")) - int(test_data[-1].get("time")))
@@ -611,11 +619,14 @@ class KLinesProcessor:
             return False
         if missing_times is None:
             return True
+        missing_times_file = os.path.join(self._log_folder, "missing_times.txt")
+        if not os.path.exists(missing_times_file):
+            for missing_time in missing_times:
+                with open(missing_times_file, "a") as f:
+                    f.write(f"{missing_time}\n")
         if len(missing_times) > self._allow_max_missing_times:
             self._logger.error("过多的缺失时间点，停止后续操作！")
             raise RuntimeError("异常终止，请查看日志")
-        missing_times_file = os.path.join(self._log_folder, "missing_times.txt")
-
         for missing_time in missing_times:
             closest_time_idx = (df_time["time"] - missing_time).abs().idxmin()
             closest_data = list(df.iloc[closest_time_idx])
@@ -625,8 +636,6 @@ class KLinesProcessor:
             self._logger.warning(
                 f"使用 {origin_time} 的数据代替缺失的时间 {missing_time} 的数据"
             )
-            with open(missing_times_file, "a") as f:
-                f.write(f"{missing_time}\n")
 
         self._save_to_csv(new_data, file_name, transfer_time=False, online_data=False)
         self._sort_csv(file_name)
