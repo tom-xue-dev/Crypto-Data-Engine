@@ -153,6 +153,7 @@ class KLinesProcessor:
                         self._logger.error("仍存在请求失败的时间戳")
                         raise RuntimeError("异常终止，请查看日志")
                     if self._fix_csv_data_integrity(self._tmp_csv_file):
+                        self._drop_first_data(self._tmp_csv_file)
                         self._split_csv()
                     self._logger.critical("历史数据已制作完成！")
                 return
@@ -655,6 +656,12 @@ class KLinesProcessor:
         df.drop_duplicates(subset=["time"], keep="first", inplace=True)
         df.to_csv(file_name, index=False)
         self._logger.info(f"对 {file_name} 中的数据完成去重")
+    
+    def _drop_first_data(self, file_name):
+        df = pd.read_csv(file_name)
+        df = df.drop(index=0)
+        df.to_csv(file_name, index=False)
+        self._logger.info(f"删除 {file_name} 中第一条数据")
 
     def _timestamp_to_datetime(self, timestamp):
         """
