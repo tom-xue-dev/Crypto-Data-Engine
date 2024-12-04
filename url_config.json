@@ -189,5 +189,42 @@
             "success_code": null,
             "result_field": null
         }
+    },
+    "bybit_future": {
+        "base_url": "https://api2-2.bybit.com/contract/v5/public/instrument/kline/market",
+        "symbol": [
+            "BTCUSDT",
+            "ETHUSDT",
+            "DOGEUSDT"
+        ],
+        "interval": {
+            "1": "1m",
+            "15": "15m",
+            "D": "1d"
+        },
+        "params": {
+            "contract_type":"2",
+            "from": "0",
+            "to": "!ET!",
+            "symbol": "!S!",
+            "resolution": "!I!",
+            "_sp_category": "fbu",
+            "_sp_response_format": "portugal",
+            "showOrigin": "true"
+        },
+        "processing_rules": {
+            "field_mappings": {
+                "time": 0,
+                "open": 1,
+                "high": 2,
+                "low": 3,
+                "close": 4,
+                "volume": 5
+            },
+            "response_code_field": "ret_code",
+            "success_code": 0,
+            "result_field": "result",
+            "result_field_2": "list"
+        }
     }
 }
