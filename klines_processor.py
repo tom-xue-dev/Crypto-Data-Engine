@@ -475,8 +475,9 @@ class KLinesProcessor:
         with self._lock:
             if (
                 self._data_collected
-                or self._block_time < self._timestamp_rate * 946656000
+                or self._block_time < self._timestamp_rate * 1230000000
             ):
+                self._data_collected = True
                 return None
             current_block_time = self._block_time
             self._block_time -= self._delta_time
