@@ -3,7 +3,7 @@
         "base_url": "https://api.binance.com/api/v3/uiKlines",
         "symbol": [
             "BTCUSDT",
-            "ETCUSDT",
+            "DOGEUSDT",
             "ETHUSDT"
         ],
         "interval": {
@@ -55,7 +55,8 @@
         "base_url": "https://api2.bybit.com/spot/api/quote/v2/klines",
         "symbol": [
             "BTCUSDT",
-            "ETHUSDT"
+            "ETHUSDT",
+            "DOGEUSDT"
         ],
         "interval": {
             "1m": null,
@@ -86,7 +87,8 @@
         "base_url": "https://www.okx.com/priapi/v5/market/history-candles",
         "symbol": [
             "BTC-USDT",
-            "ETH-USDT"
+            "ETH-USDT",
+            "DOGE-USDT"
         ],
         "interval": {
             "1m": null,
@@ -121,7 +123,8 @@
         "timestamp_type": "s",
         "symbol": [
             "BTC-USDT",
-            "ETH-USDT"
+            "ETH-USDT",
+            "DOGE-USDT"
         ],
         "interval": {
             "1min": "1m",
@@ -146,6 +149,45 @@
             "response_code_field": "success",
             "success_code": true,
             "result_field": "data"
+        }
+    },
+    "binance_futures": {
+        "base_url": "https://www.binance.com/fapi/v1/continuousKlines",
+        "symbol": [
+            "BTCUSDT",
+            "DOGEUSDT",
+            "ETHUSDT"
+        ],
+        "interval": {
+            "1m": null,
+            "15m": null,
+            "1d": null
+        },
+        "params": {
+            "endTime": "!ET!",
+            "limit": 1000,
+            "pair": "!S!",
+            "interval": "!I!",
+            "contractType": "PERPETUAL"
+        },
+        "processing_rules": {
+            "field_mappings": {
+                "time": 0,
+                "open": 1,
+                "high": 2,
+                "low": 3,
+                "close": 4,
+                "volume": 5,
+                "close_time": 6,
+                "transaction_volume": 7,
+                "transaction_number": 8,
+                "active_buying_volume": 9,
+                "active_buying_transaction_volume": 10,
+                "ignore": 11
+            },
+            "response_code_field": null,
+            "success_code": null,
+            "result_field": null
         }
     }
 }
