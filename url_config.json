@@ -120,7 +120,10 @@
     },
     "kucoin": {
         "base_url": "https://www.kucoin.com/_api/order-book/candles",
-        "timestamp_type": "s",
+        "timestamp_type": {
+            "params": "s",
+            "data": "s"
+        },
         "symbol": [
             "BTC-USDT",
             "ETH-USDT",
@@ -192,6 +195,10 @@
     },
     "bybit_future": {
         "base_url": "https://api2-2.bybit.com/contract/v5/public/instrument/kline/market",
+        "timestamp_type": {
+            "params": "ms",
+            "data": "s"
+        },
         "symbol": [
             "BTCUSDT",
             "ETHUSDT",
@@ -203,7 +210,7 @@
             "D": "1d"
         },
         "params": {
-            "contract_type":"2",
+            "contract_type": "2",
             "from": "0",
             "to": "!ET!",
             "symbol": "!S!",
