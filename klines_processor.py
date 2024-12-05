@@ -276,6 +276,9 @@ class KLinesProcessor:
                 None,
             )
             timestamp = params.get(timestamp_key)
+            datetime = self._timestamp_to_datetime(
+                timestamp, rate=self._timestamp_rate["params"]
+            )
             response = requests.get(
                 self._base_url, headers=self._get_random_headers(), params=params
             )
@@ -335,14 +338,14 @@ class KLinesProcessor:
             block_datetime = self._timestamp_to_datetime(
                 block_timestamp, rate=self._timestamp_rate['params']
             )
-            id = threading.get_ident()
+            name = threading.current_thread().name
             if block_timestamp is None:
                 break
             params = self._make_params(block_timestamp)
             data, flag = self._get_klines_data(params)
             if flag == self.KlinesDataFlag.NORMAL:
                 if data:
-                    self._logger.info(f"线程 {id} 获取到数据，time: {block_datetime}")
+                    self._logger.info(f"线程 {name} 获取到数据，time: {block_datetime}")
                     with self._lock:
                         self._new_data.extend(data)
                         self._timer += 1
@@ -359,7 +362,7 @@ class KLinesProcessor:
                     break
             else:
                 self._logger.warning(
-                    f"线程 {id} 获取数据时发生错误，time: {block_datetime}"
+                    f"线程 {name} 获取数据时发生错误，time: {block_datetime}"
                 )
                 with self._lock:
                     self._save_failed_timestamp(block_timestamp)
@@ -369,7 +372,7 @@ class KLinesProcessor:
         with open(self._failed_timestamps_file, "a") as f:
             f.write(f"{timestamp}\n")
         datetime = self._timestamp_to_datetime(
-            timestamp, rate=self._timestamp_rate['params']
+            timestamp, rate=self._timestamp_rate["params"]
         )
         self._logger.info(
             f"保存失败的时间：{datetime}（时间戳：{timestamp}）到 {self._failed_timestamps_file}"
@@ -556,7 +559,9 @@ class KLinesProcessor:
             data_list = new_data
         df = pd.DataFrame(data_list, columns=self._columns)
         if transfer_time:
-            df['time'] = self._timestamp_to_datetime(df['time'], rate=self._timestamp_rate['data'])
+            df["time"] = df["time"].apply(
+                self._timestamp_to_datetime, args=(self._timestamp_rate["data"],)
+            )
         df.to_csv(
             file_name, mode="a", header=not os.path.exists(file_name), index=False
         )
