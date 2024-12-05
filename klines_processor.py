@@ -31,7 +31,7 @@ class KLinesProcessor:
         self._timestamp_rate = {"params": 1000, "data": 1000}
         timestamp_type = self._url_config.get("timestamp_type")
         if timestamp_type:
-            for k, v in timestamp_type:
+            for k, v in timestamp_type.items():
                 if v == "ms":
                     self._timestamp_rate[k] = 1000
                 else:
@@ -330,12 +330,12 @@ class KLinesProcessor:
         """工作线程，负责获取数据并处理"""
         while not self._stop_event.is_set():
             block_timestamp = self._get_next_block_time()
+            if block_timestamp is None:
+                break
             block_datetime = self._timestamp_to_datetime(
                 block_timestamp, rate=self._timestamp_rate["params"]
             )
             name = threading.current_thread().name
-            if block_timestamp is None:
-                break
             params = self._make_params(block_timestamp)
             data, flag = self._get_klines_data(params)
             if flag == self.KlinesDataFlag.NORMAL:
@@ -698,6 +698,8 @@ class KLinesProcessor:
         :param timestamp: 时间戳（毫秒）
         :return: 转换后的系统时间字符串
         """
+        if timestamp is None:
+            print("2314")
         timestamp = int(timestamp / rate)
         dt_object = datetime.utcfromtimestamp(timestamp)
         return dt_object.strftime("%Y-%m-%d %H:%M:%S")  # 格式化为“年-月-日 时:分:秒”
