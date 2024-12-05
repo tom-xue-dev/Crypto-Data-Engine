@@ -8,10 +8,11 @@ from get_btc_info import get_btc_data
 start_date = datetime(2021, 1, 1)
 end_date = datetime(2022, 1, 31)
 timeframe = '1m'
-exchange_name1 = 'binance_btc'
-exchange_name2 = 'bybit_btc'
-binance_data = get_btc_data(start_date, end_date, timeframe, exchange_name1)
-bybit_data = get_btc_data(start_date, end_date, timeframe, exchange_name2)
+exchange_name1 = 'binance'
+exchange_name2 = 'bybit'
+crypto_type = "BTCUSDT"
+binance_data = get_btc_data(start_date, end_date, timeframe, exchange_name1,crypto_type,"future")
+bybit_data = get_btc_data(start_date, end_date, timeframe, exchange_name2,crypto_type,"future")
 
 def compare_dataframes(df1, df2):
     """

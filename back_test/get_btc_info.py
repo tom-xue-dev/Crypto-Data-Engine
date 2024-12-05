@@ -4,7 +4,7 @@ import pandas as pd
 from pathlib import Path
 
 
-def get_target_file_path(level, exchange_name, crypto_type):
+def get_target_file_path(level, exchange_name, crypto_type,sub_direct):
     """
     get the target btc file which stores the specific level
     param:
@@ -21,7 +21,7 @@ def get_target_file_path(level, exchange_name, crypto_type):
 
     script_path = Path(__file__).resolve()
     base_path = script_path.parents[1] / "data"
-    target_path = base_path / exchange_name / crypto_type / level
+    target_path = base_path / exchange_name / sub_direct/crypto_type / level
     print(target_path)
     if target_path.exists():
         return target_path
@@ -29,18 +29,19 @@ def get_target_file_path(level, exchange_name, crypto_type):
         return None
 
 
-def get_btc_data(start_date, end_date, timeframe, exchange_name, crypto_type):
+def get_btc_data(start_date, end_date, timeframe, exchange_name, crypto_type,sub_direct_name):
     """
     从编号文件中获取指定时间范围内的 BTC 数据。
-    :param start_date: 起始日期 (datetime)
+    :start_date: 起始日期 (datetime)
     :param end_date: 结束日期 (datetime)
     :param timeframe: 时间周期，例如 '15m'
     :param exchange_name: 交易所名称，例如 'binance'
-    :param exchange_name: The types of crypto i.e BTC,ETH
+    :param crypto_type: The types of crypto i.e BTC,ETH
+    :param sub_direct_name: 分目录的名字，用于区分期货现货
     :return: 包含指定时间范围内的数据的 Pandas DataFrame
     """
 
-    directory = get_target_file_path(timeframe, exchange_name, crypto_type)
+    directory = get_target_file_path(timeframe, exchange_name, crypto_type,sub_direct_name)
     if directory is None:
         raise ValueError("Can't find target directory")
     all_files = [file for file in os.listdir(directory) if file.endswith(".csv")]
