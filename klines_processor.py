@@ -5,7 +5,7 @@ import threading
 from datetime import datetime
 from enum import Enum
 from logging.handlers import RotatingFileHandler
-from time import time
+from time import sleep, time
 
 import pandas as pd
 import pytz
@@ -45,14 +45,16 @@ class KLinesProcessor:
             if self._url_config["interval"][self.interval] is not None
             else self.interval
         )
+        self._end_time = None
 
         self._work_folder = os.path.join(
             "data", self.exchange, self.type, self.symbol, self._standard_interval
         )
         self._log_folder = os.path.join(self._work_folder, "log")
         self._log_file = os.path.join(self._log_folder, "app.log")
+        self._tmp_csv_folder = os.path.join(self._work_folder, "tmp")
         self._tmp_csv_file = os.path.join(
-            self._work_folder, "tmp", f"{self._standard_interval}.csv"
+            self._tmp_csv_folder, f"{self._standard_interval}.csv"
         )
         self._failed_timestamps_file = os.path.join(
             self._log_folder, "failed_timestamps.txt"
@@ -64,15 +66,15 @@ class KLinesProcessor:
         # 最大尝试次数
         self._max_make_csv_attempt_count = self._config["MAX_MAKE_CSV_ATTEMPT_COUNT"]
         # 制作历史数据中允许最大请求失败的时间戳数量，超过数量后将1次请求次数，并减半最大线程数开始重试
-        self._allow_max_failed_timestamps_number = self._config[
-            "ALLOW_MAX_FAILED_TIMESTAMPS_NUMBER"
+        self._allow_max_failed_timestamps = self._config[
+            "ALLOW_MAX_FAILED_TIMESTAMPS"
         ]
         # 完成历史数据制作前，允许对请求失败的时间戳再次请求的次数
         self._allow_max_failed_timestamps_attempt_time = self._config[
             "ALLOW_MAX_FAILED_TIMESTAMPS_ATTEMPT_TIME"
         ]
         # 完成历史数据制作前，允许最大缺失时间点数量
-        self._allow_max_missing_times = self._config["ALLOW_MAX_MISSING_TIMES"]
+        self._allow_max_missing_timestamps = self._config["ALLOW_MAX_MISSING_TIMESTAMPS"]
         # 分割后的CSV最大行数
         self._splitted_csv_max_rows = self._config["SPLITTED_CSV_MAX_ROWS"]
         # 缓存的最大数据量
@@ -80,7 +82,15 @@ class KLinesProcessor:
         # 默认最大线程数
         self._max_threads = self._config["MAX_THREADS"]
 
-    def make_history_data(self, max_threads=0):
+    def make_history_data(
+        self,
+        max_threads=None,
+        start_time=None,
+        end_time=None,
+        drop_first=True,
+        replace_missing_time_with_adjacent=True,
+        delete_tmp=True,
+    ):
         """生成历史数据"""
         splitted_file = os.path.join(self._work_folder, "0.csv")
         if os.path.exists(splitted_file):
@@ -90,20 +100,27 @@ class KLinesProcessor:
         if max_threads > 0:
             self._max_threads = max_threads
         self._initialize_delta_time()
+        self._end_time = end_time
         while True:
             self._logger.info(f"设置最大线程数为 {self._max_threads}")
             self._initialize_attributes()
 
-            if os.path.exists(self._tmp_csv_file):
-                df = pd.read_csv(self._tmp_csv_file)
-                self._block_time = self._datetime_to_timestamp(
-                    df.iloc[-1]["time"], rate=self._timestamp_rate["params"]
+            if start_time:
+                self._block_timestamp = int(
+                    self._datetime_to_timestamp(
+                        start_time, rate=self._timestamp_rate["params"]
+                    )
                 )
             else:
-                self._block_time = int(time() * self._timestamp_rate["params"])
-
+                if os.path.exists(self._tmp_csv_file):
+                    df = pd.read_csv(self._tmp_csv_file)
+                    self._block_timestamp = self._datetime_to_timestamp(
+                        df.iloc[-1]["time"], rate=self._timestamp_rate["params"]
+                    )
+                else:
+                    self._block_timestamp = int(time() * self._timestamp_rate["params"])
             self._logger.info(
-                f"从 {self._timestamp_to_datetime(self._block_time,rate=self._timestamp_rate['params'])}（时间戳：{self._block_time}）开始获取历史数据..."
+                f"从 {self._timestamp_to_datetime(self._block_timestamp,rate=self._timestamp_rate['params'])}（时间戳：{self._block_timestamp}）开始获取历史数据..."
             )
             threads = []
             for _ in range(self._max_threads):
@@ -135,7 +152,9 @@ class KLinesProcessor:
                         f"剩余尝试次数：{self._max_make_csv_attempt_count}"
                     )
                     self._max_threads = max(int(self._max_threads / 2), 1)
-                    self._logger.info("重试开始，最大线程数减半")
+                    self._logger.info("等待10秒后开始重试...")
+                    sleep(10)
+                    self._logger.info(f"重试开始，最大线程数减半为{self._max_threads}")
                 else:
                     self._logger.error("尝试次数耗尽，终止此次数据获取")
                     raise RuntimeError("异常终止，请查看日志")
@@ -157,12 +176,20 @@ class KLinesProcessor:
                             self._tmp_csv_file, thread_number
                         ):
                             break
+                    self._drop_duplicates(self._tmp_csv_file)
+                    self._sort_csv(self._tmp_csv_file, ascending=False)
                     if os.path.exists(self._failed_timestamps_file):
                         self._logger.error("仍存在请求失败的时间戳")
                         raise RuntimeError("异常终止，请查看日志")
-                    if self._fix_csv_data_integrity(self._tmp_csv_file):
-                        self._drop_first_data(self._tmp_csv_file)
+                    if self._fix_csv_data_integrity(
+                        self._tmp_csv_file, replace=replace_missing_time_with_adjacent
+                    ):
+                        if drop_first:
+                            self._drop_first_data(self._tmp_csv_file)
                         self._split_csv()
+                    if delete_tmp and os.path.exists(self._tmp_csv_file):
+                        os.remove(self._tmp_csv_file)
+                        self._logger.info(f"删除{self._tmp_csv_file}成功")
                     self._logger.critical("历史数据已制作完成！")
                 return
 
@@ -189,7 +216,7 @@ class KLinesProcessor:
                     self._logger.info(
                         f"获取到数据，time: {self._timestamp_to_datetime(end_time)}"
                     )
-                    if end_time - self._delta_time > int(
+                    if end_time - self._delta_timestamp > int(
                         time() * self._timestamp_rate["params"]
                     ):
                         self._logger.critical("数据已最新")
@@ -197,7 +224,7 @@ class KLinesProcessor:
                         break
                     new_data.extend(data)
                     timer += 1
-                    end_time += self._delta_time
+                    end_time += self._delta_timestamp
                     if timer >= self._cached_data_amount:
                         self._save_new_data_update_mode(new_data)
                         new_data = []
@@ -329,7 +356,7 @@ class KLinesProcessor:
     def _worker(self):
         """工作线程，负责获取数据并处理"""
         while not self._stop_event.is_set():
-            block_timestamp = self._get_next_block_time()
+            block_timestamp = self._get_next_block_timestamp()
             if block_timestamp is None:
                 break
             block_datetime = self._timestamp_to_datetime(
@@ -352,9 +379,10 @@ class KLinesProcessor:
                     self._logger.warning(
                         f"线程 {name} 没有获取到数据，time: {block_datetime}"
                     )
-                    with self._lock:
-                        self._data_collected = True
-                    break
+                    if not self._end_time:
+                        with self._lock:
+                            self._data_collected = True
+                        break
             else:
                 self._logger.warning(
                     f"线程 {name} 获取数据时发生错误，time: {block_datetime}"
@@ -374,9 +402,11 @@ class KLinesProcessor:
         )
         with open(self._failed_timestamps_file, "r") as f:
             lines = f.readlines()
-        if len(lines) > self._allow_max_failed_timestamps_number:
-            self._stop_event.set()
-            self._is_abnormal_termination = True
+        if len(lines) > self._allow_max_failed_timestamps:
+            # self._stop_event.set()
+            # self._is_abnormal_termination = True
+            sleep(10)
+            self._allow_max_failed_timestamps *= 2
 
     def _retry_failed_timestamps(self, file_name, thread_number):
         """重试获取失败的时间戳数据"""
@@ -414,7 +444,7 @@ class KLinesProcessor:
                 dt = self._timestamp_to_datetime(
                     ts, rate=self._timestamp_rate["params"]
                 )
-                if flag == self.KlinesDataFlag.NORMAL and data:
+                if flag == self.KlinesDataFlag.NORMAL:
                     self._logger.info(f"重试成功，时间: {dt}（时间戳：{ts}）")
                     with file_lock:
                         self._save_to_csv(data, file_name)
@@ -433,9 +463,6 @@ class KLinesProcessor:
         for t in threads:
             t.join()
 
-        self._drop_duplicates(file_name)
-        self._sort_csv(file_name, ascending=False)
-
     def _remove_failed_timestamp(self, timestamp):
         """移除已成功获取数据的失败时间戳"""
         if not os.path.exists(self._failed_timestamps_file):
@@ -447,7 +474,7 @@ class KLinesProcessor:
                 if int(line.strip()) != timestamp:
                     f.write(line)
 
-    def _initialize_delta_time(self):
+    def _initialize_delta_time(self, start_time=None):
         mapping = {
             "1s": 1,
             "1m": 60,
@@ -467,10 +494,17 @@ class KLinesProcessor:
             "1w": 604800,
             "1M": 2592000,
         }
-        test_time = int(
-            (time() - mapping[self._standard_interval]) * self._timestamp_rate["params"]
+        if start_time:
+            start_timestamp = self._datetime_to_timestamp(
+                start_time, self._timestamp_rate["params"]
+            )
+        else:
+            start_timestamp = time()
+        test_timestamp = int(
+            (start_timestamp - mapping[self._standard_interval])
+            * self._timestamp_rate["params"]
         )
-        params = self._make_params(test_time)
+        params = self._make_params(test_timestamp)
         test_raw_data, flag = self._get_klines_data(params)
         if (
             flag == self.KlinesDataFlag.NORMAL
@@ -487,31 +521,38 @@ class KLinesProcessor:
             elif self._timestamp_rate["data"] < self._timestamp_rate["params"]:
                 delta_time = int(delta_time * 1000)
             self._logger.info(f"设置delta_time为 {delta_time} ")
-            self._delta_time = delta_time
+            self._delta_timestamp = delta_time
         else:
             self._logger.error("设置delta_time时出现错误")
             raise RuntimeError("异常终止，请查看日志")
 
-    def _get_next_block_time(self):
+    def _get_next_block_timestamp(self):
         """获取下一个数据块的时间戳"""
         with self._lock:
             if (
                 self._data_collected
-                or self._block_time < self._timestamp_rate["params"] * 1230000000
+                or self._block_timestamp < self._timestamp_rate["params"] * 1230000000
+                or (
+                    self._end_time
+                    and self._block_timestamp
+                    < self._datetime_to_timestamp(
+                        self._end_time, self._timestamp_rate["params"]
+                    )
+                )
             ):
                 self._data_collected = True
                 return None
-            current_block_time = self._block_time
-            self._block_time -= self._delta_time
-            return current_block_time
+            current_block_timestamp = self._block_timestamp
+            self._block_timestamp -= self._delta_timestamp
+            return current_block_timestamp
 
-    def _make_params(self, end_time):
+    def _make_params(self, end_timestamp):
         """根据模板生成请求参数"""
         template = self._params_template.copy()
         params = {}
         for k, v in template.items():
             if v == "!ET!":
-                params[k] = end_time
+                params[k] = end_timestamp
             elif v == "!S!":
                 params[k] = self.symbol
             elif v == "!I!":
@@ -641,7 +682,7 @@ class KLinesProcessor:
         else:
             raise ValueError("不支持的格式")
 
-    def _fix_csv_data_integrity(self, file_name):
+    def _fix_csv_data_integrity(self, file_name, replace=True):
         """修复 CSV 数据的完整性，填补缺失的数据点"""
         missing_times, df, df_time = self._get_missing_times_list(file_name)
         new_data = []
@@ -654,22 +695,25 @@ class KLinesProcessor:
             for missing_time in missing_times:
                 with open(missing_times_file, "a") as f:
                     f.write(f"{missing_time}\n")
-        if len(missing_times) > self._allow_max_missing_times:
-            self._logger.error("过多的缺失时间点，停止后续操作！")
-            raise RuntimeError("异常终止，请查看日志")
-        for missing_time in missing_times:
-            closest_time_idx = (df_time["time"] - missing_time).abs().idxmin()
-            closest_data = list(df.iloc[closest_time_idx])
-            origin_time = closest_data[0]
-            closest_data[0] = missing_time
-            new_data.append(closest_data)
-            self._logger.warning(
-                f"使用 {origin_time} 的数据代替缺失的时间 {missing_time} 的数据"
-            )
+        if replace:
+            if len(missing_times) > self._allow_max_missing_timestamps:
+                self._logger.error("过多的缺失时间点，停止后续操作！")
+                raise RuntimeError("异常终止，请查看日志")
+            for missing_time in missing_times:
+                closest_time_idx = (df_time["time"] - missing_time).abs().idxmin()
+                closest_data = list(df.iloc[closest_time_idx])
+                origin_time = closest_data[0]
+                closest_data[0] = missing_time
+                new_data.append(closest_data)
+                self._logger.warning(
+                    f"使用 {origin_time} 的数据代替缺失的时间 {missing_time} 的数据"
+                )
 
-        self._save_to_csv(new_data, file_name, transfer_time=False, online_data=False)
-        self._sort_csv(file_name)
-        self._drop_duplicates(file_name)
+            self._save_to_csv(
+                new_data, file_name, transfer_time=False, online_data=False
+            )
+            self._sort_csv(file_name)
+            self._drop_duplicates(file_name)
         return True
 
     def _sort_csv(self, file_name, ascending=True):
@@ -698,8 +742,6 @@ class KLinesProcessor:
         :param timestamp: 时间戳（毫秒）
         :return: 转换后的系统时间字符串
         """
-        if timestamp is None:
-            print("2314")
         timestamp = int(timestamp / rate)
         dt_object = datetime.utcfromtimestamp(timestamp)
         return dt_object.strftime("%Y-%m-%d %H:%M:%S")  # 格式化为“年-月-日 时:分:秒”
