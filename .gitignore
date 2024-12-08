@@ -1,5 +1,6 @@
 __pycache__
 tmp
 app.log
+proxies.yml
 *test*.py
 data/
