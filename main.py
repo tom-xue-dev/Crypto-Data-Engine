@@ -1,11 +1,13 @@
 import json
+import os
 import questionary
 
 from klines_processor import KLinesProcessor
 
 
 def main():
-    with open("url_config.json", "r") as f:
+    url_config_path = os.path.join("config", "url_config.json")
+    with open(url_config_path, "r") as f:
         url_config = json.load(f)
 
     exchanges = list(url_config.keys())

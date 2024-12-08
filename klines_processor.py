@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import random
+import subprocess
 import threading
 from datetime import datetime
 from enum import Enum
@@ -11,6 +13,7 @@ import pandas as pd
 import pytz
 from fake_useragent import UserAgent
 import requests
+import yaml
 
 
 class KLinesProcessor:
@@ -66,21 +69,27 @@ class KLinesProcessor:
         # 最大尝试次数
         self._max_make_csv_attempt_count = self._config["MAX_MAKE_CSV_ATTEMPT_COUNT"]
         # 制作历史数据中允许最大请求失败的时间戳数量，超过数量后将1次请求次数，并减半最大线程数开始重试
-        self._allow_max_failed_timestamps = self._config[
-            "ALLOW_MAX_FAILED_TIMESTAMPS"
-        ]
+        self._allow_max_failed_timestamps = self._config["ALLOW_MAX_FAILED_TIMESTAMPS"]
         # 完成历史数据制作前，允许对请求失败的时间戳再次请求的次数
         self._allow_max_failed_timestamps_attempt_time = self._config[
             "ALLOW_MAX_FAILED_TIMESTAMPS_ATTEMPT_TIME"
         ]
         # 完成历史数据制作前，允许最大缺失时间点数量
-        self._allow_max_missing_timestamps = self._config["ALLOW_MAX_MISSING_TIMESTAMPS"]
+        self._allow_max_missing_timestamps = self._config[
+            "ALLOW_MAX_MISSING_TIMESTAMPS"
+        ]
         # 分割后的CSV最大行数
         self._splitted_csv_max_rows = self._config["SPLITTED_CSV_MAX_ROWS"]
         # 缓存的最大数据量
         self._cached_data_amount = self._config["CACHED_DATA_AMOUNT"]
         # 默认最大线程数
         self._max_threads = self._config["MAX_THREADS"]
+        self._enable_proxy = self._config["ENABLE_PROXY"]
+        # 设置代理
+        self._proxy_manager = None
+        proxies_path = os.path.join("config", "proxies.yml")
+        if self._enable_proxy and os.path.exists(proxies_path):
+            self._proxy_manager = ProxyManager(proxies_path)
 
     def make_history_data(
         self,
@@ -96,153 +105,127 @@ class KLinesProcessor:
         if os.path.exists(splitted_file):
             self._logger.error("历史数据已制作完成，无需制作")
             raise RuntimeError("异常终止，请查看日志")
-
-        if max_threads > 0:
-            self._max_threads = max_threads
-        self._initialize_delta_time()
-        self._end_time = end_time
-        while True:
-            self._logger.info(f"设置最大线程数为 {self._max_threads}")
-            self._initialize_attributes()
-
-            if start_time:
-                self._block_timestamp = int(
-                    self._datetime_to_timestamp(
-                        start_time, rate=self._timestamp_rate["params"]
-                    )
-                )
-            else:
-                if os.path.exists(self._tmp_csv_file):
-                    df = pd.read_csv(self._tmp_csv_file)
-                    self._block_timestamp = self._datetime_to_timestamp(
-                        df.iloc[-1]["time"], rate=self._timestamp_rate["params"]
-                    )
-                else:
-                    self._block_timestamp = int(time() * self._timestamp_rate["params"])
-            self._logger.info(
-                f"从 {self._timestamp_to_datetime(self._block_timestamp,rate=self._timestamp_rate['params'])}（时间戳：{self._block_timestamp}）开始获取历史数据..."
-            )
-            threads = []
-            for _ in range(self._max_threads):
-                t = threading.Thread(target=self._worker)
-                t.start()
-                threads.append(t)
-
+        if self._proxy_manager:
+            proxies_amount = self._proxy_manager.start_proxies()
+            self._logger.info(f"代理配置成功，共加载 {proxies_amount} 条代理")
+        try:
+            if max_threads > 0:
+                self._max_threads = max_threads
+            self._initialize_delta_time()
+            self._end_time = end_time
             while True:
-                alive_threads = [t for t in threads if t.is_alive()]
-                if not alive_threads:
-                    break
-                try:
-                    for t in alive_threads:
-                        t.join(timeout=0.1)
-                except KeyboardInterrupt:
-                    self._logger.warning("手动停止数据收集")
-                    self._stop_event.set()
-                    for t in threads:
-                        t.join()
+                self._logger.info(f"设置最大线程数为 {self._max_threads}")
+                self._initialize_attributes()
 
-            if self._is_abnormal_termination:
-                self._max_make_csv_attempt_count -= 1
-                if os.path.exists(self._tmp_csv_file):
-                    os.remove(self._tmp_csv_file)
-                if os.path.exists(self._failed_timestamps_file):
-                    os.remove(self._failed_timestamps_file)
-                if self._max_make_csv_attempt_count > 0:
-                    self._logger.info(
-                        f"剩余尝试次数：{self._max_make_csv_attempt_count}"
+                if start_time:
+                    self._block_timestamp = int(
+                        self._datetime_to_timestamp(
+                            start_time, rate=self._timestamp_rate["params"]
+                        )
                     )
-                    self._max_threads = max(int(self._max_threads / 2), 1)
-                    self._logger.info("等待10秒后开始重试...")
-                    sleep(10)
-                    self._logger.info(f"重试开始，最大线程数减半为{self._max_threads}")
                 else:
-                    self._logger.error("尝试次数耗尽，终止此次数据获取")
-                    raise RuntimeError("异常终止，请查看日志")
-            else:
-                self._save_to_csv(self._new_data, self._tmp_csv_file)
-                self._drop_duplicates(self._tmp_csv_file)
-                self._sort_csv(self._tmp_csv_file, ascending=False)
+                    if os.path.exists(self._tmp_csv_file):
+                        df = pd.read_csv(self._tmp_csv_file)
+                        self._block_timestamp = self._datetime_to_timestamp(
+                            df.iloc[-1]["time"], rate=self._timestamp_rate["params"]
+                        )
+                    else:
+                        self._block_timestamp = int(
+                            time() * self._timestamp_rate["params"]
+                        )
+                self._logger.info(
+                    f"从 {self._timestamp_to_datetime(self._block_timestamp,rate=self._timestamp_rate['params'])}（时间戳：{self._block_timestamp}）开始获取历史数据..."
+                )
+                threads = []
+                for _ in range(self._max_threads):
+                    t = threading.Thread(target=self._worker)
+                    t.start()
+                    threads.append(t)
 
-                if self._data_collected:
-                    thread_list = [self._max_threads]
-                    while (
-                        len(thread_list)
-                        < self._allow_max_failed_timestamps_attempt_time
-                    ):
-                        next_threads = max(int(thread_list[-1] / 2), 1)
-                        thread_list.append(next_threads)
-                    for thread_number in thread_list:
-                        if self._retry_failed_timestamps(
-                            self._tmp_csv_file, thread_number
-                        ):
-                            break
+                while True:
+                    alive_threads = [t for t in threads if t.is_alive()]
+                    if not alive_threads:
+                        break
+                    try:
+                        for t in alive_threads:
+                            t.join(timeout=0.1)
+                    except KeyboardInterrupt:
+                        self._logger.warning("手动停止数据收集")
+                        self._stop_event.set()
+                        for t in threads:
+                            t.join()
+
+                if self._is_abnormal_termination:
+                    self._max_make_csv_attempt_count -= 1
+                    if os.path.exists(self._tmp_csv_file):
+                        os.remove(self._tmp_csv_file)
+                    if os.path.exists(self._failed_timestamps_file):
+                        os.remove(self._failed_timestamps_file)
+                    if self._max_make_csv_attempt_count > 0:
+                        self._logger.info(
+                            f"剩余尝试次数：{self._max_make_csv_attempt_count}"
+                        )
+                        self._max_threads = max(int(self._max_threads / 2), 1)
+                        self._logger.info("等待10秒后开始重试...")
+                        sleep(10)
+                        self._logger.info(
+                            f"重试开始，最大线程数减半为{self._max_threads}"
+                        )
+                    else:
+                        self._logger.error("尝试次数耗尽，终止此次数据获取")
+                        raise RuntimeError("异常终止，请查看日志")
+                else:
+                    self._save_to_csv(self._new_data, self._tmp_csv_file)
                     self._drop_duplicates(self._tmp_csv_file)
                     self._sort_csv(self._tmp_csv_file, ascending=False)
-                    if os.path.exists(self._failed_timestamps_file):
-                        self._logger.error("仍存在请求失败的时间戳")
-                        raise RuntimeError("异常终止，请查看日志")
-                    if self._fix_csv_data_integrity(
-                        self._tmp_csv_file, replace=replace_missing_time_with_adjacent
-                    ):
-                        if drop_first:
-                            self._drop_first_data(self._tmp_csv_file)
-                        self._split_csv()
-                    if delete_tmp and os.path.exists(self._tmp_csv_file):
-                        os.remove(self._tmp_csv_file)
-                        self._logger.info(f"删除{self._tmp_csv_file}成功")
-                    self._logger.critical("历史数据已制作完成！")
-                return
 
-    def update_data(self):
-        """更新数据"""
-        new_data = []
-        timer = 0
-        csv_files = [f for f in os.listdir(self._work_folder) if f.endswith(".csv")]
-        if len(csv_files) == 0:
-            self._logger.error("更新数据失败，请确保历史数据已制作完成")
-            raise RuntimeError("异常终止，请查看日志")
-        latest_csv = max(csv_files, key=lambda x: int(x.split(".")[0]))
-        latest_csv_path = os.path.join(self._work_folder, latest_csv)
-        df = pd.read_csv(latest_csv_path)
-        end_time = self._datetime_to_timestamp(df.iloc[-1]["time"])
-        self._logger.info(
-            f"从 {self._timestamp_to_datetime(end_time,type='params')}（时间戳：{end_time}）开始获取最新数据..."
-        )
-        try:
-            while True:
-                params = self._make_params(end_time)
-                data, flag = self._get_klines_data(params)
-                if flag == self.KlinesDataFlag.NORMAL:
-                    self._logger.info(
-                        f"获取到数据，time: {self._timestamp_to_datetime(end_time)}"
-                    )
-                    if end_time - self._delta_timestamp > int(
-                        time() * self._timestamp_rate["params"]
-                    ):
-                        self._logger.critical("数据已最新")
-                        self._save_new_data_update_mode(new_data)
-                        break
-                    new_data.extend(data)
-                    timer += 1
-                    end_time += self._delta_timestamp
-                    if timer >= self._cached_data_amount:
-                        self._save_new_data_update_mode(new_data)
-                        new_data = []
-                        timer = 0
-                else:
-                    self._logger.warning(
-                        f"获取数据时发生错误，time: {self._timestamp_to_datetime(end_time)}"
-                    )
-        except KeyboardInterrupt:
-            self._logger.warning("手动停止数据采集。")
-            self._save_new_data_update_mode(new_data)
+                    if self._data_collected:
+                        thread_list = [self._max_threads]
+                        while (
+                            len(thread_list)
+                            < self._allow_max_failed_timestamps_attempt_time
+                        ):
+                            if self._enable_proxy:
+                                next_threads = thread_list[-1]
+                            else:
+                                next_threads = max(int(thread_list[-1] / 2), 1)
+                            thread_list.append(next_threads)
+                        for thread_number in thread_list:
+                            if self._retry_failed_timestamps(
+                                self._tmp_csv_file, thread_number
+                            ):
+                                break
+                        self._drop_duplicates(self._tmp_csv_file)
+                        self._sort_csv(self._tmp_csv_file, ascending=False)
+                        if os.path.exists(self._failed_timestamps_file):
+                            self._logger.error("仍存在请求失败的时间戳")
+                            raise RuntimeError("异常终止，请查看日志")
+                        if self._fix_csv_data_integrity(
+                            self._tmp_csv_file,
+                            replace=replace_missing_time_with_adjacent,
+                        ):
+                            if drop_first:
+                                self._drop_first_data(self._tmp_csv_file)
+                            self._split_csv()
+                        if delete_tmp and os.path.exists(self._tmp_csv_file):
+                            os.remove(self._tmp_csv_file)
+                            self._logger.info(f"删除{self._tmp_csv_file}成功")
+                        self._logger.critical("历史数据已制作完成！")
+                    return
+        finally:
+            # 关闭代理池
+            if self._proxy_manager:
+                self._proxy_manager.stop_proxies()
+                self._logger.info("代理关闭成功")
 
     def _load_config(self):
         """加载配置文件"""
-        with open("url_config.json", "r", encoding="utf-8") as file:
+        url_config_path = os.path.join("config", "url_config.json")
+        config_path = os.path.join("config", "config.yml")
+        with open(url_config_path, "r", encoding="utf-8") as file:
             url_config = json.load(file)[self.exchange][self.type]
-        with open("config.json", "r", encoding="utf-8") as file:
-            config = json.load(file)
+        with open(config_path, "r", encoding="utf-8") as file:
+            config = yaml.safe_load(file)
         return url_config, config
 
     def _validate_input(self, symbol, interval):
@@ -304,8 +287,15 @@ class KLinesProcessor:
             datetime = self._timestamp_to_datetime(
                 timestamp, rate=self._timestamp_rate["params"]
             )
+            chosen_proxy = None
+            if self._proxy_manager:
+                chosen_proxy = self._proxy_manager.get_random_proxy()
             response = requests.get(
-                self._base_url, headers=self._get_random_headers(), params=params
+                self._base_url,
+                headers=self._get_random_headers(),
+                params=params,
+                proxies=chosen_proxy,
+                timeout=10,
             )
             if response.status_code == 200:
                 data = response.json()
@@ -402,7 +392,7 @@ class KLinesProcessor:
         )
         with open(self._failed_timestamps_file, "r") as f:
             lines = f.readlines()
-        if len(lines) > self._allow_max_failed_timestamps:
+        if not self._enable_proxy and len(lines) > self._allow_max_failed_timestamps:
             # self._stop_event.set()
             # self._is_abnormal_termination = True
             sleep(10)
@@ -617,30 +607,6 @@ class KLinesProcessor:
             processed_data.append(processed_item)
         return processed_data
 
-    def _save_new_data_update_mode(self, new_data):
-        """在更新模式下保存新数据"""
-        csv_files = [f for f in os.listdir(self._work_folder) if f.endswith(".csv")]
-        latest_csv = max(csv_files, key=lambda x: int(x.split(".")[0]))
-        latest_csv_path = os.path.join(self._work_folder, latest_csv)
-        latest_csv_len = len(pd.read_csv(latest_csv_path))
-        if len(new_data) + latest_csv_len > self._splitted_csv_max_rows:
-            self._logger.info(
-                f"{latest_csv_path} 中的数据即将超出 {self._splitted_csv_max_rows} 容量限制，对数据进行分割"
-            )
-            # 将数据前半部分保存到原 CSV 中
-            new_data_part1 = new_data[: self._splitted_csv_max_rows - latest_csv_len]
-            self._save_to_csv(new_data_part1, latest_csv_path)
-            self._fix_csv_data_integrity(latest_csv_path)
-            # 将数据后半部分保存到新创建的 CSV 中
-            new_data_part2 = new_data[self._splitted_csv_max_rows - latest_csv_len :]
-            new_csv_index = int(latest_csv.split(".")[0]) + 1
-            new_csv_path = os.path.join(self._work_folder, f"{new_csv_index}.csv")
-            self._save_to_csv(new_data_part2, new_csv_path)
-            self._fix_csv_data_integrity(new_csv_path)
-        else:
-            self._save_to_csv(new_data, latest_csv_path)
-            self._fix_csv_data_integrity(latest_csv_path)
-
     def _get_missing_times_list(self, file_name):
         """获取缺失的时间点列表"""
         try:
@@ -742,7 +708,7 @@ class KLinesProcessor:
         :param timestamp: 时间戳（毫秒）
         :return: 转换后的系统时间字符串
         """
-        timestamp = int(timestamp / rate)
+        timestamp = int(int(timestamp) / rate)
         dt_object = datetime.utcfromtimestamp(timestamp)
         return dt_object.strftime("%Y-%m-%d %H:%M:%S")  # 格式化为“年-月-日 时:分:秒”
 
@@ -772,3 +738,79 @@ class KLinesProcessor:
             "Connection": "keep-alive",
         }
         return headers
+
+
+class ProxyManager:
+    def __init__(self, config_file):
+        self.config_file = config_file
+        self.processes = []
+        self.proxies = []  # 存储代理信息，用于requests使用
+        self.bin_path = None
+
+    def _load_config(self):
+        with open(self.config_file, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        self.bin_path = config.get("bin_path")
+        nodes = config.get("proxies", [])
+        base_port = config.get("base_port")
+        commands = []
+        for i, node in enumerate(nodes):
+            method = node.get("cipher")
+            password = node.get("password")
+            server = node.get("server")
+            port = node.get("port")
+            local_port = base_port + i
+            # ss-local 启动参数示例：
+            # ss-local -s server -p server_port -l local_port -k password -m method
+            cmd = [
+                self.bin_path,
+                "-s",
+                str(server),
+                "-p",
+                str(port),
+                "-l",
+                str(local_port),
+                "-k",
+                str(password),
+                "-m",
+                str(method),
+                "--fast-open",  # 可选参数，根据需要添加
+            ]
+            commands.append((cmd, local_port))
+        return commands
+
+    def start_proxies(self):
+        """启动所有代理进程"""
+        commands = self._load_config()
+        for cmd, local_port in commands:
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.processes.append(p)
+            # 为requests配置socks5代理
+            proxy = {
+                "http": f"socks5h://127.0.0.1:{local_port}",
+                "https": f"socks5h://127.0.0.1:{local_port}",
+            }
+            self.proxies.append(proxy)
+        return len(commands)
+
+    def stop_proxies(self):
+        """停止所有代理进程"""
+        for p in self.processes:
+            # 优雅结束进程
+            p.terminate()
+
+        # 等待进程结束
+        for p in self.processes:
+            try:
+                p.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                p.kill()
+
+        self.processes.clear()
+        self.proxies.clear()
+
+    def get_random_proxy(self):
+        """随机获取一个代理"""
+        if not self.proxies:
+            return None
+        return random.choice(self.proxies)
