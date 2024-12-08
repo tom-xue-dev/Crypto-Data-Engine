@@ -1,3 +1,5 @@
 __pycache__
 tmp
 app.log
+*test*.py
+data/
