@@ -1,82 +1,170 @@
+import sys
+
 import pandas as pd
 
 from Account import Account
 from get_btc_info import get_btc_data
+from abc import abstractmethod
+from datetime import datetime, timedelta
+import numpy as np
 
 
-def calculate_MA(dataset, n):
-    """
-    计算 n 日均线并将其添加到 dataset 的新列中。
+def days_to_quarterly_settlement(date):
+    # 获取当前日期的月份
+    month = date.month
+    year = date.year
 
-    :param dataset: pd.DataFrame, 数据集，必须包含 'close' 列
-    :param n: int, 均线的天数
-    :return: pd.DataFrame, 添加了均线列后的数据集
-    """
-    # 检查数据集是否包含 'close' 列
-    if 'close' not in dataset.columns:
-        raise ValueError("The dataset must contain a 'close' column.")
+    # 确定当前季度的最后月份
+    if month <= 3:
+        last_month = 3
+    elif month <= 6:
+        last_month = 6
+    elif month <= 9:
+        last_month = 9
+    else:
+        last_month = 12
 
-    # 计算 n 日均线
-    column_name = f'MA{n}'
-    dataset[column_name] = dataset['close'].rolling(window=n).mean()
-    return dataset
+    # 获取该季度最后一个月的最后一天
+    last_day_of_quarter = datetime(year, last_month, 1) + timedelta(days=31)
+    last_day_of_quarter = last_day_of_quarter.replace(day=1) - timedelta(days=1)
+
+    # 找到该月的最后一个周五
+    while last_day_of_quarter.weekday() != 4:
+        last_day_of_quarter -= timedelta(days=1)
+
+    # 计算剩余天数
+    return (last_day_of_quarter - date).days
 
 
-def double_moving_average_strategy(short, long, dataset):
-    """
-    实现双均线策略，生成买入、卖出和持有信号。
+class Strategy:
+    def __init__(self, dataset: list, asset: list):
+        """
+        初始化具体策略，可以在此定义一些默认参数或初始化逻辑。
+        """
+        self.parameters = {}
+        self.dataset = dataset
+        self.assets_names = asset
+        print("Strategy initialized.")
 
-    :param short: int, 短期均线天数
-    :param long: int, 长期均线天数
-    :param dataset: pd.DataFrame, 数据集，必须包含 'close' 列
-    :return: pd.DataFrame, 包含策略信号的原始数据集
-    """
-    # 计算短期和长期均线
-    dataset = calculate_MA(dataset, short)
-    dataset = calculate_MA(dataset, long)
+    def init(self, **kwargs):
+        """
+        设置或更新策略参数。
 
-    # 列名动态生成
-    short_ma_col = f'MA{short}'
-    long_ma_col = f'MA{long}'
+        参数:
+            kwargs: 字典形式的参数，例如阈值、系数等。
+        """
+        self.parameters.update(kwargs)
+        print("Parameters set:", self.parameters)
 
-    # 生成交易信号
-    dataset['signal'] = 0  # 初始化信号为 0（保持）
-    dataset.loc[dataset[short_ma_col] > dataset[long_ma_col], 'signal'] = 1  # 短期均线高于长期均线 -> 买入
-    dataset.loc[dataset[short_ma_col] < dataset[long_ma_col], 'signal'] = -1  # 短期均线低于长期均线 -> 卖出
-    return dataset
-def arbitrage_trading_trategy(dataset1,dataset2):
-    """
+    @abstractmethod
+    def generate_signal(self) -> pd.DataFrame:
+        """
+        generate trading signals.
+        :return: a dataframe whose indexes include 'time','price_num','signal'
+        time:datetime
+        price_num is the price of Nth asset,
+        signal is a bitmap string which represent the operations for each asset.
+        """
 
-    :param dataset1:
-    :param dataset2:
-    :return:
-    """
-    dataset1['time'] = pd.to_datetime(dataset1['time'])
-    dataset2['time'] = pd.to_datetime(dataset2['time'])
 
-    # 合并两个 DataFrame，按 'time' 对齐
-    merged = pd.merge(dataset1, dataset2, on='time', suffixes=('_df1', '_df2'))
-    # 计算差值
-    merged['open_diff'] = merged['open_df1'] - merged['open_df2']
-    merged['close_diff'] = merged['close_df1'] - merged['close_df2']
-    merged['high_diff'] = merged['high_df1'] - merged['high_df2']
-    merged['low_diff'] = merged['low_df1'] - merged['low_df2']
-    # initialize signal column
-    merged['signal'] = 0
-    # Condition 1: Arbitrage opportunity for opening long on A and short on B
-    merged.loc[
-        (merged['open_diff'] > 0) & (merged['open_diff'] > merged['close_df1'] * 0.002),
-        'signal'
-    ] = -1
+class BasisArbitrageStrategy(Strategy):
+    def __init__(self, spot_data: pd.DataFrame, future_data: pd.DataFrame, asset_names: list):
+        """
+        :param spot_data:
+        :param future_data:
+        :param asset_names: the list of the asset, e.g. [BTC,ETH]
+        """
+        super().__init__()
+        try:
+            self.dataset = pd.merge(spot_data, future_data, on='time')
+        except (ValueError, KeyError) as e:
+            print("数据集合并错误，检查数据格式是否对齐，time 是否都为 datetime 格式")
+        self.assets_names = asset_names
+        print(f"index_len = {spot_data.columns}")
+        zeros = '0' * len(self.assets_names) * 2
+        print(zeros)
+        self.dataset['signal'] = zeros  # 初始化信号
+        print(self.dataset['signal'])
 
-    # Condition 2: Arbitrage opportunity for opening short on A and long on B
-    merged.loc[
-        (merged['open_diff'] < 0) & (merged['open_diff'].abs() > merged['close_df1'] * 0.002),
-        'signal'
-    ] = 1
-    # condition 3,平仓
-    merged.loc[merged['open_diff'].abs() < 10, 'signal'] = 2
-    return merged
-# df = get_btc_data("15m")
-# df = calculate_MA(df,20)
-# print(df.tail(10))
+    def calculate_expected_return(self, spot_price, future_price, time):
+        """
+        calculate the expected return after long and short the pair asset until the delivery date.
+        :param time:
+        :param spot_price:
+        :param future_price:
+        :return:
+        """
+        profit = abs(future_price - spot_price)
+        profit_ratio = profit / ((future_price + spot_price) / 2)  # 假设收敛到中间
+        return_ratio = profit_ratio / timedelta(time).total_seconds() / (8 * 3600)
+        return return_ratio
+
+    def generate_signal(self):
+        # Condition 1: Arbitrage opportunity for opening long on A and short on B
+        self.dataset['DTS'] = self.dataset['date'].apply(days_to_quarterly_settlement)
+        print(self.dataset['DTS'])
+
+
+class MovingAverageStrategy(Strategy):
+    def __init__(self, dataset: list, asset: list, period: int):
+        super().__init__(dataset, asset)
+        self.period = period
+    def calculate_MA(self,period):
+        """
+        计算MA均线,以收盘价为例
+        :return:
+        """
+        full_df = pd.concat(dataset, ignore_index=True)
+        # 确保数据按 time 排序（如果 time 可以转为 datetime 更好）
+        full_df['time'] = pd.to_datetime(full_df['time'])
+        full_df = full_df.sort_values(['asset', 'time'])
+        # 按 name 分组，对 close 列进行 rolling mean
+        full_df[f'MA{self.period}'] = full_df.groupby('asset')['close'].transform(lambda x: x.rolling(self.period).mean())
+        df = full_df
+        grouped = df.groupby('time')
+        self.dataset = [group.reset_index(drop=True) for _, group in grouped]
+    def generate_signal(self) -> list:
+        for index, daily_df in enumerate(self.dataset):
+            if index == 0:
+                daily_df['signal'] = 0
+                print(daily_df)
+                continue
+            prev_df = self.dataset[index - 1]
+            # 假设 daily_df 和 prev_df 行对应是1对1的，如果不是，需要先对齐或匹配索引
+            condition = (daily_df['close'] >= daily_df[f'MA{self.period}']) & (
+                        prev_df['close'] < daily_df[f'MA{self.period}'])
+            daily_df['signal'] = np.where(condition, 1, 0)
+        for df in self.dataset:
+            print(df)
+        return self.dataset
+
+
+data_day1 = pd.DataFrame({
+    'time': ['2024-01-01'] * 3,
+    'asset': ['AAPL', 'GOOG', 'AMZN'],
+    'open': [150, 2800, 3450],
+    'high': [152, 2825, 3480],
+    'close': [151, 2810, 3460]
+})
+
+data_day2 = pd.DataFrame({
+    'time': ['2024-01-02'] * 3,
+    'asset': ['AAPL', 'GOOG', 'AMZN'],
+    'open': [152, 2825, 3480],
+    'high': [153, 2835, 3490],
+    'close': [152, 2830, 3485]
+})
+data_day3 = pd.DataFrame({
+    'time': ['2024-01-03'] * 3,
+    'asset': ['AAPL', 'GOOG', 'AMZN'],
+    'open': [152, 2825, 3480],
+    'high': [153, 2835, 3490],
+    'close': [152, 2830, 3485]
+})
+dataset = [data_day1, data_day2,data_day3]
+assets = ['AAPL', 'GOOG', 'AMZN']
+# 打印 DataFrame
+strategy = MovingAverageStrategy(dataset, assets,2)
+
+strategy.calculate_MA(3)
+strategy.generate_signal()
