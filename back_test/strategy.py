@@ -114,7 +114,7 @@ class MovingAverageStrategy(Strategy):
         计算MA均线,以收盘价为例
         :return:
         """
-        full_df = pd.concat(dataset, ignore_index=True)
+        full_df = pd.concat(self.dataset, ignore_index=True)
         # 确保数据按 time 排序（如果 time 可以转为 datetime 更好）
         full_df['time'] = pd.to_datetime(full_df['time'])
         full_df = full_df.sort_values(['asset', 'time'])
@@ -134,37 +134,6 @@ class MovingAverageStrategy(Strategy):
             condition = (daily_df['close'] >= daily_df[f'MA{self.period}']) & (
                         prev_df['close'] < daily_df[f'MA{self.period}'])
             daily_df['signal'] = np.where(condition, 1, 0)
-        for df in self.dataset:
-            print(df)
         return self.dataset
 
 
-data_day1 = pd.DataFrame({
-    'time': ['2024-01-01'] * 3,
-    'asset': ['AAPL', 'GOOG', 'AMZN'],
-    'open': [150, 2800, 3450],
-    'high': [152, 2825, 3480],
-    'close': [151, 2810, 3460]
-})
-
-data_day2 = pd.DataFrame({
-    'time': ['2024-01-02'] * 3,
-    'asset': ['AAPL', 'GOOG', 'AMZN'],
-    'open': [152, 2825, 3480],
-    'high': [153, 2835, 3490],
-    'close': [152, 2830, 3485]
-})
-data_day3 = pd.DataFrame({
-    'time': ['2024-01-03'] * 3,
-    'asset': ['AAPL', 'GOOG', 'AMZN'],
-    'open': [152, 2825, 3480],
-    'high': [153, 2835, 3490],
-    'close': [152, 2830, 3485]
-})
-dataset = [data_day1, data_day2,data_day3]
-assets = ['AAPL', 'GOOG', 'AMZN']
-# 打印 DataFrame
-strategy = MovingAverageStrategy(dataset, assets,2)
-
-strategy.calculate_MA(3)
-strategy.generate_signal()
