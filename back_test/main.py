@@ -60,8 +60,8 @@ backtester = Backtest(
 result = backtester.run()
 
 print("回测结果：")
-# print("最终资金: ", result['final_cash'])
-# print("交易历史: ")
-# for t in result['transaction_history']:
-#     print(t)
+print("最终资金: ", result['final_cash'])
+print("交易历史: ")
+for t in result['transaction_history']:
+    print(t)
 print(backtester.account.transaction)
