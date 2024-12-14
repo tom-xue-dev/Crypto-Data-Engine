@@ -72,7 +72,8 @@ class Factory:
                     self._stop_event.set()
                     if self._abnormal_termination_info is None:
                         self._abnormal_termination_info = f"请求（{ts}）数据时超过了允许最多尝试次数：{attempt_times - 1}"
-            data, flag = self.fetch_data_callback(ts)
+            # TODO since=ts
+            data, flag = self.fetch_data_callback(since=ts)
             self._local_queue.put((ts, data, flag, attempt_times + 1))
             self._online_queue.task_done()
 

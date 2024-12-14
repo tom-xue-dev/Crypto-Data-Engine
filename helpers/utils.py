@@ -18,10 +18,10 @@ _DELTA_TIMESTAMP_MAPPING = {
 }
 
 
-def interval_to_timestamp(standard_interval, rate=1000):
+def timeframe_to_timestamp(timeframe, rate=1000):
     return (
-        _DELTA_TIMESTAMP_MAPPING[standard_interval[-1]]
-        * int(standard_interval[:-1])
+        _DELTA_TIMESTAMP_MAPPING[timeframe[-1]]
+        * int(timeframe[:-1])
         * rate
     )
 
@@ -77,3 +77,7 @@ def initialize_ccxt_exchange(info: BasicInfo, rateLimit=False):
         raise ValueError(f"不支持的类型: {type}")
     retval.enableRateLimit = rateLimit
     return retval
+
+
+def safe_load(value, default=None):
+    return value if value else default

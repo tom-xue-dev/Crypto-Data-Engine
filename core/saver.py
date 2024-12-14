@@ -1,4 +1,3 @@
-from enum import Enum
 import os
 
 import numpy as np
@@ -7,7 +6,7 @@ import pandas as pd
 from helpers.config import Config
 from helpers.logger import Logger
 from helpers.model import BasicInfo
-from helpers.utils import interval_to_timestamp, timestamp_to_datetime
+from helpers.utils import timeframe_to_timestamp, timestamp_to_datetime
 
 
 def _id(func_id):
@@ -27,7 +26,13 @@ class CSVSaver:
             "fix_integrity",
             "drop_last",
             "transfer_time",
-        ]
+        ],
+        "MODE_1": [
+            "drop_duplicates",
+            "sort",
+            "drop_last",
+            "transfer_time",
+        ],
     }
 
     def __init__(
@@ -53,7 +58,7 @@ class CSVSaver:
             self.info.exchange,
             self.info.type,
             self.info.symbol.replace("/", "-"),
-            self.info.interval,
+            self.info.label,
         )
         os.makedirs(work_folder, exist_ok=True)
         return work_folder
@@ -76,23 +81,24 @@ class CSVSaver:
 
     def _initialize_missing_times(self):
         """
-        使用纯timestamp进行缺失值判断:
-        要求: self._df 已排序
+        进行缺失值判断:
+        要求: self._df 已排序，构造器params包含timeframe
         """
         if self._missing_times is not None:
-            return
-        Logger.info("检查缺失数据...")
+            return True
+        if self.params.get("timeframe") is None:
+            return False
         df = self._df
         if df.empty:
-            Logger.info("无数据，不存在缺失点")
-            return
+            Logger.warning("无数据，不存在缺失点")
+            return False
 
         df["time"] = df["time"].astype(np.int64)
 
         min_time = df["time"].min()
         max_time = df["time"].max()
 
-        delta_timestamp = interval_to_timestamp(self.info.interval)
+        delta_timestamp = timeframe_to_timestamp(self.params.get("timeframe"))
         expected_timestamps = np.arange(
             min_time, max_time + delta_timestamp, delta_timestamp
         )
@@ -102,9 +108,12 @@ class CSVSaver:
         if not missing_timestamps:
             Logger.info("所有预期的时间点数据均存在")
             self._missing_times = set()
-        else:
-            Logger.info(f"共缺失 {len(missing_timestamps)} 条数据")
-            self._missing_times = sorted(missing_timestamps)
+            return True
+        if len(missing_timestamps) > Config("ALLOW_MAX_MISSING_TIMESTAMPS"):
+            raise RuntimeError(f"过多的缺失时间点：{len(missing_timestamps)}")
+        Logger.info(f"共缺失 {len(missing_timestamps)} 条数据")            
+        self._missing_times = sorted(missing_timestamps)
+        return True
 
     @_id("fix_integrity")
     def _fix_data_integrity(self):
@@ -112,7 +121,8 @@ class CSVSaver:
         使用相邻数据填补缺失的数据点
         要求: self._df已排序
         """
-        self._initialize_missing_times()
+        if not self._initialize_missing_times():
+            return
         if len(self._missing_times) == 0:
             return
         df = self._df
@@ -176,7 +186,8 @@ class CSVSaver:
 
     @_id("save_missing_times")
     def _save_missing_times(self):
-        self._initialize_missing_times()
+        if not self._initialize_missing_times():
+            return
         if len(self._missing_times) == 0:
             return
         file_name = os.path.join(self._work_folder, "missingtimes.txt")
@@ -194,7 +205,9 @@ class CSVSaver:
     def save(self, processed_data):
         # 从_mapping中根据传入的mode获取要执行的动作列表
         self._append_data(processed_data)
-        mode = self.params.get("mode") if self.params.get("mode") else "DEFAULT"
+        mode = (
+            self.params.get("save_mode") if self.params.get("save_mode") else "DEFAULT"
+        )
         actions = self._mapping[mode]
         if self.params.get("drop_last") == False:
             actions.remove("drop_last")
