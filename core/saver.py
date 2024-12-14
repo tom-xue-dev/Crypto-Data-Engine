@@ -101,10 +101,10 @@ class CSVSaver:
 
         if not missing_timestamps:
             Logger.info("所有预期的时间点数据均存在")
-            return None
-
-        self._missing_times = sorted(missing_timestamps)
-        Logger.info(f"共缺失 {len(missing_timestamps)} 条数据")
+            self._missing_times = set()
+        else:
+            Logger.info(f"共缺失 {len(missing_timestamps)} 条数据")
+            self._missing_times = sorted(missing_timestamps)
 
     @_id("fix_integrity")
     def _fix_data_integrity(self):
