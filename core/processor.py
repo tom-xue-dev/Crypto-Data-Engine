@@ -28,10 +28,12 @@ class Processor:
             data = self._factory.complete(sub_task)
             self._saver.save(data)
             Logger.critical(f"任务{self.task.name}完成", prefix=self.task.info)
+            return True
         except Exception as e:
             Logger.critical(
                 f"任务{self.task.name}失败，失败原因：{e}", prefix=self.task.info
             )
+            return False 
 
     def _fetch_data(self, since_ts):
         try:
