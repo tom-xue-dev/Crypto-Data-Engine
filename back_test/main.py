@@ -28,7 +28,7 @@ data = pd.DataFrame({
 day1 = data[data['time'].dt.date == datetime(2024,1,1).date()].copy()
 day2 = data[data['time'].dt.date == datetime(2024,1,2).date()].copy()
 dataset = [day1, day2]
-
+print(dataset)
 # 创建策略实例，period=3
 strategy = MovingAverageStrategy(dataset, ['AAPL'], 3)
 strategy.calculate_MA(2)
@@ -60,7 +60,8 @@ backtester = Backtest(
 result = backtester.run()
 
 print("回测结果：")
-print("最终资金: ", result['final_cash'])
-print("交易历史: ")
-for t in result['transaction_history']:
-    print(t)
+# print("最终资金: ", result['final_cash'])
+# print("交易历史: ")
+# for t in result['transaction_history']:
+#     print(t)
+print(backtester.account.transaction)
