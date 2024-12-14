@@ -4,8 +4,6 @@ import os
 
 from helpers.config import Config
 
-_log_file = os.path.join("log", "app.log")
-
 
 class Logger:
     _logger = None
@@ -28,6 +26,8 @@ class Logger:
                     console_handler.setFormatter(formatter)
                 if Config("FILE_LOG"):
                     # 创建文件处理器，设置日志级别为 DEBUG
+                    os.makedirs(Config("LOG_PATH"), exist_ok=True)
+                    _log_file = os.path.join(Config("LOG_PATH"), "app.log")
                     file_handler = RotatingFileHandler(
                         filename=_log_file,
                         maxBytes=3 * 1024 * 1024,
