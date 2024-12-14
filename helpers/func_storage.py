@@ -10,7 +10,7 @@ def make_sub_task(since, until, thread_count, fetch_data_func, parse_func=None):
     attempt_times = Config("MAX_ATTEMPT_TIMES")
     while attempt_times:
         test_raw_data, flag = fetch_data_func(since=test_since)
-        test_data = parse_func(test_data) if callable(parse_func) else test_raw_data
+        test_data = parse_func(test_raw_data) if callable(parse_func) else test_raw_data
         if flag == DataFlag.NORMAL and len(test_data) > 0:
             delta = abs(test_data[0][0] - test_data[-1][0])
             since = test_data[0][0]
