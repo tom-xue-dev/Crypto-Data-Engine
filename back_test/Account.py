@@ -2,41 +2,17 @@ import datetime
 from collections import defaultdict
 import pandas as pd
 
+
 class Account:
     def __init__(self, initial_cash: float):
         """
         初始化账户，设置初始现金、持仓以及保证金信息结构。
         """
         self.cash = initial_cash  # 当前现金（USD）
-        self.holdings = {}        # 资产持仓: { 'AAPL': quantity }
-        self.margins = {}         # 保证金和借款信息: { 'AAPL': {'own_equity':..., 'borrowed_funds':..., 'leverage_rate':...} }
-        self.transaction = []     # 交易记录列表
-
-    def current_status(self):
-        """
-        返回当前账户状态，包括现金和持仓信息。
-        如果需要显示保证金信息，也可在此打印 self.margins。
-        """
-        return f"Current Cash: ${self.cash:.2f}, Holdings: {self.holdings}, Margins: {self.margins}"
-
-    def record_position_info(self, asset: str, own_equity: float, borrowed_funds: float, leverage_rate: float, hourly_rate: float):
-        """
-        在建立或更新杠杆仓位时，记录或更新保证金相关信息。
-        由Backtest在开仓或调整仓位时调用。
-        """
-        self.margins[asset] = {
-            'own_equity': own_equity,
-            'borrowed_funds': borrowed_funds,
-            'leverage_rate': leverage_rate,
-            'hourly_rate': hourly_rate
-        }
-
-    def clear_position_info(self, asset: str):
-        """
-        清除对某资产的保证金记录（平仓后调用）。
-        """
-        if asset in self.margins:
-            del self.margins[asset]
+        self.spot_holdings = {}  # 现货持仓: { 'BTC': {'amount': 5, 'leverage': 2x}, ... }
+        self.futures_positions = {}  # 期货持仓: { 'BTCUSDT_PERP': {'side': 'LONG','qty':...,'entry_price':..., 'leverage':...}, ... }
+        self.transactions = []  # 交易记录列表
+        self.margin_balance = initial_cash  # 合约保证金余额(USDT), 可根据策略从self.cash划转
 
     def buy(self, timestamp: datetime.datetime, bid_asset_type: str, bid_asset_amount: float, ask_asset_type: str,
             ask_asset_amount: float, own_equity: float = None, borrowed_funds: float = None, interest: float = 0.0, fees: float = 0.0):
@@ -133,30 +109,6 @@ class Account:
     def get_transaction_history(self):
         return self.transaction
 
-    def calculate_daily_nav(self, daily_prices):
-        # daily_prices: {日期: {资产: 价格, ...}, ...}
-
-        records = []
-        for date, prices in daily_prices.items():
-            # 计算当日NAV
-            total_value = self.cash
-            for asset, qty in self.holdings.items():
-                price = prices.get(asset, 0)
-                total_value += qty * price
-
-            # 考虑borrowed_funds和利息累积(如果有相应的数据结构记录这部分)
-            # 假设你在margins记录中或backtest逻辑中能得出当日借款利息总额
-            # interest_of_the_day = ... (需要在backtest中计算，并在account中维护一个总累计利息)
-
-            # 同理，如有需要，还可将borrowed_funds当成负债计入NAV计算
-
-            records.append((date, total_value))
-
-        nav_df = pd.DataFrame(records, columns=['Date', 'NAV'])
-        nav_df.sort_values(by='Date', inplace=True)
-        nav_df['Daily Change'] = nav_df['NAV'].diff().fillna(0)
-        return nav_df
-
     def calculate_total_value(self, price_map: dict):
         """
         根据给定的资产价格字典计算当前账户总价值
@@ -166,3 +118,30 @@ class Account:
             price = price_map.get(asset, 0)
             total_value += qty * price
         return total_value
+
+    def current_status(self):
+        """
+        返回当前账户状态，包括现金和持仓信息。
+        如果需要显示保证金信息，也可在此打印 self.margins。
+        """
+        return f"Current Cash: ${self.cash:.2f}, Holdings: {self.holdings}, Margins: {self.margins}"
+
+    def record_position_info(self, asset: str, own_equity: float, borrowed_funds: float, leverage_rate: float,
+                             hourly_rate: float):
+        """
+        在建立或更新杠杆仓位时，记录或更新保证金相关信息。
+        由Backtest在开仓或调整仓位时调用。
+        """
+        self.margins[asset] = {
+            'own_equity': own_equity,
+            'borrowed_funds': borrowed_funds,
+            'leverage_rate': leverage_rate,
+            'hourly_rate': hourly_rate
+        }
+
+    def clear_position_info(self, asset: str):
+        """
+        清除对某资产的保证金记录（平仓后调用）。
+        """
+        if asset in self.margins:
+            del self.margins[asset]
