@@ -46,6 +46,9 @@ class Strategy:
         self.assets_names = asset
         print("Strategy initialized.")
 
+    def get_dataset(self):
+        return self.dataset
+
     def init(self, **kwargs):
         """
         设置或更新策略参数。
@@ -105,11 +108,22 @@ class BasisArbitrageStrategy(Strategy):
         print(self.dataset['DTS'])
 
 
-class MovingAverageStrategy(Strategy):
-    def __init__(self, dataset: list, asset: list, period: int):
+class DualMAStrategy(Strategy):
+    def __init__(self, dataset: list, asset: list, long: int, short: int):
+        """
+        双均线策略
+        :param dataset:
+        :param asset:
+        :param long: 长周期
+        :param short:短周期
+        """
         super().__init__(dataset, asset)
-        self.period = period
-    def calculate_MA(self,period):
+        self.long_period = long
+        self.short_period = short
+        self.calculate_MA(self.long_period)
+        self.calculate_MA(self.short_period)
+
+    def calculate_MA(self, period):
         """
         计算MA均线,以收盘价为例
         :return:
@@ -119,21 +133,57 @@ class MovingAverageStrategy(Strategy):
         full_df['time'] = pd.to_datetime(full_df['time'])
         full_df = full_df.sort_values(['asset', 'time'])
         # 按 name 分组，对 close 列进行 rolling mean
-        full_df[f'MA{self.period}'] = full_df.groupby('asset')['close'].transform(lambda x: x.rolling(self.period).mean())
+        full_df[f'MA{period}'] = full_df.groupby('asset')['close'].transform(
+            lambda x: x.rolling(period).mean())
         df = full_df
         grouped = df.groupby('time')
         self.dataset = [group.reset_index(drop=True) for _, group in grouped]
-    def generate_signal(self) -> list:
-        for index, daily_df in enumerate(self.dataset):
-            if index == 0:
-                daily_df['signal'] = 0
-                print(daily_df)
+
+    def generate_signal(self) -> None:
+        """
+        生成信号，默认短期MA上穿长期时用收盘价开多，信号为1
+        反之开空 信号为-1
+        :return: None
+        """
+        for index, time_frame_df in enumerate(self.dataset):
+            if index < self.long_period:
+                time_frame_df['signal'] = 0
                 continue
             prev_df = self.dataset[index - 1]
-            # 假设 daily_df 和 prev_df 行对应是1对1的，如果不是，需要先对齐或匹配索引
-            condition = (daily_df['close'] >= daily_df[f'MA{self.period}']) & (
-                        prev_df['close'] < daily_df[f'MA{self.period}'])
-            daily_df['signal'] = np.where(condition, 1, 0)
-        return self.dataset
+            # 开多的情况，prev_df的MA_short在MA_long 下面，且当前MA_short在MA_long上面，用当前收盘价开多
+            long_condition = (prev_df[f'MA{self.short_period}'] < prev_df[f'MA{self.long_period}']) & (
+                    time_frame_df[f'MA{self.short_period}'] >= time_frame_df[f'MA{self.long_period}'])
+            # 开空的情况，prev_df 的shortMA在上，当前的short_MA在下
+            short_condition = (prev_df[f'MA{self.short_period}'] > prev_df[f'MA{self.long_period}']) & (
+                    time_frame_df[f'MA{self.short_period}'] <= time_frame_df[f'MA{self.long_period}'])
+            time_frame_df.loc[long_condition, 'signal'] = 1
+            time_frame_df.loc[short_condition, 'signal'] = -1
+        return
 
 
+if __name__ == "__main__":
+    dates = [datetime(2024, 1, 1, 9), datetime(2024, 1, 1, 10), datetime(2024, 1, 1, 11),
+             datetime(2024, 1, 2, 9)]
+
+    prices = [150, 100, 300, 120]  # 模拟价格小幅波动
+    asset = ['AAPL'] * len(dates)
+
+    data = pd.DataFrame({
+        'time': dates,
+        'asset': asset,
+        'open': prices,
+        'high': [p + 1 for p in prices],
+        'low': [p - 1 for p in prices],
+        'close': prices
+    })
+
+    # 将数据拆分为每日DataFrame列表（符合strategy使用格式）
+    day1 = data[data['time'].dt.date == datetime(2024, 1, 1).date()].copy()
+    day2 = data[data['time'].dt.date == datetime(2024, 1, 2).date()].copy()
+    dataset = [day1, day2]
+    # for df in dataset:
+    #     print(df)
+    strategy = DualMAStrategy(dataset, ['APPL'], 5, 3)
+    strategy.generate_signal()
+    dataset = strategy.get_dataset()
+    print(dataset)

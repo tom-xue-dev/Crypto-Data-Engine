@@ -12,119 +12,19 @@ import matplotlib.dates as dates
 
 
 class Backtest:
-    def __init__(self, strategy_results, initial_capital, asset_parameters, stop_loss_threshold=0.05):
+    def __init__(self, strategy_results: list, initial_capital: int, asset_parameters, stop_loss_threshold=0.05):
+        """
+        initialize the backtest class
+        :param strategy_results: the dataset list that provided by specific strategy
+        :param initial_capital: the initial capital of the account at the beginning
+        :param asset_parameters:
+        :param stop_loss_threshold: passive stop_loss threshold from the cost.
+        """
         self.account = Account(initial_capital)
         self.strategy_results = strategy_results
         self.asset_parameters = asset_parameters
         self.stop_loss_threshold = stop_loss_threshold
         self.open_positions = {}
-
-    def check_liquidation(self, current_time, price_map):
-        """
-        在每个bar结束或价格更新后调用此方法，检查是否需要爆仓。
-        :param current_time: 当前时刻（Datetime）
-        :param price_map: dict, 当前各资产价格，例如 {'AAPL': 150.0, 'GOOG': 2800.0}
-        """
-        # 假设有一个维持保证金率，比如0.02（2%）
-        maintenance_margin_rate = 0.02
-
-        assets_to_liquidate = []
-
-        for asset, pos in self.open_positions.items():
-            quantity = pos['quantity']
-            entry_price = pos['entry_price']
-            borrowed_funds = pos['borrowed_funds']
-            own_equity = pos['own_equity']
-            hourly_rate = pos['hourly_rate']
-            leverage_rate = pos['leverage_rate']
-            position_type = pos['position_type']
-
-            current_price = price_map.get(asset, None)
-            if current_price is None:
-                continue  # 无法获取当前价格则跳过
-
-            # 计算当前持仓价值
-            current_value = quantity * current_price
-
-            # 计算持仓期间产生的利息
-            holding_hours = (current_time - pos['entry_time']).total_seconds() / 3600
-            interest = borrowed_funds * hourly_rate * holding_hours
-
-            # 净值 = 当前持仓价值 + own_equity - borrowed_funds - interest - fees(若有)
-            # 在此暂不考虑额外费用
-            net_equity = current_value + own_equity - borrowed_funds - interest
-
-            # 计算初始总头寸成本
-            total_cost = own_equity + borrowed_funds
-
-            # 爆仓条件示例：
-            # 假定当净值/初始头寸成本 < 维持保证金率 时爆仓（实际中可能用更复杂的条件）
-            margin_ratio = net_equity / total_cost if total_cost != 0 else 1
-
-            if margin_ratio < maintenance_margin_rate:
-                print(f"Liquidation triggered for {asset} at {current_time}! margin_ratio={margin_ratio:.4f}")
-                assets_to_liquidate.append(asset)
-
-        # 执行强制平仓
-        for asset in assets_to_liquidate:
-            current_price = price_map[asset]
-            self.liquidate_position(asset, current_price, current_time)
-
-    def liquidate_position(self, asset, price, current_time):
-        """
-        强制平仓，将仓位以当前价平掉，并在transaction中标记为liquidation交易。
-        """
-        pos = self.open_positions[asset]
-        quantity = pos['quantity']
-        borrowed_funds = pos['borrowed_funds']
-        own_equity = pos['own_equity']
-        holding_hours = (current_time - pos['entry_time']).total_seconds() / 3600
-        interest = borrowed_funds * pos['hourly_rate'] * holding_hours
-        fees = quantity * price * 0.001  # 0.1% 假设
-
-        gross_revenue = quantity * price
-        repay_amount = borrowed_funds + interest
-        net_profit = gross_revenue - repay_amount - fees + own_equity
-
-        # 先卖出资产获得USD
-        self.account.sell(current_time, asset, quantity, "USD", gross_revenue,
-                          own_equity=own_equity, borrowed_funds=borrowed_funds, interest=interest, fees=0)
-
-        # 记录repay交易
-        self.account.cash -= repay_amount
-        repay_record = {
-            'time': current_time,
-            'type': 'repay',
-            'description': 'Forced liquidation repay borrowed funds and interest',
-            'borrowed_funds': borrowed_funds,
-            'interest': interest,
-            'amount': repay_amount
-        }
-        self.account.transaction.append(repay_record)
-
-        # 支付费用
-        self.account.cash -= fees
-        fee_record = {
-            'time': current_time,
-            'type': 'fee',
-            'description': 'Forced liquidation transaction fee',
-            'fees': fees
-        }
-        self.account.transaction.append(fee_record)
-
-        # 清除仓位信息
-        self.account.clear_position_info(asset)
-        del self.open_positions[asset]
-
-        # 可以额外记录一次liquidation标记的交易或在sell中添加一个字段表示liquidation
-        liquidation_record = {
-            'time': current_time,
-            'type': 'liquidation',
-            'asset': asset,
-            'price': price,
-            'net_profit': net_profit
-        }
-        self.account.transaction.append(liquidation_record)
 
     def run(self):
         for daily_df in self.strategy_results:
