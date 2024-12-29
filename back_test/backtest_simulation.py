@@ -1,231 +1,186 @@
 import math
-from datetime import datetime
-
-import numpy as np
+import sys
+from datetime import datetime, timedelta
+from typing import Dict, List, Any
 import pandas as pd
 
-from Account import Account
-from get_btc_info import get_btc_data
-import strategy
-import matplotlib.pyplot as plt
-import matplotlib.dates as dates
+from Account import Account, Position, DefaultStopLossLogic, PositionManager
+
+
+class Broker:
+    """
+    Broker 为撮合类，对回测交易的函数调用高层封装
+    """
+
+    def __init__(self, account: Account, leverage_manager=None, stop_loss_logic=None):
+        """
+        撮合订单的类
+        传入账号据数据用于记录交易历史
+        传入市场类型用于记录现货或者期货市场
+        传入leverage_manager用于记录每小时末的杠杆费率结算
+        传入stop_loss_logic用于进行止损的逻辑处理
+
+        :param account:
+        :param leverage_manager:
+        :param stop_loss_logic:
+        """
+        self.account = account
+        self.leverage_manager = leverage_manager
+        self.stop_loss_logic = stop_loss_logic
+
+    def open_position(self, asset, direction, quantity, price, leverage, position_type, current_time):
+        # 简化: 扣除自有资金 = quantity * price / leverage
+        cost = quantity * price / leverage
+        if self.account.cash < cost:
+            print("Insufficient cash to open position.")
+            return
+        self.account.cash -= cost
+        if leverage > 1:
+            # 开仓计算杠杆 目前只支持做多杠杆计算
+            if direction == "long":
+                price_map = {asset: price}
+                self.leverage_manager.settle_fees(self.account, current_time, price_map, is_open_close=True)
+
+        pos = Position(asset, direction, quantity, price, leverage, position_type)
+        self.account.positions[(asset, direction)] = pos
+        self.account.record_transaction({
+            "time": current_time,
+            "action": "open",
+            "asset": asset,
+            "direction": direction,
+            "quantity": quantity,
+            "price": price,
+            "leverage": leverage
+        })
+
+    def close_position(self, asset, direction, price, current_time):
+        key = (asset, direction)
+        if key not in self.account.positions:
+            return
+        pos = self.account.positions.pop(key)
+        # 结算盈亏
+        # 多头收益：quantity * (price - entry_price)
+        # 这里略写
+        if pos.leverage > 1:
+            # 开仓计算杠杆 目前只支持做多杠杆计算
+            if direction == "long":
+                price_map = {asset: price}
+                self.leverage_manager.settle_fees(self.account, current_time, price_map, is_open_close=True)
+
+        if direction == "long":
+            pnl = pos.quantity * (price - pos.entry_price)
+        else:
+            pnl = pos.quantity * (pos.entry_price - price)
+
+        self.account.cash += (pos.own_equity + pnl)
+        self.account.record_transaction({
+            "time": current_time,
+            "action": "close",
+            "asset": asset,
+            "direction": direction,
+            "quantity": pos.quantity,
+            "close_price": price,
+            "pnl": pnl
+        })
+
+    def on_bar_end(self, current_time, price_map):
+        """
+        进行k线结束的一些检查 例如止损止盈检查，资金费率和杠杆费率结算等
+        :param current_time:
+        :param price_map:
+        :return:
+        """
+        # 1) 杠杆结算
+        if self.leverage_manager:
+            self.leverage_manager.settle_fees(self.account, current_time, price_map)
+
+        # 2) 止损检查
+        if self.stop_loss_logic:
+            positions_to_close = self.stop_loss_logic.check_stop_loss(self.account, price_map, current_time)
+            for (asset, direction) in positions_to_close:
+                self.close_position(asset, direction, price_map.get(asset, 0), current_time)
 
 
 class Backtest:
-    def __init__(self, strategy_results: list, initial_capital: int, asset_parameters, stop_loss_threshold=0.05):
+    """
+    回测主流程：对每根bar做：
+     1. 从row读取signal
+     2. 调用 broker.open/close
+     3. bar结束时，broker.on_bar_end -> 杠杆费 + 止损检查
+    """
+
+    def __init__(self, broker, strategy_results, pos_manager=PositionManager()):
         """
-        initialize the backtest class
-        :param strategy_results: the dataset list that provided by specific strategy
-        :param initial_capital: the initial capital of the account at the beginning
-        :param asset_parameters:
-        :param stop_loss_threshold: passive stop_loss threshold from the cost.
+        :param broker: Broker对象，内部有account、leverage_manager、stop_loss_logic
+        :param strategy_results: List[pd.DataFrame] 这里假设每个df对应一段时间(如每日/每小时)
         """
-        self.account = Account(initial_capital)
+        self.broker = broker
         self.strategy_results = strategy_results
-        self.asset_parameters = asset_parameters
-        self.stop_loss_threshold = stop_loss_threshold
-        self.open_positions = {}
+        self.pos_manager = pos_manager
 
     def run(self):
-        for daily_df in self.strategy_results:
-            for idx, row in daily_df.iterrows():
-                self.process_signal(row)
-                self.check_stop_loss(row)
-        return self.calculate_final_result()
+        for df in self.strategy_results:
+            current_market_cap = self.get_market_cap(df)
+            for idx, row in df.iterrows():
+                asset = row['asset']
+                price = row['close']
+                signal = row['signal']
+                current_time = row['time']
+                # 1) 处理交易信号
+                self.process_signal(signal, asset, price, current_time, current_market_cap)
+                # 2) 在每行处理完后(可理解为每个 bar 结束)调用 on_bar_end
+                price_map = {asset: price}  # 如果多资产，就把所有资产的价格都放进去
+                self.broker.on_bar_end(current_time, price_map)
 
-    def process_signal(self, row):
-        asset = row['asset']
-        price = row['close']
-        signal = row['signal']
-        current_time = row['time']
-        if signal == 1:  # 开多
-            # 如果已经有同方向持仓，可以选择加仓逻辑，这里简单化不加仓，只在无持仓时才开仓
-            if asset not in self.open_positions:
-                self.open_long_position(asset, price, current_time)
-        elif signal == -1:  # 开空
-            if asset not in self.open_positions:
-                self.open_short_position(asset, price, current_time)
-        # signal = 0 不做操作
-
-    def open_long_position(self, asset, price, current_time):
-        min_unit = self.asset_parameters.get(asset, {}).get('min_trade_unit', 1)
-        leverage = self.asset_parameters.get(asset, {}).get('leverage', 1)
-        hourly_rate = self.asset_parameters.get(asset, {}).get('hourly_rate', 0.001)
-
-        # 计算数量
-        max_units = self.account.cash / price
-        units_without_leverage = math.floor(max_units / min_unit) * min_unit
-        if units_without_leverage <= 0:
-            print("No cash to open long position.")
-            return
-
-        own_equity = units_without_leverage * price
-        total_cost = own_equity * leverage
-        borrowed_funds = total_cost - own_equity
-
-        if self.account.cash < own_equity:
-            print("Insufficient cash for own equity.")
-            return
-
-        own_equity_units = units_without_leverage
-        borrowed_units = borrowed_funds / price
-        quantity = own_equity_units + borrowed_units
-
-        # 在开仓时记录保证金信息到account.margins中(可选)
-        self.account.record_position_info(
-            asset=asset,
-            own_equity=own_equity,
-            borrowed_funds=borrowed_funds,
-            leverage_rate=leverage,
-            hourly_rate=hourly_rate
-        )
-
-        # 第一步：用own_equity购买资产
-        # 此时我们可将own_equity等信息直接记录到交易中，但利息和费用此时还没有产生或计算，为0或None即可
-        self.account.buy(current_time, asset, own_equity_units, "USD", own_equity,
-                         own_equity=own_equity, borrowed_funds=0, interest=0, fees=0)
-
-        # 第二步：借入剩余的资产
-        if borrowed_units > 0:
-            # 借入部分也可标记own_equity=0，borrowed_funds不为0表示是借入的
-            self.account.buy(current_time, asset, borrowed_units, "USD", 0,
-                             own_equity=0, borrowed_funds=borrowed_funds, interest=0, fees=0)
-
-        self.open_positions[asset] = {
-            'entry_time': current_time,
-            'entry_price': price,
-            'quantity': quantity,
-            'own_equity': own_equity,
-            'borrowed_funds': borrowed_funds,
-            'leverage_rate': leverage,
-            'hourly_rate': hourly_rate,
-            'position_type': 'long'
-        }
-
-    def open_short_position(self, asset, price, current_time):
-        min_unit = self.asset_parameters.get(asset, {}).get('min_trade_unit', 1)
-        leverage = self.asset_parameters.get(asset, {}).get('leverage', 1)
-        hourly_rate = self.asset_parameters.get(asset, {}).get('hourly_rate', 0.001)
-
-        max_units = self.account.cash / price
-        units_without_leverage = math.floor(max_units / min_unit) * min_unit
-        if units_without_leverage <= 0:
-            print("No cash margin to open short position.")
-            return
-
-        own_equity = units_without_leverage * price
-        total_cost = own_equity * leverage
-        borrowed_funds = total_cost - own_equity
-
-        if self.account.cash < own_equity:
-            print("Insufficient cash for short margin.")
-            return
-
-        # 扣除自有资金作为保证金
-        self.account.cash -= own_equity
-
-        # 借入总计相当于total_cost/price的资产数量
-        borrowed_units = total_cost / price
-        # 第一步：借入资产(ask_asset_amount=0)
-        self.account.buy(current_time, asset, borrowed_units, asset, 0)
-        # 第二步：卖出借来的全部资产，获得 total_cost USD
-        self.account.sell(current_time, asset, borrowed_units, "USD", total_cost)
-
-        # 此时账户中增加total_cost USD，但我们减少了own_equity USD的保证金，所以净现金增加borrowed_funds。
-        # 仓位记录
-        self.open_positions[asset] = {
-            'entry_time': current_time,
-            'entry_price': price,
-            'quantity': borrowed_units,
-            'own_equity': own_equity,
-            'borrowed_funds': borrowed_funds,
-            'leverage_rate': leverage,
-            'hourly_rate': hourly_rate,
-            'position_type': 'short'
-        }
-
-    def close_position(self, asset, price, current_time):
-        pos = self.open_positions[asset]
-        quantity = pos['quantity']
-        borrowed_funds = pos['borrowed_funds']
-        own_equity = pos['own_equity']
-        holding_hours = (current_time - pos['entry_time']).total_seconds() / 3600
-        interest = borrowed_funds * pos['hourly_rate'] * holding_hours
-        fees = quantity * price * 0.001  # 假设0.1%手续费
-
-        # 卖出所持资产
-        gross_revenue = quantity * price
-        # 第一步：执行卖出操作，将资产换成USD
-        self.account.sell(
-            timestamp=current_time,
-            sell_asset_type=asset,
-            sell_asset_amount=quantity,
-            receive_asset_type="USD",
-            receive_asset_amount=gross_revenue,
-            own_equity=own_equity,
-            borrowed_funds=borrowed_funds,
-            interest=interest,
-            fees=0  # 此处fees暂不计入，因为还没正式扣除
-        )
-
-        # 此时 account.cash 增加了 gross_revenue
-        # 第二步：偿还借款和利息，从account.cash中扣除repay_amount
-        repay_amount = borrowed_funds + interest
-        if self.account.cash < repay_amount:
-            print("Warning: Not enough cash to repay borrowed funds and interest!")
-        self.account.cash -= repay_amount
-        # 记录一条repay交易，让交易记录清晰
-        repay_record = {
-            'time': current_time,
-            'type': 'repay',
-            'description': 'Repay borrowed funds and interest',
-            'borrowed_funds': borrowed_funds,
-            'interest': interest,
-            'amount': repay_amount
-        }
-        self.account.transaction.append(repay_record)
-
-        # 第三步：支付交易费用
-        if self.account.cash < fees:
-            print("Warning: Not enough cash to pay fees!")
-        self.account.cash -= fees
-        fee_record = {
-            'time': current_time,
-            'type': 'fee',
-            'description': 'Transaction fees',
-            'fees': fees
-        }
-        self.account.transaction.append(fee_record)
-
-        # 最后：own_equity是我们原本投入的本金，net_profit = gross_revenue - repay_amount - fees + own_equity
-        # 实际上，这些计算你已经做完了，不过在这里分步做的话，
-        # net_profit实际上已经通过这些增减操作体现在account.cash中。
-
-        # 清除保证金信息和仓位信息
-        self.account.clear_position_info(asset)
-        del self.open_positions[asset]
-
-    def check_stop_loss(self, row):
-        current_time = row['time']
-        price = row['close']
-        assets_to_close = []
-        for a, pos in self.open_positions.items():
-            entry_price = pos['entry_price']
-            if pos['position_type'] == 'long':
-                # 多头止损条件
-                if price < entry_price * (1 - self.stop_loss_threshold):
-                    assets_to_close.append(a)
-            else:
-                # 空头止损条件（价格上涨超出阈值）
-                if price > entry_price * (1 + self.stop_loss_threshold):
-                    assets_to_close.append(a)
-
-        for a in assets_to_close:
-            self.close_position(a, price, current_time)
-
-    def calculate_final_result(self):
-        final_cash = self.account.cash
         return {
-            'final_cash': final_cash,
-            'transaction_history': self.account.get_transaction_history()
+            "final_cash": self.broker.account.cash,
+            "positions": self.broker.account.positions,
+            "transactions": self.broker.account.transactions
         }
+
+    def process_signal(self, signal, asset, price, current_time, current_market_cap):
+        # 简化: signal=1 -> 开多, signal=-1 -> 开空, signal=0 -> 不操作
+        position = self.pos_manager.get_allocate_pos(current_market_cap, self.broker.account.cash)
+        quantity = position / price
+        quantity = math.floor(quantity * 100) / 100  # 去尾法保证小数点后两位
+        if quantity <= 0.01:  # 余额不足
+            raise ValueError("insufficient amount cash to buy asset")
+
+        if signal == 1:
+            self.broker.open_position(
+                asset=asset,
+                direction="long",
+                price=price,
+                leverage=2.0,  # 或从别处读取
+                current_time=current_time,
+                position_type="spot",
+                quantity=quantity  # 可以根据策略或资金管理计算
+            )
+        elif signal == -1:
+            self.broker.open_position(
+                asset=asset,
+                direction="short",
+                price=price,
+                leverage=2.0,
+                current_time=current_time,
+                position_type="spot",
+                quantity=quantity
+            )
+        else:
+            pass  # signal=0, 不开仓
+
+    def get_market_cap(self, current_df: pd.DataFrame):
+        """
+        计算当前持仓总市值（不包含现金）
+        :param current_df:
+        :return:
+        """
+        total_market_value = 0
+        holdings = self.broker.account.positions
+        for (asset, _), position in holdings.items():
+            # 从DataFrame中获取当前价格
+            if asset in current_df['asset'].values:
+                # 从DataFrame中找到对应资产的当前价格
+                current_price = current_df.loc[current_df['asset'] == asset, 'close'].iloc[0]
+                total_market_value += position.quantity * current_price
+        return total_market_value
