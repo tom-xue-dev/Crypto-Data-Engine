@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import math
 
 from Account import Account
-from strategy import MovingAverageStrategy
+from strategy import DualMAStrategy
 from backtest_simulation import Backtest
 
 # 生成测试数据

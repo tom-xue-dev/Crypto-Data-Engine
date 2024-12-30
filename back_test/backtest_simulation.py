@@ -109,7 +109,7 @@ class Backtest:
      3. bar结束时，broker.on_bar_end -> 杠杆费 + 止损检查
     """
 
-    def __init__(self, broker, strategy_results, pos_manager=PositionManager()):
+    def __init__(self, broker: Broker, strategy_results: list, pos_manager=PositionManager()):
         """
         :param broker: Broker对象，内部有account、leverage_manager、stop_loss_logic
         :param strategy_results: List[pd.DataFrame] 这里假设每个df对应一段时间(如每日/每小时)

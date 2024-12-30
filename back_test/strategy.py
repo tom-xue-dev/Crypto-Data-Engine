@@ -162,28 +162,4 @@ class DualMAStrategy(Strategy):
 
 
 if __name__ == "__main__":
-    dates = [datetime(2024, 1, 1, 9), datetime(2024, 1, 1, 10), datetime(2024, 1, 1, 11),
-             datetime(2024, 1, 2, 9)]
-
-    prices = [150, 100, 300, 120]  # 模拟价格小幅波动
-    asset = ['AAPL'] * len(dates)
-
-    data = pd.DataFrame({
-        'time': dates,
-        'asset': asset,
-        'open': prices,
-        'high': [p + 1 for p in prices],
-        'low': [p - 1 for p in prices],
-        'close': prices
-    })
-
-    # 将数据拆分为每日DataFrame列表（符合strategy使用格式）
-    day1 = data[data['time'].dt.date == datetime(2024, 1, 1).date()].copy()
-    day2 = data[data['time'].dt.date == datetime(2024, 1, 2).date()].copy()
-    dataset = [day1, day2]
-    # for df in dataset:
-    #     print(df)
-    strategy = DualMAStrategy(dataset, ['APPL'], 5, 3)
-    strategy.generate_signal()
-    dataset = strategy.get_dataset()
-    print(dataset)
+    pass
