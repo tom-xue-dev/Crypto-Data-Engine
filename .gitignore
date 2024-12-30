@@ -1,6 +1,8 @@
-
+__pycache__
 /data
+tmp
+log
+/data/binance
 /data_fees
-/processors
-/back_test
-/__pycache__
+back_test/BTC_USDT_USDT_funding_rate_history.csv
+
