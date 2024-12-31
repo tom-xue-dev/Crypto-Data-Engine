@@ -1,5 +1,5 @@
 import pickle
-
+from pathlib import Path
 import pandas as pd
 
 
@@ -25,7 +25,9 @@ def read_list_pickle(pickle_file):
         return None
 
 # 示例调用
-pickle_file = 'nested_pickle/1d/1INCH-USDT_spot_1d.pkl'  # 替换为实际 Pickle 文件路径
+script_path = Path(__file__).resolve()
+base_path = script_path.parents[1] / "data"
+pickle_file = base_path/'nested_pickle/15min/1INCH-USDT_future_15m.pkl'  # 替换为实际 Pickle 文件路径
 data_list = read_list_pickle(pickle_file)
 with open(pickle_file, 'rb') as f:
     data = pickle.load(f)
@@ -41,7 +43,7 @@ else:
 
 num_first_layer_elements = len(data_list)
 print(f"第一层元素数量: {num_first_layer_elements}")
-print(data_list[1100])  # 打印第一个 DataFrame 或其他对象
-print(data_list[1110])
-print(data_list[1120])
+ans = 0
+for idx,df in enumerate(data_list):
+    print(df)
 
