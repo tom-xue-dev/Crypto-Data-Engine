@@ -145,19 +145,24 @@ class DualMAStrategy(Strategy):
         反之开空 信号为-1
         :return: None
         """
+
         for index, time_frame_df in enumerate(self.dataset):
             if index < self.long_period:
                 time_frame_df['signal'] = 0
                 continue
             prev_df = self.dataset[index - 1]
-            # 开多的情况，prev_df的MA_short在MA_long 下面，且当前MA_short在MA_long上面，用当前收盘价开多
+            # 开多的情况
             long_condition = (prev_df[f'MA{self.short_period}'] < prev_df[f'MA{self.long_period}']) & (
                     time_frame_df[f'MA{self.short_period}'] >= time_frame_df[f'MA{self.long_period}'])
-            # 开空的情况，prev_df 的shortMA在上，当前的short_MA在下
+            # 开空的情况
             short_condition = (prev_df[f'MA{self.short_period}'] > prev_df[f'MA{self.long_period}']) & (
                     time_frame_df[f'MA{self.short_period}'] <= time_frame_df[f'MA{self.long_period}'])
+            # 初始化 signal 列为 0
+            time_frame_df['signal'] = 0
+            # 更新满足条件的信号
             time_frame_df.loc[long_condition, 'signal'] = 1
             time_frame_df.loc[short_condition, 'signal'] = -1
+
         return
 
 

@@ -148,20 +148,35 @@ class StopLossLogic(ABC):
 
 
 class DefaultStopLossLogic(StopLossLogic):
-    def __init__(self, max_drawdown=0.05):
+    def __init__(self, max_drawdown=0.5):
         self.max_drawdown = max_drawdown
-        self.highest_price_map = {}
+        self.highest_price_map = {}  # 用于多头跟踪最高价格
+        self.lowest_price_map = {}  # 用于空头跟踪最低价格
 
     def check_stop_loss(self, account, price_map, current_time):
         positions_to_close = []
+
         for (asset, direction), pos in account.positions.items():
+            curr_price = price_map.get(asset, pos.entry_price)
+
             if direction == "long":
-                curr_price = price_map.get(asset, pos.entry_price)
+                # 多头逻辑：跟踪最高价格
                 prev_high = self.highest_price_map.get(asset, pos.entry_price)
                 new_high = max(prev_high, curr_price)
                 self.highest_price_map[asset] = new_high
+                # 如果当前价格低于最高价格的 (1 - max_drawdown)，止损
                 if curr_price < new_high * (1 - self.max_drawdown):
                     positions_to_close.append((asset, direction))
+
+            elif direction == "short":
+                # 空头逻辑：跟踪最低价格
+                prev_low = self.lowest_price_map.get(asset, pos.entry_price)
+                new_low = min(prev_low, curr_price)
+                self.lowest_price_map[asset] = new_low
+                # 如果当前价格高于最低价格的 (1 + max_drawdown)，止损
+                if curr_price > new_low * (1 + self.max_drawdown):
+                    positions_to_close.append((asset, direction))
+
         return positions_to_close
 
 

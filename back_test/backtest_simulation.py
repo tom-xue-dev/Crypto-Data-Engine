@@ -1,8 +1,10 @@
+import datetime
 import math
 import sys
-from datetime import datetime, timedelta
-from typing import Dict, List, Any
+
+import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
 
 from Account import Account, Position, DefaultStopLossLogic, PositionManager
 
@@ -12,7 +14,7 @@ class Broker:
     Broker 为撮合类，对回测交易的函数调用高层封装
     """
 
-    def __init__(self, account: Account, leverage_manager=None, stop_loss_logic=None):
+    def __init__(self, account: Account, leverage_manager=None, stop_loss_logic=DefaultStopLossLogic()):
         """
         撮合订单的类
         传入账号据数据用于记录交易历史
@@ -34,6 +36,7 @@ class Broker:
         if self.account.cash < cost:
             print("Insufficient cash to open position.")
             return
+        # print(f"open pos in {current_time}")
         self.account.cash -= cost
         if leverage > 1:
             # 开仓计算杠杆 目前只支持做多杠杆计算
@@ -52,11 +55,15 @@ class Broker:
             "price": price,
             "leverage": leverage
         })
+        if self.stop_loss_logic:
+            self.stop_loss_logic.highest_price_map[asset] = price
+            self.stop_loss_logic.lowest_price_map[asset] = price
 
-    def close_position(self, asset, direction, price, current_time):
+    def close_position(self, asset, direction, price, current_time, stop_loss=False):
         key = (asset, direction)
         if key not in self.account.positions:
             return
+        # print(f"close pos in {current_time}")
         pos = self.account.positions.pop(key)
         # 结算盈亏
         # 多头收益：quantity * (price - entry_price)
@@ -80,8 +87,12 @@ class Broker:
             "direction": direction,
             "quantity": pos.quantity,
             "close_price": price,
-            "pnl": pnl
+            "pnl": pnl,
+            "stop_loss": stop_loss
         })
+        if self.stop_loss_logic:
+            del self.stop_loss_logic.highest_price_map[asset]
+            del self.stop_loss_logic.lowest_price_map[asset]
 
     def on_bar_end(self, current_time, price_map):
         """
@@ -96,9 +107,10 @@ class Broker:
 
         # 2) 止损检查
         if self.stop_loss_logic:
-            positions_to_close = self.stop_loss_logic.check_stop_loss(self.account, price_map, current_time)
+            positions_to_close = self.stop_loss_logic.check_stop_loss(account=self.account, price_map=price_map,
+                                                                      current_time=current_time)
             for (asset, direction) in positions_to_close:
-                self.close_position(asset, direction, price_map.get(asset, 0), current_time)
+                self.close_position(asset, direction, price_map.get(asset), current_time, stop_loss=True)
 
 
 class Backtest:
@@ -122,21 +134,21 @@ class Backtest:
     def run(self):
         for df in self.strategy_results:
             current_market_cap = self.get_market_cap(df)
+            price_map = {}
+            current_time = df['time'][0]
             for idx, row in df.iterrows():
                 asset = row['asset']
                 price = row['close']
                 signal = row['signal']
-                current_time = row['time']
 
                 # 1) 处理交易信号
                 self.process_signal(signal, asset, price, current_time, current_market_cap)
 
-                # 2) bar结束调用 on_bar_end
-                price_map = {asset: price}
-                self.broker.on_bar_end(current_time, price_map)
-
-                # 3) 记录并打印当前净值
-                self.log_net_value(current_time, price_map)
+                price_map[asset] = price
+            # 2) bar结束调用 on_bar_end
+            self.broker.on_bar_end(current_time, price_map)
+            # 3) 记录当前净值
+            self.log_net_value(df, current_time)
 
         return {
             "final_cash": self.broker.account.cash,
@@ -160,7 +172,14 @@ class Backtest:
             # print(f"insufficient cash,target price is {price}")
             return
 
+        existing_long_key = (asset, "long")
+        existing_short_key = (asset, "short")
+
+        holdings = self.broker.account.positions  # 当前持仓 dict
+
         if signal == 1:
+            if existing_short_key in holdings:
+                self.broker.close_position(asset, "short", price, current_time)
             self.broker.open_position(
                 asset=asset,
                 direction="long",
@@ -171,6 +190,9 @@ class Backtest:
                 quantity=quantity  # 可以根据策略或资金管理计算
             )
         elif signal == -1:
+            if existing_long_key in holdings:
+                self.broker.close_position(asset, "long", price, current_time)
+
             self.broker.open_position(
                 asset=asset,
                 direction="short",
@@ -199,18 +221,13 @@ class Backtest:
                 total_market_value += position.quantity * current_price
         return total_market_value
 
-    def log_net_value(self, current_time, price_map):
+    def log_net_value(self, current_df: pd.DataFrame, current_time: datetime.datetime):
         """
         计算并记录账户净值：
         1) 现金
         2) 所有持仓的市值
         """
-        total_market_value = 0
-        for (asset, direction), position in self.broker.account.positions.items():
-            # 如果当前 bar 的价格中有该资产，则用它来计算
-            if asset in price_map:
-                current_price = price_map[asset]
-                total_market_value += position.quantity * current_price
+        total_market_value = self.get_market_cap(current_df)
 
         net_value = self.broker.account.cash + total_market_value
 
@@ -222,6 +239,97 @@ class Backtest:
             "positions": len(self.broker.account.positions)
         })
 
-        # 如果想直接打印，也可以加上一行：
-        print(f"Time: {current_time}, Net Value: {net_value:.2f}, "
-              f"Cash: {self.broker.account.cash:.2f}, Positions: {len(self.broker.account.positions)}")
+
+class PerformanceAnalyzer:
+    def __init__(self, net_value_df: pd.DataFrame):
+        """
+        net_value_df: DataFrame，至少包含 ['time', 'net_value'] 字段。
+        时间可以是索引或者一列，根据你的数据格式定。
+        """
+        self.net_value_df = net_value_df.copy()
+        self._prepare_data()
+
+    def _prepare_data(self):
+        """
+        将 time 转换为 datetime，并按时间排序等预处理。
+        也可以在这里计算日度收益率、累计收益等。
+        """
+        # 如果 time 不是 datetime，需要先转换
+        if not np.issubdtype(self.net_value_df['time'].dtype, np.datetime64):
+            self.net_value_df['time'] = pd.to_datetime(self.net_value_df['time'])
+
+        # 按时间排序
+        self.net_value_df.sort_values(by='time', inplace=True)
+
+        # 设置 time 为索引（可选）
+        self.net_value_df.set_index('time', inplace=True)
+
+        # 计算收益率 (如按 bar 计算)
+        self.net_value_df['returns'] = self.net_value_df['net_value'].pct_change().fillna(0)
+
+    def plot_net_value(self):
+        """
+        绘制净值曲线
+        """
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.net_value_df.index, self.net_value_df['net_value'], label='Net Value')
+        plt.title('Net Value Over Time')
+        plt.xlabel('Time')
+        plt.ylabel('Net Value')
+        plt.legend()
+        plt.show()
+
+    def calculate_max_drawdown(self) -> float:
+        """
+        计算最大回撤
+        """
+        cum_max = self.net_value_df['net_value'].cummax()
+        drawdown = self.net_value_df['net_value'] / cum_max - 1
+        max_drawdown = drawdown.min()
+        return max_drawdown
+
+    def calculate_annual_return(self, annual_factor: int = 252) -> float:
+        """
+        计算年化收益率（假设每年有 annual_factor 个交易日/交易bar，可根据实际情况调整）
+        """
+        # 先计算累计收益率
+        final_net_value = self.net_value_df['net_value'].iloc[-1]
+        init_net_value = self.net_value_df['net_value'].iloc[0]
+        total_return = final_net_value / init_net_value - 1
+
+        # 计算回测总天数
+        total_days = (self.net_value_df.index[-1] - self.net_value_df.index[0]).days
+        if total_days == 0:
+            return 0.0
+
+        # 年化系数（粗略）
+        yearly_periods = total_days / 365
+        annual_return = (1 + total_return) ** (1 / yearly_periods) - 1
+        return annual_return
+
+    def calculate_sharpe_ratio(self, risk_free_rate: float = 0.0, annual_factor: int = 252) -> float:
+        """
+        计算夏普比率:
+        Sharpe = (Mean(returns) - risk_free_rate) / Std(returns) * sqrt(annual_factor)
+        """
+        rets = self.net_value_df['returns']
+        mean_ret = rets.mean()
+        std_ret = rets.std()
+        if std_ret == 0:
+            return 0.0
+        sharpe = (mean_ret - risk_free_rate / annual_factor) / std_ret * np.sqrt(annual_factor)
+        return sharpe
+
+    def summary(self):
+        """
+        输出常见指标的汇总信息
+        """
+        max_dd = self.calculate_max_drawdown()
+        ann_ret = self.calculate_annual_return()
+        sharpe = self.calculate_sharpe_ratio()
+
+        print("Performance Summary:")
+        print(f"Final Net Value: {self.net_value_df['net_value'].iloc[-1]:.2f}")
+        print(f"Max Drawdown: {max_dd:.2%}")
+        print(f"Annual Return: {ann_ret:.2%}")
+        print(f"Sharpe Ratio: {sharpe:.2f}")
