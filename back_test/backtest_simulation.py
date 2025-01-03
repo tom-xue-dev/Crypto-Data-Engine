@@ -62,8 +62,8 @@ class Broker:
     def close_position(self, asset, direction, price, current_time, stop_loss=False):
         key = (asset, direction)
         if key not in self.account.positions:
-            return
-        # print(f"close pos in {current_time}")
+            raise ValueError("target asset not in holdings")
+
         pos = self.account.positions.pop(key)
         # 结算盈亏
         # 多头收益：quantity * (price - entry_price)
@@ -90,6 +90,7 @@ class Broker:
             "pnl": pnl,
             "stop_loss": stop_loss
         })
+
         if self.stop_loss_logic:
             del self.stop_loss_logic.highest_price_map[asset]
             del self.stop_loss_logic.lowest_price_map[asset]
@@ -178,6 +179,9 @@ class Backtest:
         holdings = self.broker.account.positions  # 当前持仓 dict
 
         if signal == 1:
+
+            if existing_long_key in holdings:
+                return
             if existing_short_key in holdings:
                 self.broker.close_position(asset, "short", price, current_time)
             self.broker.open_position(
@@ -192,7 +196,8 @@ class Backtest:
         elif signal == -1:
             if existing_long_key in holdings:
                 self.broker.close_position(asset, "long", price, current_time)
-
+            if existing_short_key in holdings:
+                return
             self.broker.open_position(
                 asset=asset,
                 direction="short",
@@ -236,7 +241,7 @@ class Backtest:
             "time": current_time,
             "net_value": net_value,
             "cash": self.broker.account.cash,
-            "positions": len(self.broker.account.positions)
+            "positions": list(self.broker.account.positions.keys())
         })
 
 
