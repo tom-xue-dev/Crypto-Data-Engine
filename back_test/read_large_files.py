@@ -1,5 +1,8 @@
+import mmap
 import os
 import pickle
+import time
+
 import pandas as pd
 from pathlib import Path
 
@@ -82,12 +85,42 @@ def load_filtered_data_as_list(start_time, end_time, asset_list, level: str):
     return filtered_list
 
 
-if __name__ == "__main__":
-    # 定义读取参数
-    start_time = "2024-12-01"
-    end_time = "2024-12-31"
-    asset_list = ["1MBABYDOGE-USDT_spot", "AAVE-USDT_future"]  # 替换为您需要的资产
+def map_and_load_pkl_files(level:str):
+    # 获取文件列表，按名称排序（假设文件名格式为 YYYY-MM.pkl）
+    script_path = Path(__file__).resolve()
+    folder_path = script_path.parents[1] / "data" / "data_divided_by_mouth" / level
 
+    files = sorted([f for f in os.listdir(folder_path) if f.endswith('.pkl')])
 
-    # 调用函数读取并过滤数据
-    filtered_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "15min")
+    data = []
+    for file_name in files:
+        file_path = os.path.join(folder_path, file_name)
+        with open(file_path, "rb") as f:
+            # 映射文件到内存
+            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+
+            # 使用 pickle 加载数据
+            loaded_data = pickle.loads(mm[:])
+            data.append((file_name, loaded_data))  # 保存文件名和对应数据
+
+            # 关闭 mmap
+            mm.close()
+
+    return data
+
+# start = time.time()
+# all_data = map_and_load_pkl_files("15min")
+# end = time.time()
+# print(end-start)
+# # 打印加载的数据
+# for file_name, content in all_data:
+#     print(f"File: {file_name} finish load")
+# if __name__ == "__main__":
+#     # 定义读取参数
+#     start_time = "2024-12-01"
+#     end_time = "2024-12-31"
+#     asset_list = ["1MBABYDOGE-USDT_spot", "AAVE-USDT_future"]  # 替换为您需要的资产
+#
+#
+#     # 调用函数读取并过滤数据
+#     filtered_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "15min")

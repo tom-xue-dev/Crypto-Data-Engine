@@ -117,6 +117,7 @@ class Backtest:
         self.broker = broker
         self.strategy_results = strategy_results
         self.pos_manager = pos_manager
+        self.net_value_history = []
 
     def run(self):
         for df in self.strategy_results:
@@ -126,16 +127,22 @@ class Backtest:
                 price = row['close']
                 signal = row['signal']
                 current_time = row['time']
+
                 # 1) 处理交易信号
                 self.process_signal(signal, asset, price, current_time, current_market_cap)
-                # 2) 在每行处理完后(可理解为每个 bar 结束)调用 on_bar_end
-                price_map = {asset: price}  # 如果多资产，就把所有资产的价格都放进去
+
+                # 2) bar结束调用 on_bar_end
+                price_map = {asset: price}
                 self.broker.on_bar_end(current_time, price_map)
+
+                # 3) 记录并打印当前净值
+                self.log_net_value(current_time, price_map)
 
         return {
             "final_cash": self.broker.account.cash,
             "positions": self.broker.account.positions,
-            "transactions": self.broker.account.transactions
+            "transactions": self.broker.account.transactions,
+            "net_value_history": pd.DataFrame(self.net_value_history)
         }
 
     def process_signal(self, signal, asset, price, current_time, current_market_cap):
@@ -143,15 +150,22 @@ class Backtest:
         position = self.pos_manager.get_allocate_pos(current_market_cap, self.broker.account.cash)
         quantity = position / price
         quantity = math.floor(quantity * 100) / 100  # 去尾法保证小数点后两位
+        if self.broker.leverage_manager is not None:
+            leverage = self.broker.leverage_manager.leverage
+        else:
+            leverage = 1  # 默认为1,不开杠杆
         if quantity <= 0.01:  # 余额不足
-            raise ValueError("insufficient amount cash to buy asset")
+            # print(self.broker.account.cash, self.broker.account.positions)
+            # raise ValueError("insufficient amount cash to buy asset")
+            # print(f"insufficient cash,target price is {price}")
+            return
 
         if signal == 1:
             self.broker.open_position(
                 asset=asset,
                 direction="long",
                 price=price,
-                leverage=2.0,  # 或从别处读取
+                leverage=leverage,  # 或从别处读取
                 current_time=current_time,
                 position_type="spot",
                 quantity=quantity  # 可以根据策略或资金管理计算
@@ -161,7 +175,7 @@ class Backtest:
                 asset=asset,
                 direction="short",
                 price=price,
-                leverage=2.0,
+                leverage=leverage,
                 current_time=current_time,
                 position_type="spot",
                 quantity=quantity
@@ -184,3 +198,30 @@ class Backtest:
                 current_price = current_df.loc[current_df['asset'] == asset, 'close'].iloc[0]
                 total_market_value += position.quantity * current_price
         return total_market_value
+
+    def log_net_value(self, current_time, price_map):
+        """
+        计算并记录账户净值：
+        1) 现金
+        2) 所有持仓的市值
+        """
+        total_market_value = 0
+        for (asset, direction), position in self.broker.account.positions.items():
+            # 如果当前 bar 的价格中有该资产，则用它来计算
+            if asset in price_map:
+                current_price = price_map[asset]
+                total_market_value += position.quantity * current_price
+
+        net_value = self.broker.account.cash + total_market_value
+
+        # 将当前时间、净值等信息保存
+        self.net_value_history.append({
+            "time": current_time,
+            "net_value": net_value,
+            "cash": self.broker.account.cash,
+            "positions": len(self.broker.account.positions)
+        })
+
+        # 如果想直接打印，也可以加上一行：
+        print(f"Time: {current_time}, Net Value: {net_value:.2f}, "
+              f"Cash: {self.broker.account.cash:.2f}, Positions: {len(self.broker.account.positions)}")

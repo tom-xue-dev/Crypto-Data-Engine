@@ -78,8 +78,9 @@ class Position:
 
 
 class LeverageManager:
-    def __init__(self, rate_map: list):
+    def __init__(self, rate_map: list, leverage: int):
         self.rate_map = rate_map
+        self.leverage = leverage
 
     def settle_fees(self, account: Account, current_time: datetime, price_map: dict, is_open_close=False) -> None:
         if current_time.minute != 0 and current_time.second != 0 and is_open_close is False:  # 只有整小时或开仓关仓才会进行杠杆费用结算
