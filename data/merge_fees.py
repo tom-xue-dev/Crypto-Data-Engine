@@ -53,8 +53,8 @@ def merge_fees(crypto_name, level):
     future_path = os.path.join("binance", "futures", crypto_name, level)
     future_files = [f for f in os.listdir(future_path) if f.endswith(".csv")]
     parent_dir = get_parent_dir()
-    fees_path = os.path.join(parent_dir, "data_fees")
-
+    fees_path = os.path.join(parent_dir, "data","funding_fees")
+    print(fees_path)
     # 定义新列名
     new_column_name = "Funding_Rate"
 
@@ -148,7 +148,6 @@ def merge_fees(crypto_name, level):
 files = os.listdir("binance/futures")
 # 打印文件列表
 for file in files:
-
     print("start merge file", file)
     merge_fees(file, "15m")
 
