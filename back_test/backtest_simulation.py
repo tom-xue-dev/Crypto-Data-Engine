@@ -46,6 +46,7 @@ class Broker:
 
         pos = Position(asset, direction, quantity, price, leverage, position_type)
         self.account.positions[(asset, direction)] = pos
+
         self.account.record_transaction({
             "time": current_time,
             "action": "open",
@@ -63,7 +64,6 @@ class Broker:
         key = (asset, direction)
         if key not in self.account.positions:
             raise ValueError("target asset not in holdings")
-
         pos = self.account.positions.pop(key)
         # 结算盈亏
         # 多头收益：quantity * (price - entry_price)
@@ -73,12 +73,10 @@ class Broker:
             if direction == "long":
                 price_map = {asset: price}
                 self.leverage_manager.settle_fees(self.account, current_time, price_map, is_open_close=True)
-
-        if direction == "long":
+        if pos.direction == "long":
             pnl = pos.quantity * (price - pos.entry_price)
         else:
-            pnl = pos.quantity * (pos.entry_price - price)
-
+            pnl = -pos.quantity * (price - pos.entry_price)
         self.account.cash += (pos.own_equity + pnl)
         self.account.record_transaction({
             "time": current_time,
@@ -179,7 +177,6 @@ class Backtest:
         holdings = self.broker.account.positions  # 当前持仓 dict
 
         if signal == 1:
-
             if existing_long_key in holdings:
                 return
             if existing_short_key in holdings:
@@ -208,22 +205,32 @@ class Backtest:
                 quantity=quantity
             )
         else:
+            if existing_short_key in holdings:
+                self.broker.close_position(asset, "short", price, current_time)
+            if existing_long_key in holdings:
+                self.broker.close_position(asset, "long", price, current_time)
             pass  # signal=0, 不开仓
 
     def get_market_cap(self, current_df: pd.DataFrame):
         """
         计算当前持仓总市值（不包含现金）
-        :param current_df:
-        :return:
+        :param current_df: 包含当前市场数据的 DataFrame，需包含 'asset' 和 'close' 列
+        :return: 持仓总市值
         """
         total_market_value = 0
         holdings = self.broker.account.positions
+
+        price_map = dict(zip(current_df['asset'], current_df['close']))
+
         for (asset, _), position in holdings.items():
-            # 从DataFrame中获取当前价格
-            if asset in current_df['asset'].values:
-                # 从DataFrame中找到对应资产的当前价格
-                current_price = current_df.loc[current_df['asset'] == asset, 'close'].iloc[0]
-                total_market_value += position.quantity * current_price
+            if asset in price_map:
+                current_price = price_map[asset]
+                # 计算持仓总市值（绝对值）
+                total_market_value += abs(position.quantity * current_price)
+            else:
+                # 如果找不到当前价格，抛出警告或记录日志
+                raise ValueError(f"Warning: Current price for asset {asset} not found in data.")
+
         return total_market_value
 
     def log_net_value(self, current_df: pd.DataFrame, current_time: datetime.datetime):
@@ -235,13 +242,12 @@ class Backtest:
         total_market_value = self.get_market_cap(current_df)
 
         net_value = self.broker.account.cash + total_market_value
-
+        print(self.broker.account.cash,total_market_value)
         # 将当前时间、净值等信息保存
         self.net_value_history.append({
             "time": current_time,
-            "net_value": net_value,
-            "cash": self.broker.account.cash,
-            "positions": list(self.broker.account.positions.keys())
+            "net_value": round(net_value, 2),
+            "cash": round(self.broker.account.cash, 2),
         })
 
 

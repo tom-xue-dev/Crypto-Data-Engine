@@ -1,227 +1,52 @@
-{'time': Timestamp('2017-12-05 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.12, 'price': 11699.99, 'leverage': 1}
-{'time': Timestamp('2017-12-21 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.12, 'close_price': 15492.64, 'pnl': 455.11799999999994, 'stop_loss': False}
-{'time': Timestamp('2017-12-21 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.1, 'price': 15492.64, 'leverage': 1}
-{'time': Timestamp('2018-01-05 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.1, 'close_price': 16960.39, 'pnl': -146.775, 'stop_loss': False}
-{'time': Timestamp('2018-01-05 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.09, 'price': 16960.39, 'leverage': 1}
-{'time': Timestamp('2018-01-11 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.09, 'close_price': 13238.78, 'pnl': -334.9448999999999, 'stop_loss': False}
-{'time': Timestamp('2018-01-11 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.11, 'price': 13238.78, 'leverage': 1}
-{'time': Timestamp('2018-01-28 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.11, 'close_price': 11879.95, 'pnl': 149.47129999999999, 'stop_loss': False}
-{'time': Timestamp('2018-01-28 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.12, 'price': 11879.95, 'leverage': 1}
-{'time': Timestamp('2018-02-02 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.12, 'close_price': 8873.03, 'pnl': -360.8304, 'stop_loss': False}
-{'time': Timestamp('2018-02-02 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.16, 'price': 8873.03, 'leverage': 1}
-{'time': Timestamp('2018-02-16 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.16, 'close_price': 10159.98, 'pnl': -205.91199999999984, 'stop_loss': False}
-{'time': Timestamp('2018-02-16 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.14, 'price': 10159.98, 'leverage': 1}
-{'time': Timestamp('2018-02-25 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.14, 'close_price': 9590.0, 'pnl': -79.79719999999995, 'stop_loss': False}
-{'time': Timestamp('2018-02-25 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.14, 'price': 9590.0, 'leverage': 1}
-{'time': Timestamp('2018-03-02 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.14, 'close_price': 11039.0, 'pnl': -202.86, 'stop_loss': False}
-{'time': Timestamp('2018-03-02 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.13, 'price': 11039.0, 'leverage': 1}
-{'time': Timestamp('2018-03-09 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.13, 'close_price': 9227.0, 'pnl': -235.56, 'stop_loss': False}
-{'time': Timestamp('2018-03-09 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.14, 'price': 9227.0, 'leverage': 1}
-{'time': Timestamp('2018-04-15 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.14, 'close_price': 8355.0, 'pnl': 122.08000000000001, 'stop_loss': False}
-{'time': Timestamp('2018-04-15 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.16, 'price': 8355.0, 'leverage': 1}
-{'time': Timestamp('2018-05-09 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.16, 'close_price': 9310.0, 'pnl': 152.8, 'stop_loss': False}
-{'time': Timestamp('2018-05-09 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.15, 'price': 9310.0, 'leverage': 1}
-{'time': Timestamp('2018-06-01 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.15, 'close_price': 7521.01, 'pnl': 268.34849999999994, 'stop_loss': False}
-{'time': Timestamp('2018-06-01 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.18, 'price': 7521.01, 'leverage': 1}
-{'time': Timestamp('2018-06-12 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.18, 'close_price': 6530.0, 'pnl': -178.38180000000003, 'stop_loss': False}
-{'time': Timestamp('2018-06-12 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.21, 'price': 6530.0, 'leverage': 1}
-{'time': Timestamp('2018-06-21 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.21, 'close_price': 6718.84, 'pnl': -39.656400000000026, 'stop_loss': False}
-{'time': Timestamp('2018-06-21 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.21, 'price': 6718.84, 'leverage': 1}
-{'time': Timestamp('2018-07-13 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.21, 'close_price': 6214.57, 'pnl': -105.89670000000008, 'stop_loss': False}
-{'time': Timestamp('2018-07-13 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.22, 'price': 6214.57, 'leverage': 1}
-{'time': Timestamp('2018-07-18 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.22, 'close_price': 7381.9, 'pnl': -256.8126, 'stop_loss': False}
-{'time': Timestamp('2018-07-18 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.19, 'price': 7381.9, 'leverage': 1}
-{'time': Timestamp('2018-08-02 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.19, 'close_price': 7525.71, 'pnl': 27.323900000000076, 'stop_loss': False}
-{'time': Timestamp('2018-08-02 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.17, 'price': 7525.71, 'leverage': 1}
-{'time': Timestamp('2018-08-19 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.17, 'close_price': 6477.53, 'pnl': 178.19060000000007, 'stop_loss': False}
-{'time': Timestamp('2018-08-19 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.2, 'price': 6477.53, 'leverage': 1}
-{'time': Timestamp('2018-09-08 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.2, 'close_price': 6185.05, 'pnl': -58.49599999999992, 'stop_loss': False}
-{'time': Timestamp('2018-09-08 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.22, 'price': 6185.05, 'leverage': 1}
-{'time': Timestamp('2018-09-14 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.22, 'close_price': 6476.63, 'pnl': -64.14759999999998, 'stop_loss': False}
-{'time': Timestamp('2018-09-14 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.21, 'price': 6476.63, 'leverage': 1}
-{'time': Timestamp('2018-10-03 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.21, 'close_price': 6510.0, 'pnl': 7.007699999999977, 'stop_loss': False}
-{'time': Timestamp('2018-10-03 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.2, 'price': 6510.0, 'leverage': 1}
-{'time': Timestamp('2018-10-08 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.2, 'close_price': 6673.01, 'pnl': -32.60200000000005, 'stop_loss': False}
-{'time': Timestamp('2018-10-08 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.2, 'price': 6673.01, 'leverage': 1}
-{'time': Timestamp('2018-10-26 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.2, 'close_price': 6538.63, 'pnl': -26.876000000000023, 'stop_loss': False}
-{'time': Timestamp('2018-10-26 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.2, 'price': 6538.63, 'leverage': 1}
-{'time': Timestamp('2018-11-04 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.2, 'close_price': 6485.85, 'pnl': 10.55599999999995, 'stop_loss': False}
-{'time': Timestamp('2018-11-04 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.2, 'price': 6485.85, 'leverage': 1}
-{'time': Timestamp('2018-11-17 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.2, 'close_price': 5628.29, 'pnl': -171.51200000000009, 'stop_loss': False}
-{'time': Timestamp('2018-11-17 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.23, 'price': 5628.29, 'leverage': 1}
-{'time': Timestamp('2018-12-20 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.23, 'close_price': 4049.62, 'pnl': 363.0941, 'stop_loss': False}
-{'time': Timestamp('2018-12-20 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.31, 'price': 4049.62, 'leverage': 1}
-{'time': Timestamp('2019-01-12 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.31, 'close_price': 3583.13, 'pnl': -144.61189999999993, 'stop_loss': False}
-{'time': Timestamp('2019-01-12 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.38, 'price': 3583.13, 'leverage': 1}
-{'time': Timestamp('2019-02-19 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.38, 'close_price': 3907.79, 'pnl': -123.37079999999995, 'stop_loss': False}
-{'time': Timestamp('2019-02-19 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.35, 'price': 3907.79, 'leverage': 1}
-{'time': Timestamp('2019-07-02 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.35, 'close_price': 10842.85, 'pnl': 2427.271, 'stop_loss': False}
-{'time': Timestamp('2019-07-02 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.15, 'price': 10842.85, 'leverage': 1}
-{'time': Timestamp('2019-07-10 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.15, 'close_price': 12108.37, 'pnl': -189.82800000000006, 'stop_loss': False}
-{'time': Timestamp('2019-07-10 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.14, 'price': 12108.37, 'leverage': 1}
-{'time': Timestamp('2019-07-14 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.14, 'close_price': 10174.18, 'pnl': -270.7866000000001, 'stop_loss': False}
-{'time': Timestamp('2019-07-14 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.16, 'price': 10174.18, 'leverage': 1}
-{'time': Timestamp('2019-08-02 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.16, 'close_price': 10523.75, 'pnl': -55.931199999999954, 'stop_loss': False}
-{'time': Timestamp('2019-08-02 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.15, 'price': 10523.75, 'leverage': 1}
-{'time': Timestamp('2019-08-13 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.15, 'close_price': 10892.71, 'pnl': 55.343999999999866, 'stop_loss': False}
-{'time': Timestamp('2019-08-13 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.15, 'price': 10892.71, 'leverage': 1}
-{'time': Timestamp('2019-09-03 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.15, 'close_price': 10615.28, 'pnl': 41.61449999999977, 'stop_loss': False}
-{'time': Timestamp('2019-09-03 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.15, 'price': 10615.28, 'leverage': 1}
-{'time': Timestamp('2019-09-09 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.15, 'close_price': 10303.12, 'pnl': -46.82399999999998, 'stop_loss': False}
-{'time': Timestamp('2019-09-09 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.15, 'price': 10303.12, 'leverage': 1}
-{'time': Timestamp('2019-10-02 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.15, 'close_price': 8359.94, 'pnl': 291.47700000000003, 'stop_loss': False}
-{'time': Timestamp('2019-10-02 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.19, 'price': 8359.94, 'leverage': 1}
-{'time': Timestamp('2019-10-06 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.19, 'close_price': 7854.25, 'pnl': -96.08110000000009, 'stop_loss': False}
-{'time': Timestamp('2019-10-06 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.21, 'price': 7854.25, 'leverage': 1}
-{'time': Timestamp('2019-11-30 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.21, 'close_price': 7541.89, 'pnl': 65.59559999999993, 'stop_loss': False}
-{'time': Timestamp('2019-11-30 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.21, 'price': 7541.89, 'leverage': 1}
-{'time': Timestamp('2019-12-04 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.21, 'close_price': 7194.32, 'pnl': -72.98970000000013, 'stop_loss': False}
-{'time': Timestamp('2019-12-04 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.23, 'price': 7194.32, 'leverage': 1}
-{'time': Timestamp('2020-01-06 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.23, 'close_price': 7758.0, 'pnl': -129.64640000000009, 'stop_loss': False}
-{'time': Timestamp('2020-01-06 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.21, 'price': 7758.0, 'leverage': 1}
-{'time': Timestamp('2020-02-28 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.21, 'close_price': 8692.91, 'pnl': 196.33109999999996, 'stop_loss': False}
-{'time': Timestamp('2020-02-28 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.19, 'price': 8692.91, 'leverage': 1}
-{'time': Timestamp('2020-03-06 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.19, 'close_price': 9131.88, 'pnl': -83.40429999999988, 'stop_loss': False}
-{'time': Timestamp('2020-03-06 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.18, 'price': 9131.88, 'leverage': 1}
-{'time': Timestamp('2020-03-11 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.18, 'close_price': 7934.52, 'pnl': -215.52479999999977, 'stop_loss': False}
-{'time': Timestamp('2020-03-11 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.2, 'price': 7934.52, 'leverage': 1}
-{'time': Timestamp('2020-03-20 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.2, 'close_price': 6208.36, 'pnl': 345.2320000000002, 'stop_loss': False}
-{'time': Timestamp('2020-03-20 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.25, 'price': 6208.36, 'leverage': 1}
-{'time': Timestamp('2020-06-21 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.25, 'close_price': 9294.69, 'pnl': 771.5825000000002, 'stop_loss': False}
-{'time': Timestamp('2020-06-21 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.19, 'price': 9294.69, 'leverage': 1}
-{'time': Timestamp('2020-07-22 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.19, 'close_price': 9518.16, 'pnl': -42.45929999999988, 'stop_loss': False}
-{'time': Timestamp('2020-07-22 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.18, 'price': 9518.16, 'leverage': 1}
-{'time': Timestamp('2020-08-23 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.18, 'close_price': 11648.13, 'pnl': 383.39459999999985, 'stop_loss': False}
-{'time': Timestamp('2020-08-23 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.15, 'price': 11648.13, 'leverage': 1}
-{'time': Timestamp('2020-08-31 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.15, 'close_price': 11649.51, 'pnl': -0.20700000000015278, 'stop_loss': False}
-{'time': Timestamp('2020-08-31 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.15, 'price': 11649.51, 'leverage': 1}
-{'time': Timestamp('2020-09-23 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.15, 'close_price': 10241.46, 'pnl': -211.20750000000015, 'stop_loss': False}
-{'time': Timestamp('2020-09-23 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.17, 'price': 10241.46, 'leverage': 1}
-{'time': Timestamp('2020-10-11 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.17, 'close_price': 11369.02, 'pnl': -191.68520000000024, 'stop_loss': False}
-{'time': Timestamp('2020-10-11 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.16, 'price': 11369.02, 'leverage': 1}
-{'time': Timestamp('2020-12-11 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.16, 'close_price': 18036.53, 'pnl': 1066.8015999999998, 'stop_loss': False}
-{'time': Timestamp('2020-12-11 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.1, 'price': 18036.53, 'leverage': 1}
-{'time': Timestamp('2020-12-15 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.1, 'close_price': 19426.43, 'pnl': -138.99000000000015, 'stop_loss': False}
-{'time': Timestamp('2020-12-15 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.1, 'price': 19426.43, 'leverage': 1}
-{'time': Timestamp('2021-01-20 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.1, 'close_price': 35468.23, 'pnl': 1604.1800000000003, 'stop_loss': False}
-{'time': Timestamp('2021-01-20 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.06, 'price': 35468.23, 'leverage': 1}
-{'time': Timestamp('2021-02-05 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.06, 'close_price': 38290.24, 'pnl': -169.32059999999967, 'stop_loss': False}
-{'time': Timestamp('2021-02-05 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'price': 38290.24, 'leverage': 1}
-{'time': Timestamp('2021-02-25 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'close_price': 47073.73, 'pnl': 439.1745000000003, 'stop_loss': False}
-{'time': Timestamp('2021-02-25 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'price': 47073.73, 'leverage': 1}
-{'time': Timestamp('2021-03-09 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'close_price': 54884.5, 'pnl': -312.43079999999986, 'stop_loss': False}
-{'time': Timestamp('2021-03-09 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'price': 54884.5, 'leverage': 1}
-{'time': Timestamp('2021-03-25 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'close_price': 51293.78, 'pnl': -143.62880000000004, 'stop_loss': False}
-{'time': Timestamp('2021-03-25 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'price': 51293.78, 'leverage': 1}
-{'time': Timestamp('2021-03-30 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'close_price': 58746.57, 'pnl': -298.11160000000007, 'stop_loss': False}
-{'time': Timestamp('2021-03-30 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.03, 'price': 58746.57, 'leverage': 1}
-{'time': Timestamp('2021-04-19 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.03, 'close_price': 55633.14, 'pnl': -93.4029, 'stop_loss': False}
-{'time': Timestamp('2021-04-19 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'price': 55633.14, 'leverage': 1}
-{'time': Timestamp('2021-06-03 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'close_price': 39246.79, 'pnl': 491.59049999999996, 'stop_loss': False}
-{'time': Timestamp('2021-06-03 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'price': 39246.79, 'leverage': 1}
-{'time': Timestamp('2021-06-08 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'close_price': 33380.81, 'pnl': -293.29900000000015, 'stop_loss': False}
-{'time': Timestamp('2021-06-08 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.06, 'price': 33380.81, 'leverage': 1}
-{'time': Timestamp('2021-07-24 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.06, 'close_price': 34258.14, 'pnl': -52.6398000000001, 'stop_loss': False}
-{'time': Timestamp('2021-07-24 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.06, 'price': 34258.14, 'leverage': 1}
-{'time': Timestamp('2021-09-11 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.06, 'close_price': 45173.69, 'pnl': 654.9330000000001, 'stop_loss': False}
-{'time': Timestamp('2021-09-11 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'price': 45173.69, 'leverage': 1}
-{'time': Timestamp('2021-09-16 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'close_price': 47737.82, 'pnl': -102.56519999999989, 'stop_loss': False}
-{'time': Timestamp('2021-09-16 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'price': 47737.82, 'leverage': 1}
-{'time': Timestamp('2021-09-21 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'close_price': 40734.38, 'pnl': -280.1376000000001, 'stop_loss': False}
-{'time': Timestamp('2021-09-21 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'price': 40734.38, 'leverage': 1}
-{'time': Timestamp('2021-10-03 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'close_price': 48200.01, 'pnl': -373.2815000000003, 'stop_loss': False}
-{'time': Timestamp('2021-10-03 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'price': 48200.01, 'leverage': 1}
-{'time': Timestamp('2021-11-19 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'close_price': 58052.24, 'pnl': 394.08919999999983, 'stop_loss': False}
-{'time': Timestamp('2021-11-19 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'price': 58052.24, 'leverage': 1}
-{'time': Timestamp('2021-12-23 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'close_price': 50838.81, 'pnl': 216.4029, 'stop_loss': False}
-{'time': Timestamp('2021-12-23 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'price': 50838.81, 'leverage': 1}
-{'time': Timestamp('2021-12-29 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'close_price': 46464.66, 'pnl': -174.96599999999978, 'stop_loss': False}
-{'time': Timestamp('2021-12-29 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'price': 46464.66, 'leverage': 1}
-{'time': Timestamp('2022-01-13 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'close_price': 42560.11, 'pnl': 156.18200000000013, 'stop_loss': False}
-{'time': Timestamp('2022-01-13 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'price': 42560.11, 'leverage': 1}
-{'time': Timestamp('2022-01-20 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'close_price': 40680.91, 'pnl': -93.95999999999987, 'stop_loss': False}
-{'time': Timestamp('2022-01-20 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'price': 40680.91, 'leverage': 1}
-{'time': Timestamp('2022-01-27 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'close_price': 37160.1, 'pnl': 176.04050000000026, 'stop_loss': False}
-{'time': Timestamp('2022-01-27 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'price': 37160.1, 'leverage': 1}
-{'time': Timestamp('2022-02-13 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'close_price': 42053.66, 'pnl': 244.67800000000025, 'stop_loss': False}
-{'time': Timestamp('2022-02-13 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'price': 42053.66, 'leverage': 1}
-{'time': Timestamp('2022-03-18 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'close_price': 41757.51, 'pnl': 14.807500000000074, 'stop_loss': False}
-{'time': Timestamp('2022-03-18 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'price': 41757.51, 'leverage': 1}
-{'time': Timestamp('2022-04-09 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'close_price': 42753.97, 'pnl': 49.82299999999996, 'stop_loss': False}
-{'time': Timestamp('2022-04-09 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'price': 42753.97, 'leverage': 1}
-{'time': Timestamp('2022-07-07 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'close_price': 21624.98, 'pnl': 1056.4495000000002, 'stop_loss': False}
-{'time': Timestamp('2022-07-07 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.09, 'price': 21624.98, 'leverage': 1}
-{'time': Timestamp('2022-07-13 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.09, 'close_price': 20234.87, 'pnl': -125.10990000000005, 'stop_loss': False}
-{'time': Timestamp('2022-07-13 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.11, 'price': 20234.87, 'leverage': 1}
-{'time': Timestamp('2022-07-17 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.11, 'close_price': 20798.16, 'pnl': -61.9619000000001, 'stop_loss': False}
-{'time': Timestamp('2022-07-17 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.11, 'price': 20798.16, 'leverage': 1}
-{'time': Timestamp('2022-07-25 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.11, 'close_price': 21310.9, 'pnl': 56.40140000000017, 'stop_loss': False}
-{'time': Timestamp('2022-07-25 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.11, 'price': 21310.9, 'leverage': 1}
-{'time': Timestamp('2022-08-12 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.11, 'close_price': 24403.68, 'pnl': -340.2057999999999, 'stop_loss': False}
-{'time': Timestamp('2022-08-12 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.09, 'price': 24403.68, 'leverage': 1}
-{'time': Timestamp('2022-08-18 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.09, 'close_price': 23191.2, 'pnl': -109.12319999999995, 'stop_loss': False}
-{'time': Timestamp('2022-08-18 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.09, 'price': 23191.2, 'leverage': 1}
-{'time': Timestamp('2022-09-11 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.09, 'close_price': 21826.87, 'pnl': 122.78970000000015, 'stop_loss': False}
-{'time': Timestamp('2022-09-11 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.1, 'price': 21826.87, 'leverage': 1}
-{'time': Timestamp('2022-10-10 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.1, 'close_price': 19131.87, 'pnl': -269.5, 'stop_loss': False}
-{'time': Timestamp('2022-10-10 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.11, 'price': 19131.87, 'leverage': 1}
-{'time': Timestamp('2022-10-25 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.11, 'close_price': 20080.07, 'pnl': -104.30200000000008, 'stop_loss': False}
-{'time': Timestamp('2022-10-25 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.11, 'price': 20080.07, 'leverage': 1}
-{'time': Timestamp('2022-11-03 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.11, 'close_price': 20207.82, 'pnl': 14.0525, 'stop_loss': False}
-{'time': Timestamp('2022-11-03 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.11, 'price': 20207.82, 'leverage': 1}
-{'time': Timestamp('2023-01-05 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.11, 'close_price': 16831.85, 'pnl': 371.3567000000001, 'stop_loss': False}
-{'time': Timestamp('2023-01-05 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.13, 'price': 16831.85, 'leverage': 1}
-{'time': Timestamp('2023-02-07 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.13, 'close_price': 23240.46, 'pnl': 833.1193000000001, 'stop_loss': False}
-{'time': Timestamp('2023-02-07 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.1, 'price': 23240.46, 'leverage': 1}
-{'time': Timestamp('2023-02-18 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.1, 'close_price': 24631.95, 'pnl': -139.14900000000017, 'stop_loss': False}
-{'time': Timestamp('2023-02-18 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.1, 'price': 24631.95, 'leverage': 1}
-{'time': Timestamp('2023-02-24 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.1, 'close_price': 23185.29, 'pnl': -144.666, 'stop_loss': False}
-{'time': Timestamp('2023-02-24 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.1, 'price': 23185.29, 'leverage': 1}
-{'time': Timestamp('2023-03-15 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.1, 'close_price': 24285.66, 'pnl': -110.0369999999999, 'stop_loss': False}
-{'time': Timestamp('2023-03-15 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.09, 'price': 24285.66, 'leverage': 1}
-{'time': Timestamp('2023-04-22 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.09, 'close_price': 27816.85, 'pnl': 317.8070999999999, 'stop_loss': False}
-{'time': Timestamp('2023-04-22 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.08, 'price': 27816.85, 'leverage': 1}
-{'time': Timestamp('2023-04-27 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.08, 'close_price': 29472.77, 'pnl': -132.47360000000015, 'stop_loss': False}
-{'time': Timestamp('2023-04-27 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.08, 'price': 29472.77, 'leverage': 1}
-{'time': Timestamp('2023-05-09 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.08, 'close_price': 27628.27, 'pnl': -147.56, 'stop_loss': False}
-{'time': Timestamp('2023-05-09 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.08, 'price': 27628.27, 'leverage': 1}
-{'time': Timestamp('2023-05-30 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.08, 'close_price': 27694.4, 'pnl': -5.290400000000082, 'stop_loss': False}
-{'time': Timestamp('2023-05-30 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.08, 'price': 27694.4, 'leverage': 1}
-{'time': Timestamp('2023-06-03 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.08, 'close_price': 27069.22, 'pnl': -50.01440000000002, 'stop_loss': False}
-{'time': Timestamp('2023-06-03 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.08, 'price': 27069.22, 'leverage': 1}
-{'time': Timestamp('2023-06-20 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.08, 'close_price': 28307.99, 'pnl': -99.10160000000003, 'stop_loss': False}
-{'time': Timestamp('2023-06-20 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.08, 'price': 28307.99, 'leverage': 1}
-{'time': Timestamp('2023-07-09 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.08, 'close_price': 30160.71, 'pnl': 148.2175999999998, 'stop_loss': False}
-{'time': Timestamp('2023-07-09 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.07, 'price': 30160.71, 'leverage': 1}
-{'time': Timestamp('2023-09-16 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.07, 'close_price': 26559.67, 'pnl': 252.0728000000001, 'stop_loss': False}
-{'time': Timestamp('2023-09-16 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.08, 'price': 26559.67, 'leverage': 1}
-{'time': Timestamp('2023-09-25 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.08, 'close_price': 26304.81, 'pnl': -20.388799999999755, 'stop_loss': False}
-{'time': Timestamp('2023-09-25 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.09, 'price': 26304.81, 'leverage': 1}
-{'time': Timestamp('2023-10-01 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.09, 'close_price': 27992.57, 'pnl': -151.89839999999984, 'stop_loss': False}
-{'time': Timestamp('2023-10-01 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.08, 'price': 27992.57, 'leverage': 1}
-{'time': Timestamp('2023-10-12 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.08, 'close_price': 26759.63, 'pnl': -98.6351999999999, 'stop_loss': False}
-{'time': Timestamp('2023-10-12 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.08, 'price': 26759.63, 'leverage': 1}
-{'time': Timestamp('2023-10-20 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.08, 'close_price': 29669.04, 'pnl': -232.75279999999998, 'stop_loss': False}
-{'time': Timestamp('2023-10-20 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.08, 'price': 29669.04, 'leverage': 1}
-{'time': Timestamp('2024-01-14 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.08, 'close_price': 41732.35, 'pnl': 965.0647999999999, 'stop_loss': False}
-{'time': Timestamp('2024-01-14 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.06, 'price': 41732.35, 'leverage': 1}
-{'time': Timestamp('2024-01-28 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.06, 'close_price': 42031.06, 'pnl': -17.922599999999946, 'stop_loss': False}
-{'time': Timestamp('2024-01-28 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'price': 42031.06, 'leverage': 1}
-{'time': Timestamp('2024-03-17 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'close_price': 68393.48, 'pnl': 1318.121, 'stop_loss': False}
-{'time': Timestamp('2024-03-17 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'price': 68393.48, 'leverage': 1}
-{'time': Timestamp('2024-03-28 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'close_price': 70780.6, 'pnl': -71.61360000000029, 'stop_loss': False}
-{'time': Timestamp('2024-03-28 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.03, 'price': 70780.6, 'leverage': 1}
-{'time': Timestamp('2024-04-14 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.03, 'close_price': 65661.84, 'pnl': -153.56280000000027, 'stop_loss': False}
-{'time': Timestamp('2024-04-14 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'price': 65661.84, 'leverage': 1}
-{'time': Timestamp('2024-04-21 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'close_price': 64941.15, 'pnl': 28.8275999999998, 'stop_loss': False}
-{'time': Timestamp('2024-04-21 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'price': 64941.15, 'leverage': 1}
-{'time': Timestamp('2024-04-27 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'close_price': 63461.98, 'pnl': -59.16679999999993, 'stop_loss': False}
-{'time': Timestamp('2024-04-27 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'price': 63461.98, 'leverage': 1}
-{'time': Timestamp('2024-05-16 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'close_price': 65235.21, 'pnl': -70.92919999999984, 'stop_loss': False}
-{'time': Timestamp('2024-05-16 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'price': 65235.21, 'leverage': 1}
-{'time': Timestamp('2024-05-31 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'close_price': 67540.01, 'pnl': 92.19199999999982, 'stop_loss': False}
-{'time': Timestamp('2024-05-31 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'price': 67540.01, 'leverage': 1}
-{'time': Timestamp('2024-06-06 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'close_price': 70799.06, 'pnl': -97.77150000000009, 'stop_loss': False}
-{'time': Timestamp('2024-06-06 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.03, 'price': 70799.06, 'leverage': 1}
-{'time': Timestamp('2024-06-14 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.03, 'close_price': 66043.99, 'pnl': -142.65209999999976, 'stop_loss': False}
-{'time': Timestamp('2024-06-14 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'price': 66043.99, 'leverage': 1}
+{'time': Timestamp('2021-12-10 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'price': 47140.54, 'leverage': 1}
+{'time': Timestamp('2021-12-21 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'close_price': 48889.88, 'pnl': -34.98679999999993, 'stop_loss': False}
+{'time': Timestamp('2022-01-03 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'price': 46446.1, 'leverage': 1}
+{'time': Timestamp('2022-01-15 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'close_price': 43084.29, 'pnl': 67.23619999999995, 'stop_loss': False}
+{'time': Timestamp('2022-01-22 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'price': 35071.42, 'leverage': 1}
+{'time': Timestamp('2022-01-29 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'close_price': 38166.84, 'pnl': -61.908399999999965, 'stop_loss': False}
+{'time': Timestamp('2022-02-02 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.02, 'price': 36896.36, 'leverage': 1}
+{'time': Timestamp('2022-02-14 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.02, 'close_price': 42535.94, 'pnl': 112.79160000000003, 'stop_loss': False}
+{'time': Timestamp('2022-02-15 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.02, 'price': 44544.86, 'leverage': 1}
+{'time': Timestamp('2022-02-16 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.02, 'close_price': 43873.56, 'pnl': -13.426000000000059, 'stop_loss': False}
+{'time': Timestamp('2022-02-20 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'price': 38386.89, 'leverage': 1}
+{'time': Timestamp('2022-02-28 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'close_price': 43160.0, 'pnl': -95.46220000000001, 'stop_loss': False}
+{'time': Timestamp('2022-03-05 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.02, 'price': 39397.96, 'leverage': 1}
+{'time': Timestamp('2022-03-07 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.02, 'close_price': 37988.0, 'pnl': -28.199199999999983, 'stop_loss': False}
+{'time': Timestamp('2022-03-13 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'price': 37777.34, 'leverage': 1}
+{'time': Timestamp('2022-03-14 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'close_price': 39671.37, 'pnl': -37.88060000000012, 'stop_loss': False}
+{'time': Timestamp('2022-03-19 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.02, 'price': 42201.13, 'leverage': 1}
+{'time': Timestamp('2022-04-05 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.02, 'close_price': 45497.55, 'pnl': 65.92840000000011, 'stop_loss': False}
+{'time': Timestamp('2022-04-08 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'price': 42252.01, 'leverage': 1}
+{'time': Timestamp('2022-04-20 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'close_price': 41358.19, 'pnl': 17.876399999999993, 'stop_loss': False}
+{'time': Timestamp('2022-04-28 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'price': 39742.07, 'leverage': 1}
+{'time': Timestamp('2022-05-19 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.02, 'close_price': 30319.23, 'pnl': 188.45680000000002, 'stop_loss': False}
+{'time': Timestamp('2022-05-27 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'price': 28629.8, 'leverage': 1}
+{'time': Timestamp('2022-05-29 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'close_price': 29468.1, 'pnl': -25.148999999999976, 'stop_loss': False}
+{'time': Timestamp('2022-06-05 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.03, 'price': 29919.21, 'leverage': 1}
+{'time': Timestamp('2022-06-09 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.03, 'close_price': 30109.93, 'pnl': 5.721600000000035, 'stop_loss': False}
+{'time': Timestamp('2022-06-12 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'price': 26574.53, 'leverage': 1}
+{'time': Timestamp('2022-06-23 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.03, 'close_price': 21110.13, 'pnl': 163.93199999999993, 'stop_loss': True}
+{'time': Timestamp('2022-07-02 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'price': 19252.81, 'leverage': 1}
+{'time': Timestamp('2022-07-07 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'close_price': 21624.98, 'pnl': -118.60849999999992, 'stop_loss': False}
+{'time': Timestamp('2022-07-22 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'price': 22684.83, 'leverage': 1}
+{'time': Timestamp('2022-07-26 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'close_price': 21254.67, 'pnl': -57.206400000000144, 'stop_loss': False}
+{'time': Timestamp('2022-08-13 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'price': 24441.38, 'leverage': 1}
+{'time': Timestamp('2022-08-18 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'close_price': 23191.2, 'pnl': -50.00720000000001, 'stop_loss': False}
+{'time': Timestamp('2022-08-22 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'price': 21399.83, 'leverage': 1}
+{'time': Timestamp('2022-09-01 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.04, 'close_price': 20131.46, 'pnl': 50.73480000000011, 'stop_loss': False}
+{'time': Timestamp('2022-09-02 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'price': 19951.86, 'leverage': 1}
+{'time': Timestamp('2022-09-09 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'close_price': 21360.11, 'pnl': -70.41250000000001, 'stop_loss': False}
+{'time': Timestamp('2022-09-21 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'price': 18461.36, 'leverage': 1}
+{'time': Timestamp('2022-09-29 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'close_price': 19591.51, 'pnl': -56.507499999999894, 'stop_loss': False}
+{'time': Timestamp('2022-10-03 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'price': 19629.08, 'leverage': 1}
+{'time': Timestamp('2022-10-09 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.05, 'close_price': 19439.02, 'pnl': -9.503000000000066, 'stop_loss': False}
+{'time': Timestamp('2022-10-15 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'price': 19069.39, 'leverage': 1}
+{'time': Timestamp('2022-10-18 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'close_price': 19327.44, 'pnl': -12.902499999999964, 'stop_loss': False}
+{'time': Timestamp('2022-10-27 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'price': 20295.11, 'leverage': 1}
+{'time': Timestamp('2022-11-03 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'long', 'quantity': 0.04, 'close_price': 20207.82, 'pnl': -3.491600000000035, 'stop_loss': False}
+{'time': Timestamp('2022-11-11 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'price': 17070.31, 'leverage': 1}
+{'time': Timestamp('2022-11-19 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.05, 'close_price': 16700.68, 'pnl': 18.48150000000005, 'stop_loss': False}
+{'time': Timestamp('2022-11-23 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.06, 'price': 16603.11, 'leverage': 1}
+{'time': Timestamp('2022-11-25 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.06, 'close_price': 16522.14, 'pnl': 4.858200000000069, 'stop_loss': False}
+{'time': Timestamp('2022-11-27 00:00:00'), 'action': 'open', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.06, 'price': 16428.78, 'leverage': 1}
+{'time': Timestamp('2022-11-29 00:00:00'), 'action': 'close', 'asset': 'BTC-USDT_spot', 'direction': 'short', 'quantity': 0.06, 'close_price': 16442.53, 'pnl': -0.825, 'stop_loss': False}

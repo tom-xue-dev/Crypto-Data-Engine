@@ -47,6 +47,24 @@ class Account:
     def record_transaction(self, tx):
         self.transactions.append(tx)
 
+    def print_positions(self):
+        """
+        打印所有持仓的详细参数
+        """
+        if not self.positions:
+            print("No positions in the account.")
+            return
+
+        print("Positions:")
+        for (asset, direction), position in self.positions.items():
+            print(f"Asset: {position.asset}")
+            print(f"Direction: {position.direction}")
+            print(f"Quantity: {position.quantity}")
+            print(f"Entry Price: {position.entry_price:.2f}")
+            print(f"Leverage: {position.leverage:.2f}")
+            print(f"Position Type: {position.position_type}")
+            print("-" * 30)
+
 
 class Position:
     """
@@ -74,7 +92,6 @@ class Position:
 
         # 自行扩展
         self.own_equity = entry_price * quantity / leverage  # 持仓市值（不包含杠杆的部分）
-        self.entry_time = datetime.now()
 
 
 class LeverageManager:
