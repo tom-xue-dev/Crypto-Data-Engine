@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 
 def calculate_S_value(x: np.ndarray) -> int:
     n = len(x)
+    print(n)
     S = 0
     for i in range(n - 1):
         for j in range(i + 1, n):
@@ -121,9 +122,13 @@ class MannKendallTrendByRow:
         # 1) 分组并计算信号
         grouped = self.df.groupby("asset", group_keys=False)
         df_list = []
+        start = time.time()
+
         for asset, df_asset in grouped:
             df_result = self._compute_signals_for_asset(df_asset)
             df_list.append(df_result)
+        end = time.time()
+        print(end - start)
         print("start to concat")
         df_with_signal = pd.concat(df_list, ignore_index=True)
 
@@ -259,10 +264,10 @@ def analyze_future_returns_all_signals(df_list, n=3):
 # ------------------ 使用示例 ------------------ #
 if __name__ == "__main__":
     # 模拟 dataset
-    start_time = "2019-12-01"
-    end_time = "2024-1-30"
+    start_time = "2021-12-01"
+    end_time = "2023-1-30"
     # asset_list = ['HOOK-USDT_future', 'ENS-USDT_future']
-    asset_list = select_assets(future=True, n=20)
+    asset_list = select_assets(future=True, n=50)
     filtered_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "15min")
     print("start initialize")
     strategy = MannKendallTrendByRow(filtered_data_list, window_size=50)
