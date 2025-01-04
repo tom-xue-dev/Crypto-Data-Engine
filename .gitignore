@@ -5,3 +5,7 @@ log
 /data_fees
 back_test/BTC_USDT_USDT_funding_rate_history.csv
 /data
+*.txt
+back_test/result.txt
+back_test/result.txt
+back_test/transactions.txt

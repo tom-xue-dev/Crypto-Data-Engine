@@ -1,6 +1,7 @@
 import mmap
 import os
 import pickle
+import random
 import time
 
 import pandas as pd
@@ -41,7 +42,7 @@ def load_filtered_data_as_list(start_time, end_time, asset_list, level: str):
         # 构造文件名，例如 "2023-01.pkl"
         filename = f"{period.year}-{period.month:02d}.pkl"
         script_path = Path(__file__).resolve()
-        base_path = script_path.parents[1] / "data" / "data_divided_by_mouth"/level
+        base_path = script_path.parents[1] / "data" / "data_divided_by_mouth" / level
         print(base_path)
         pickle_path = os.path.join(base_path, filename)
 
@@ -85,7 +86,7 @@ def load_filtered_data_as_list(start_time, end_time, asset_list, level: str):
     return filtered_list
 
 
-def map_and_load_pkl_files(level:str):
+def map_and_load_pkl_files(level: str):
     # 获取文件列表，按名称排序（假设文件名格式为 YYYY-MM.pkl）
     script_path = Path(__file__).resolve()
     folder_path = script_path.parents[1] / "data" / "data_divided_by_mouth" / level
@@ -107,6 +108,63 @@ def map_and_load_pkl_files(level:str):
             mm.close()
 
     return data
+
+
+def select_assets(future = False, spot = False, n = 5):
+    """
+    从资产表中根据参数随机选择资产。
+
+    参数:
+        future (bool): 是否从 future 列中选择
+        spot (bool): 是否从 spot 列中选择
+        n (int): 需要选择的资产数量
+
+    返回:
+        list: 随机选择的资产列表
+    """
+    # 获取当前脚本的路径并解析上一级目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+
+    # 构造 assets.xls 文件路径
+    file_path = os.path.join(current_dir, "assets.xls")
+
+    # 检查文件是否存在
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"{file_path} 文件未找到，请确保在当前目录下有 assets.xls")
+
+    # 读取 Excel 文件
+    data = pd.read_excel(file_path)
+
+    # 确保 future 和 spot 列存在
+    if "future" not in data.columns or "spot" not in data.columns:
+        raise ValueError("文件中缺少 'future' 或 'spot' 列")
+
+    # 初始化选择池
+    selection_pool = []
+
+    # 根据布尔值 future 和 spot 确定选择池
+
+    future_pool = data['future'].dropna().tolist() if future else []
+    spot_pool = data['spot'].dropna().tolist() if spot else []
+
+    # 合并选择池
+    if future and spot:
+        selection_pool = future_pool + spot_pool
+    elif future and not spot:
+        selection_pool = future_pool
+    elif spot and not future:
+        selection_pool = spot_pool
+
+    # 若选择池为空，抛出异常
+    if not selection_pool:
+        raise ValueError("没有可以选择的资产")
+
+    # 从选择池中随机选择 n 个资产
+    selected_assets = random.sample(selection_pool, min(n, len(selection_pool)))
+
+    return selected_assets
+
 
 # start = time.time()
 # all_data = map_and_load_pkl_files("15min")

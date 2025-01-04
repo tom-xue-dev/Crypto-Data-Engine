@@ -6,6 +6,7 @@ from typing import List
 from read_large_files import load_filtered_data_as_list
 
 from typing import List
+import matplotlib.pyplot as plt
 
 
 def _mann_kendall_test(x: np.ndarray) -> int:
@@ -40,7 +41,7 @@ def _mann_kendall_test(x: np.ndarray) -> int:
         z = (S + 1) / np.sqrt(var_s)
 
     # 4) 临界值（双侧检验, alpha=0.05 => z_crit=1.96）
-    z_crit = 1.96
+    z_crit = 2.8
     if abs(z) > z_crit:
         return 1 if z > 0 else -1
     else:
@@ -99,28 +100,23 @@ class MannKendallTrendByRow:
         return df_asset
 
     def generate_signal(self) -> List[pd.DataFrame]:
-        """
-        逐行计算 Mann-Kendall 趋势信号，并将结果回填到每个DataFrame中（在其末尾增加一列 'signal'）。
-        返回: 一个新的 List[pd.DataFrame]，与输入 dataset 对应的形状，且多一列 'signal'。
-        """
-        # 1) 分组，对每个 asset 分别做 逐行滚动窗口 的 Mann-Kendall
-
+        ...
+        # 1) 分组并计算信号
         grouped = self.df.groupby("asset", group_keys=False)
-
         df_list = []
         for asset, df_asset in grouped:
-            # 这里直接在循环里调用你的处理函数
             df_result = self._compute_signals_for_asset(df_asset)
             df_list.append(df_result)
-
         df_with_signal = pd.concat(df_list, ignore_index=True)
 
-        # 2) 按原始 DataFrame 拆分并合并回 'signal'
+        # 2) 更新 self.df，让其带有最新的 signal
+        #    这样 visualize_signals() 里的 self.df 才能用到
+        self.df = df_with_signal
+
+        # 3) 返回拆分后的列表（如果你还需要）
         new_dataset = []
         for original_df in self.original_dataset:
-            # 确保 original_df 里的 time 列也是 datetime 类型
             original_df["time"] = pd.to_datetime(original_df["time"])
-
             merged_df = pd.merge(
                 original_df,
                 df_with_signal[["time", "asset", "signal"]],
@@ -130,6 +126,57 @@ class MannKendallTrendByRow:
             new_dataset.append(merged_df)
 
         return new_dataset
+
+    def visualize_signals(self, asset: str, start_date: str = None, end_date: str = None):
+        """
+        可视化指定资产在指定时间区间内的收盘价走势及 Mann-Kendall 信号。
+        :param asset: 资产名称（如 "BTC-USDT"）
+        :param start_date: 开始日期（字符串，格式 "YYYY-MM-DD"）
+        :param end_date: 结束日期（字符串，格式 "YYYY-MM-DD"）
+        """
+        # 筛选出指定资产的数据
+        df_asset = self.df[self.df["asset"] == asset].copy()
+        if start_date:
+            df_asset = df_asset[df_asset["time"] >= pd.to_datetime(start_date)]
+        if end_date:
+            df_asset = df_asset[df_asset["time"] <= pd.to_datetime(end_date)]
+
+        if df_asset.empty:
+            print(f"No data available for asset '{asset}' in the specified date range.")
+            return
+
+        # 绘制收盘价
+        plt.figure(figsize=(14, 7))
+        plt.plot(df_asset["time"], df_asset["close"], label="Close Price", color="lightblue", linewidth=2)
+
+        # 绘制信号
+        plt.scatter(
+            df_asset["time"][df_asset["signal"] == 1],
+            df_asset["close"][df_asset["signal"] == 1],
+            label="Uptrend Signal",
+            color="green",
+            marker="^",
+            alpha=1
+        )
+        plt.scatter(
+            df_asset["time"][df_asset["signal"] == -1],
+            df_asset["close"][df_asset["signal"] == -1],
+            label="Downtrend Signal",
+            color="red",
+            marker="v",
+            alpha=1
+        )
+
+        # 设置标题和标签
+        plt.title(f"{asset} Price and Mann-Kendall Signals", fontsize=16)
+        plt.xlabel("Date", fontsize=12)
+        plt.ylabel("Price", fontsize=12)
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+
+        # 显示图形
+        plt.show()
 
 
 def analyze_future_returns_all_signals(df_list, n=3):
@@ -194,18 +241,16 @@ def analyze_future_returns_all_signals(df_list, n=3):
 # ------------------ 使用示例 ------------------ #
 if __name__ == "__main__":
     # 模拟 dataset
-    start_time = "2017-12-01"
-    end_time = "2024-6-30"
-    asset_list = ['DOGE-USDT_future']  # 替换为您需要的资产
+    start_time = "2023-12-01"
+    end_time = "2024-3-30"
+    asset_list = ['ILV-USDT_future']  # 替换为您需要的资产
 
-    filtered_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "1d")
+    filtered_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "15min")
     print("start initialize")
 
-    mk_detector = MannKendallTrendByRow(filtered_data_list, window_size=28)
+    strategy = MannKendallTrendByRow(filtered_data_list, window_size=28)
     print("start generate signal")
+    strategy_result = strategy.generate_signal()
 
-    new_dataset_with_signal = mk_detector.generate_signal()
-
-    for i in range(2, 60):
-        result = analyze_future_returns_all_signals(new_dataset_with_signal, n=i)
-        print(i, result)
+    # 可视化
+    strategy.visualize_signals(asset="ILV-USDT_future", start_date="2018-01-01", end_date="2024-06-10")
