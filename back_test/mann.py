@@ -54,6 +54,7 @@ def _mann_kendall_test(S: int, n: int) -> int:
 class MannKendallTrendByRow:
     def __init__(self,
                  dataset: List[pd.DataFrame],
+                 asset: list,
                  window_size: int = 7):
         """
         dataset: 外层是 List，每个元素是一个 DataFrame，
@@ -67,22 +68,9 @@ class MannKendallTrendByRow:
             raise ValueError("dataset 列表中每个元素必须都是 pandas.DataFrame。")
 
         self.window_size = window_size  # 加入到类属性，方便后续使用
-
+        self.assets = asset
         # 1) 把所有 DataFrame 合并成一个大的 DataFrame
-        self.original_dataset = dataset  # 保存原始引用，以便后面要回填signal
-        self.df = pd.concat(dataset, ignore_index=True)
-
-        # 检查必要字段
-        required_cols = {"time", "asset", "close"}
-        if not required_cols.issubset(self.df.columns):
-            raise ValueError(f"数据缺少必要列: {required_cols}")
-
-        # 统一转换 time 为 datetime，并按照 (asset, time) 排序
-        self.df["time"] = pd.to_datetime(self.df["time"])
-        self.df.sort_values(["asset", "time"], ascending=[True, True], inplace=True)
-
-        # 准备一列来存放信号
-        self.df["signal"] = 0
+        self.dataset = dataset  # 保存原始引用，以便后面要回填signal
 
     def _compute_signals_for_asset(self, df_asset: pd.DataFrame) -> pd.DataFrame:
         """
@@ -116,34 +104,50 @@ class MannKendallTrendByRow:
         df_asset["signal"] = signals
         return df_asset
 
-    def generate_signal(self) -> List[pd.DataFrame]:
-        ...
-        # 1) 分组并计算信号
-        grouped = self.df.groupby("asset", group_keys=False)
-        df_list = []
-        for asset, df_asset in grouped:
-            df_result = self._compute_signals_for_asset(df_asset)
-            df_list.append(df_result)
-        print("start to concat")
-        df_with_signal = pd.concat(df_list, ignore_index=True)
+    def generate_signal(self):
+        assets_dict = {}
+        for df in self.dataset:
+            for _, row in df.iterrows():
+                asset = row['asset']
+                if asset not in assets_dict:
+                    assets_dict[asset] = []
+                assets_dict[asset].append(row)
 
-        # 2) 更新 self.df，让其带有最新的 signal
-        #    这样 visualize_signals() 里的 self.df 才能用到
-        self.df = df_with_signal
+        asset_dfs = []
+        for asset, rows in assets_dict.items():
+            asset_df = pd.DataFrame(rows)
+            asset_df = asset_df.sort_values('time')  # 按时间排序
+            asset_dfs.append(asset_df)
 
-        # 3) 返回拆分后的列表（如果你还需要）
-        new_dataset = []
-        for original_df in self.original_dataset:
-            original_df["time"] = pd.to_datetime(original_df["time"])
-            merged_df = pd.merge(
-                original_df,
-                df_with_signal[["time", "asset", "signal"]],
-                on=["time", "asset"],
-                how="left"
-            )
-            new_dataset.append(merged_df)
+        for idx, df in enumerate(asset_dfs):
+            asset_dfs[idx] = self._compute_signals_for_asset(df)
 
-        return new_dataset
+        print("start concat")
+        # 3. 合并所有 asset_dfs 为一个信号 DataFrame
+        signals_df = pd.concat(asset_dfs, ignore_index=True)
+        signals_df = signals_df[['asset', 'time', 'signal']]
+
+        # 4. 确保 'time' 列为 datetime
+        signals_df['time'] = pd.to_datetime(signals_df['time'])
+        signals_grouped = signals_df.groupby('time')
+
+        # 创建一个字典，键为时间，值为对应的信号 DataFrame
+        signals_dict = {time: group[['asset', 'signal']] for time, group in signals_grouped}
+
+        print("start merge")
+        # 6. 合并信号回原始的 self.dataset DataFrames
+        for idx, df in enumerate(self.dataset):
+            # 确保 'time' 列为 datetime 类型
+            df['time'] = pd.to_datetime(df['time'])
+            current_time = df['time'].iloc[0]
+            signals_to_merge = pd.DataFrame()
+            signals_to_merge = pd.concat([signals_to_merge, signals_dict[current_time]], ignore_index=True)
+            df = df.merge(signals_to_merge, on='asset', how='left')
+            df['signal'] = df['signal'].fillna(0)
+
+            # 更新 self.dataset
+            self.dataset[idx] = df
+        return self.dataset
 
     def visualize_signals(self, asset: str, start_date: str = None, end_date: str = None):
         """
@@ -259,12 +263,15 @@ def analyze_future_returns_all_signals(df_list, n=3):
 # ------------------ 使用示例 ------------------ #
 if __name__ == "__main__":
     # 模拟 dataset
-    start_time = "2019-12-01"
-    end_time = "2024-1-30"
-    # asset_list = ['HOOK-USDT_future', 'ENS-USDT_future']
-    asset_list = select_assets(future=True, n=20)
+    start = time.time()
+    start_time = "2022-12-01"
+    end_time = "2023-3-30"
+    asset_list = ['HOOK-USDT_future', 'ENS-USDT_future','BTC-USDT_future']
+    # asset_list = select_assets(future=True, n=4)
     filtered_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "15min")
     print("start initialize")
-    strategy = MannKendallTrendByRow(filtered_data_list, window_size=50)
+    strategy = MannKendallTrendByRow(filtered_data_list, window_size=10,asset=asset_list)
     print("start generate signal")
-    strategy_result = strategy.generate_signal()
+    strategy.generate_signal()
+    end = time.time()
+    print(end-start)
