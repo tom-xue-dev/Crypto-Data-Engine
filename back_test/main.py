@@ -3,24 +3,29 @@ import time
 from strategy import DualMAStrategy
 from backtest_simulation import Backtest, Broker
 from Account import Account, PositionManager, DefaultStopLossLogic
-from mann import MannKendallTrendByRow
+from mann import MannKendallTrendByRow, filter_signals_by_daily_vectorized
 from back_test_evaluation import PerformanceAnalyzer
 
-start_time = "2021-12-01"
-end_time = "2024-6-30"
-asset_list = select_assets(future=True, n=20)  # 替换为您需要的资产
-# asset_list = ['HOOK-USDT_future', 'ENS-USDT_future']
+start_time = "2023-12-01"
+end_time = "2024-11-30"
+asset_list = ['BTC-USDT_future']
+# asset_list = select_assets(spot=True, n=100)
+min_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "15min")
+day_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "1d")
 
-filtered_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "1d")
+min_strategy = MannKendallTrendByRow(min_data_list, window_size=96, asset=asset_list, z_crit=1.6)
+day_strategy = MannKendallTrendByRow(day_data_list, window_size=7, asset=asset_list, z_crit=2.2)
+print("start generate signal")
+min_strategy.generate_signal()
+day_strategy.generate_signal()
 
-mk_detector = MannKendallTrendByRow(filtered_data_list, window_size=14)
-strategy_results = mk_detector.generate_signal()
+strategy_results = filter_signals_by_daily_vectorized(min_strategy.dataset, day_strategy.dataset)
 print(asset_list)
 print("strategy over")
 account = Account(initial_cash=10000)
-stop = DefaultStopLossLogic(max_drawdown=0.15)
+stop = DefaultStopLossLogic(max_drawdown=0.1)
 broker = Broker(account, stop_loss_logic=stop)
-pos_manager = PositionManager(threshold=0.15)
+pos_manager = PositionManager(threshold=1)
 backtester = Backtest(broker, strategy_results, pos_manager)
 
 result = backtester.run()

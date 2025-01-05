@@ -1,3 +1,4 @@
+import datetime
 import time
 
 import numpy as np
@@ -9,6 +10,72 @@ from typing import List
 import matplotlib.pyplot as plt
 
 
+def filter_signals_by_daily_vectorized(
+        list_15min: List[pd.DataFrame],
+        list_day: List[pd.DataFrame]
+) -> List[pd.DataFrame]:
+    """
+    对于15分钟级别的嵌套列表中的每个DataFrame，
+    仅保留其信号与对应1天级别的信号相同的行，否则将信号置为0。
+    使用Pandas的向量化操作进行优化。
+
+    参数:
+    - list_15min: List[pd.DataFrame]，15分钟级别的嵌套列表，每个DataFrame包含多个资产的行情和信号。
+    - list_day: List[pd.DataFrame]，1天级别的嵌套列表，每个DataFrame包含多个资产的行情和信号。
+
+    返回:
+    - List[pd.DataFrame]，经过信号筛选后的15分钟级别嵌套列表。
+    """
+
+    if not list_15min or not list_day:
+        raise ValueError("输入的列表不能为空。")
+
+    # 确保1天级别的列表按时间排序
+    list_day_sorted = sorted(list_day, key=lambda df: df['time'].iloc[0])
+    day_times = [df['time'].iloc[0] for df in list_day_sorted]
+    num_day_intervals = len(day_times)
+    start_time = day_times[0]
+
+    # 将1天级别的信号转换为以资产为索引的Series列表
+    list_day_signals = [df.set_index('asset')['signal'] for df in list_day_sorted]
+
+    # 筛选后的15分钟列表
+    filtered_list_15min = []
+
+    for df_15min in list_15min:
+        current_time = df_15min['time'].iloc[0]
+
+        # 计算当前15分钟时间点对应的1天级别索引
+        delta = current_time - start_time
+        day_index = delta.days
+
+        # 边界处理
+        if day_index < 0:
+            day_index = 0
+        elif day_index >= num_day_intervals - 1:
+            day_index = num_day_intervals - 2
+
+        # 获取对应的1天级别信号Series
+        day_signal_series = list_day_signals[day_index]
+
+        # 将15分钟DataFrame的资产设置为索引，以便与1天信号Series进行对齐
+        df_15min_indexed = df_15min.set_index('asset')
+
+        # 合并15分钟信号与1天信号
+        df_merged = df_15min_indexed.join(day_signal_series.rename('signal_day'), how='left')
+
+        # 使用向量化操作比较信号，并设置不匹配的信号为0
+        df_merged['signal'] = df_merged['signal'].where(df_merged['signal'] == df_merged['signal_day'], 0)
+
+        # 删除辅助列并重置索引
+        df_filtered = df_merged.drop(columns=['signal_day']).reset_index()
+
+        # 追加到筛选后的列表
+        filtered_list_15min.append(df_filtered)
+
+    return filtered_list_15min
+
+
 def calculate_S_value(x: np.ndarray) -> int:
     n = len(x)
     S = 0
@@ -18,7 +85,7 @@ def calculate_S_value(x: np.ndarray) -> int:
     return S
 
 
-def _mann_kendall_test(S: int, n: int) -> int:
+def _mann_kendall_test(S: int, n: int, z_crit) -> int:
     """
     对给定的序列 x 进行 Mann-Kendall 趋势检验。
 
@@ -44,7 +111,6 @@ def _mann_kendall_test(S: int, n: int) -> int:
         z = (S + 1) / np.sqrt(var_s)
 
     # 4) 临界值（双侧检验, alpha=0.05 => z_crit=1.96）
-    z_crit = 2.8
     if abs(z) > z_crit:
         return 1 if z > 0 else -1
     else:
@@ -55,7 +121,8 @@ class MannKendallTrendByRow:
     def __init__(self,
                  dataset: List[pd.DataFrame],
                  asset: list,
-                 window_size: int = 7):
+                 window_size: int = 7,
+                 z_crit=2.8):
         """
         dataset: 外层是 List，每个元素是一个 DataFrame，
                  每个 DataFrame 的列包括 [time, asset, open, high, low, close]。
@@ -66,7 +133,7 @@ class MannKendallTrendByRow:
             raise ValueError("dataset 必须是一个列表(List)，其中每个元素都是一个 DataFrame。")
         if not all(isinstance(df, pd.DataFrame) for df in dataset):
             raise ValueError("dataset 列表中每个元素必须都是 pandas.DataFrame。")
-
+        self.z_crit = z_crit
         self.window_size = window_size  # 加入到类属性，方便后续使用
         self.assets = asset
         # 1) 把所有 DataFrame 合并成一个大的 DataFrame
@@ -99,7 +166,7 @@ class MannKendallTrendByRow:
                     else:
                         prev_S -= 1
                 S[i] = prev_S
-            trend_signal = _mann_kendall_test(S[i], self.window_size)
+            trend_signal = _mann_kendall_test(S[i], self.window_size, self.z_crit)
             signals.append(trend_signal)
         df_asset["signal"] = signals
         return df_asset
@@ -148,57 +215,6 @@ class MannKendallTrendByRow:
             # 更新 self.dataset
             self.dataset[idx] = df
         return self.dataset
-
-    def visualize_signals(self, asset: str, start_date: str = None, end_date: str = None):
-        """
-        可视化指定资产在指定时间区间内的收盘价走势及 Mann-Kendall 信号。
-        :param asset: 资产名称（如 "BTC-USDT"）
-        :param start_date: 开始日期（字符串，格式 "YYYY-MM-DD"）
-        :param end_date: 结束日期（字符串，格式 "YYYY-MM-DD"）
-        """
-        # 筛选出指定资产的数据
-        df_asset = self.df[self.df["asset"] == asset].copy()
-        if start_date:
-            df_asset = df_asset[df_asset["time"] >= pd.to_datetime(start_date)]
-        if end_date:
-            df_asset = df_asset[df_asset["time"] <= pd.to_datetime(end_date)]
-
-        if df_asset.empty:
-            print(f"No data available for asset '{asset}' in the specified date range.")
-            return
-
-        # 绘制收盘价
-        plt.figure(figsize=(14, 7))
-        plt.plot(df_asset["time"], df_asset["close"], label="Close Price", color="lightblue", linewidth=2)
-
-        # 绘制信号
-        plt.scatter(
-            df_asset["time"][df_asset["signal"] == 1],
-            df_asset["close"][df_asset["signal"] == 1],
-            label="Uptrend Signal",
-            color="green",
-            marker="^",
-            alpha=1
-        )
-        plt.scatter(
-            df_asset["time"][df_asset["signal"] == -1],
-            df_asset["close"][df_asset["signal"] == -1],
-            label="Downtrend Signal",
-            color="red",
-            marker="v",
-            alpha=1
-        )
-
-        # 设置标题和标签
-        plt.title(f"{asset} Price and Mann-Kendall Signals", fontsize=16)
-        plt.xlabel("Date", fontsize=12)
-        plt.ylabel("Price", fontsize=12)
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-
-        # 显示图形
-        plt.show()
 
 
 def analyze_future_returns_all_signals(df_list, n=3):
@@ -264,14 +280,26 @@ def analyze_future_returns_all_signals(df_list, n=3):
 if __name__ == "__main__":
     # 模拟 dataset
     start = time.time()
-    start_time = "2022-12-01"
-    end_time = "2023-3-30"
-    asset_list = ['HOOK-USDT_future', 'ENS-USDT_future','BTC-USDT_future']
-    # asset_list = select_assets(future=True, n=4)
-    filtered_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "15min")
-    print("start initialize")
-    strategy = MannKendallTrendByRow(filtered_data_list, window_size=10,asset=asset_list)
+    start_time = "2020-12-01"
+    end_time = "2021-6-30"
+    # asset_list = ['HOOK-USDT_future', 'ENS-USDT_future', 'BTC-USDT_future']
+    asset_list = select_assets(future=True, n=20)
+    min_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "15min")
+    day_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "1d")
+
+    min_strategy = MannKendallTrendByRow(min_data_list, window_size=96, asset=asset_list, z_crit=1.8)
+    day_strategy = MannKendallTrendByRow(day_data_list, window_size=7, asset=asset_list, z_crit=1.25)
     print("start generate signal")
-    strategy.generate_signal()
+    min_strategy.generate_signal()
+    day_strategy.generate_signal()
+
+    for i in range(5, 60, 5):
+        print(analyze_future_returns_all_signals(df_list=min_strategy.dataset, n=i))
+
+    strategy_results = filter_signals_by_daily_vectorized(min_strategy.dataset, day_strategy.dataset)
+    print()
+    for i in range(5, 60, 5):
+        print(analyze_future_returns_all_signals(df_list=strategy_results, n=i))
+
     end = time.time()
-    print(end-start)
+    print(end - start)

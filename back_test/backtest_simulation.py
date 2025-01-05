@@ -33,6 +33,8 @@ class Broker:
     def open_position(self, asset, direction, quantity, price, leverage, position_type, current_time):
         # 简化: 扣除自有资金 = quantity * price / leverage
         cost = quantity * price / leverage
+        # 计算手续费 现在默认是maker: 双向千1
+        cost = cost * 1.001
         if self.account.cash < cost:
             print("Insufficient cash to open position.")
             return
@@ -77,7 +79,8 @@ class Broker:
             pnl = pos.quantity * (price - pos.entry_price)
         else:
             pnl = -pos.quantity * (price - pos.entry_price)
-        self.account.cash += (pos.own_equity + pnl)
+        total_gain = (pos.own_equity + pnl)
+        self.account.cash += total_gain * 0.999 #千分之一手续费
         self.account.record_transaction({
             "time": current_time,
             "action": "close",
@@ -109,7 +112,10 @@ class Broker:
             positions_to_close = self.stop_loss_logic.check_stop_loss(account=self.account, price_map=price_map,
                                                                       current_time=current_time)
             for (asset, direction) in positions_to_close:
-                self.close_position(asset, direction, price_map.get(asset), current_time, stop_loss=True)
+                if price_map.get(asset) is not None:
+                    self.close_position(asset, direction, price_map.get(asset), current_time, stop_loss=True)
+                else:
+                    print(f"warning,cannot find price_map{ asset,price_map.get(asset)}")
 
 
 class Backtest:
@@ -145,7 +151,10 @@ class Backtest:
 
                 price_map[asset] = price
             # 2) bar结束调用 on_bar_end
-            self.broker.on_bar_end(current_time, price_map)
+            if price_map is not None:
+                self.broker.on_bar_end(current_time, price_map)
+            else:
+                print(current_time)
             # 3) 记录当前净值
             self.log_net_value(df, current_time)
 
@@ -159,7 +168,7 @@ class Backtest:
     def process_signal(self, signal, asset, price, current_time, current_market_cap):
         # 简化: signal=1 -> 开多, signal=-1 -> 开空, signal=0 -> 不操作
         position = self.pos_manager.get_allocate_pos(current_market_cap, self.broker.account.cash)
-        quantity = position / price
+        quantity = position / (price*1.001)
         quantity = math.floor(quantity * 100) / 100  # 去尾法保证小数点后两位
         if self.broker.leverage_manager is not None:
             leverage = self.broker.leverage_manager.leverage
@@ -229,7 +238,8 @@ class Backtest:
                 total_market_value += abs(position.quantity * current_price)
             else:
                 # 如果找不到当前价格，抛出警告或记录日志
-                raise ValueError(f"Warning: Current price for asset {asset} not found in data.")
+                print(f"Warning: Current price for asset {asset} not found in data.,timestamp is {current_df.loc[0,'time']}")
+                continue
 
         return total_market_value
 

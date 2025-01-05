@@ -6,8 +6,13 @@
   <component name="ChangeListManager">
     <list default="true" id="43a80aa9-5ae9-44fa-896d-27c06c7df6fa" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/back_test/backtest_simulation.py" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/backtest_simulation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/back_test/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/main.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/back_test/mann.py" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/mann.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/back_test/mann_backup.py" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/mann_backup.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/back_test/result.txt" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/result.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/back_test/transactions.txt" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/transactions.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/strategy_report/~$ Microsoft Word 文档.docx" beforeDir="false" afterPath="$PROJECT_DIR$/strategy_report/~$ Microsoft Word 文档.docx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
