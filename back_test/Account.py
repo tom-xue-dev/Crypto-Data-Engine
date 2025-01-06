@@ -170,7 +170,14 @@ class DefaultStopLossLogic(StopLossLogic):
         self.highest_price_map = {}  # 用于多头跟踪最高价格
         self.lowest_price_map = {}  # 用于空头跟踪最低价格
 
-    def check_stop_loss(self, account, price_map, current_time):
+    def init_holding(self, asset, price, **kwargs):
+        self.highest_price_map[asset] = price
+        self.lowest_price_map[asset] = price
+
+    def check_stop_loss(self, account, price_map, current_time, **kwargs):
+        """
+        这个函数似乎有问题
+        """
         positions_to_close = []
 
         for (asset, direction), pos in account.positions.items():
@@ -195,6 +202,82 @@ class DefaultStopLossLogic(StopLossLogic):
                     positions_to_close.append((asset, direction))
 
         return positions_to_close
+
+    def holding_close(self, asset):
+        del self.highest_price_map[asset]
+        del self.lowest_price_map[asset]
+
+
+class HoldNBarStopLossLogic(StopLossLogic):
+    """
+    持仓经过n根k线止盈止损
+    """
+
+    def __init__(self, windows=1):
+        self.windows = windows
+        self.holding_time = {}  # 用于跟踪持仓经过k线
+
+    def init_holding(self, asset, **kwargs):
+        self.holding_time[asset] = 0
+
+    def check_stop_loss(self, account, current_time, **kwargs):
+        """
+        price_map为一个字典，为当前时间戳所有的资产信息
+        """
+        positions_to_close = []
+        for (asset, direction), pos in account.positions.items():
+            if asset not in self.holding_time:
+                # print(self.holding_time)
+                pass
+            self.holding_time[asset] += 1
+            if self.holding_time[asset] == self.windows:
+                positions_to_close.append((asset, direction))
+                self.holding_time[asset] = 0
+
+        return positions_to_close
+
+    def holding_close(self, asset):
+        del self.holding_time[asset]
+
+
+class CostThresholdStrategy(StopLossLogic):
+    def __init__(self, gain_threshold=0.05, loss_threshold=0.02):
+        self.gain_threshold = gain_threshold
+        self.loss_threshold = loss_threshold
+        self.holding_cost = {}  # 用于跟踪持仓成本
+
+    def init_holding(self, asset, direction,price, **kwargs):
+        self.holding_cost[(asset, direction)] = price
+
+    def check_stop_loss(self, account, current_time, price_map, **kwargs):
+        """
+        price_map为一个字典，为当前时间戳所有的资产信息
+        """
+        positions_to_close = []
+
+        for (asset, direction), pos in account.positions.items():
+            curr_price = price_map.get(asset)
+            if (asset, direction) not in self.holding_cost:
+                raise ValueError(f"holding {asset} not exist")
+            if direction == "long":
+                if curr_price < pos.entry_price * (1 - self.loss_threshold):
+                    # 止损
+                    positions_to_close.append((asset, direction))
+                if curr_price > pos.entry_price * (1 + self.gain_threshold):
+                    #止盈
+                    positions_to_close.append((asset, direction))
+
+            elif direction == "short":
+                if curr_price > pos.entry_price * (1 + self.loss_threshold):
+                    #止损
+                    positions_to_close.append((asset, direction))
+                if curr_price < pos.entry_price * (1 - self.gain_threshold):
+                    positions_to_close.append((asset, direction))
+
+        return positions_to_close
+
+    def holding_close(self, asset,direction):
+        del self.holding_cost[(asset, direction)]
 
 
 class PositionManager:

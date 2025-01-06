@@ -3,10 +3,11 @@ import sys
 import pandas as pd
 
 from Account import Account
-from get_btc_info import get_btc_data
 from abc import abstractmethod
 from datetime import datetime, timedelta
 import numpy as np
+
+from back_test.read_large_files import select_assets, load_filtered_data_as_list
 
 
 def days_to_quarterly_settlement(date):
@@ -167,4 +168,8 @@ class DualMAStrategy(Strategy):
 
 
 if __name__ == "__main__":
-    pass
+    start_time = "2023-12-01"
+    end_time = "2024-6-30"
+    asset_list = select_assets(spot=True, n=150)
+    day_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "1d")
+    strategy = DualMAStrategy(dataset=day_data_list, asset=asset_list, long=50, short=5)

@@ -47,7 +47,7 @@ def filter_signals_by_daily_vectorized(
 
         # 计算当前15分钟时间点对应的1天级别索引
         delta = current_time - start_time
-        day_index = delta.days
+        day_index = delta.days - 1
 
         # 边界处理
         if day_index < 0:
@@ -65,7 +65,7 @@ def filter_signals_by_daily_vectorized(
         df_merged = df_15min_indexed.join(day_signal_series.rename('signal_day'), how='left')
 
         # 使用向量化操作比较信号，并设置不匹配的信号为0
-        df_merged['signal'] = df_merged['signal'].where(df_merged['signal'] == df_merged['signal_day'], 0)
+        df_merged['signal'] = df_merged['signal'].where(df_merged['signal'] == -df_merged['signal_day'], 0)
 
         # 删除辅助列并重置索引
         df_filtered = df_merged.drop(columns=['signal_day']).reset_index()
@@ -237,15 +237,16 @@ def analyze_future_returns_all_signals(df_list, n=3):
     for asset, group in grouped:
         group = group.sort_values('time').reset_index(drop=True)
 
-        # 找到 signal=1 的行
-        signal_rows = group[group['signal'] == 1]
+        group['prev_signal'] = group['signal'].shift(1)
+
+        signal_rows = group[(group['signal'] == 1) & (group['prev_signal'] != 1)]
         if signal_rows.empty:
             continue
 
         # 逐行处理 signal=1 的索引
         for idx in signal_rows.index:
             current_close = group.loc[idx, 'close']
-
+            current_time = group.loc[idx, 'time']
             # 获取第 n 条 k 线所在的行索引
             target_idx = idx + n
             if target_idx >= len(group):
@@ -280,21 +281,20 @@ def analyze_future_returns_all_signals(df_list, n=3):
 if __name__ == "__main__":
     # 模拟 dataset
     start = time.time()
-    start_time = "2020-12-01"
-    end_time = "2021-6-30"
-    # asset_list = ['HOOK-USDT_future', 'ENS-USDT_future', 'BTC-USDT_future']
-    asset_list = select_assets(future=True, n=20)
+    start_time = "2022-12-01"
+    end_time = "2023-3-30"
+    asset_list = select_assets(spot=True, n=100)
     min_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "15min")
     day_data_list = load_filtered_data_as_list(start_time, end_time, asset_list, "1d")
 
-    min_strategy = MannKendallTrendByRow(min_data_list, window_size=96, asset=asset_list, z_crit=1.8)
-    day_strategy = MannKendallTrendByRow(day_data_list, window_size=7, asset=asset_list, z_crit=1.25)
+    min_strategy = MannKendallTrendByRow(min_data_list, window_size=48, asset=asset_list, z_crit=1.6)
+    day_strategy = MannKendallTrendByRow(day_data_list, window_size=7, asset=asset_list, z_crit=2.6)
     print("start generate signal")
     min_strategy.generate_signal()
     day_strategy.generate_signal()
 
-    for i in range(5, 60, 5):
-        print(analyze_future_returns_all_signals(df_list=min_strategy.dataset, n=i))
+    for i in range(1, 20):
+        print(analyze_future_returns_all_signals(df_list=day_strategy.dataset, n=i))
 
     strategy_results = filter_signals_by_daily_vectorized(min_strategy.dataset, day_strategy.dataset)
     print()

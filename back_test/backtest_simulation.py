@@ -14,7 +14,7 @@ class Broker:
     Broker 为撮合类，对回测交易的函数调用高层封装
     """
 
-    def __init__(self, account: Account, leverage_manager=None, stop_loss_logic=DefaultStopLossLogic()):
+    def __init__(self, account: Account, leverage_manager=None, stop_loss_logic=None):
         """
         撮合订单的类
         传入账号据数据用于记录交易历史
@@ -47,8 +47,6 @@ class Broker:
                 self.leverage_manager.settle_fees(self.account, current_time, price_map, is_open_close=True)
 
         pos = Position(asset, direction, quantity, price, leverage, position_type)
-        self.account.positions[(asset, direction)] = pos
-
         self.account.record_transaction({
             "time": current_time,
             "action": "open",
@@ -58,15 +56,17 @@ class Broker:
             "price": price,
             "leverage": leverage
         })
+        self.account.positions[(asset, direction)] = pos
         if self.stop_loss_logic:
-            self.stop_loss_logic.highest_price_map[asset] = price
-            self.stop_loss_logic.lowest_price_map[asset] = price
+            self.stop_loss_logic.init_holding(asset=asset, price=price, direction=direction)
 
     def close_position(self, asset, direction, price, current_time, stop_loss=False):
         key = (asset, direction)
         if key not in self.account.positions:
-            raise ValueError("target asset not in holdings")
+            raise ValueError(f"target asset{key} not in holdings")
         pos = self.account.positions.pop(key)
+        if self.stop_loss_logic:
+            self.stop_loss_logic.holding_close(asset=asset,direction = direction)
         # 结算盈亏
         # 多头收益：quantity * (price - entry_price)
         # 这里略写
@@ -80,7 +80,7 @@ class Broker:
         else:
             pnl = -pos.quantity * (price - pos.entry_price)
         total_gain = (pos.own_equity + pnl)
-        self.account.cash += total_gain * 0.999 #千分之一手续费
+        self.account.cash += total_gain * 0.999  # 千分之一手续费
         self.account.record_transaction({
             "time": current_time,
             "action": "close",
@@ -91,10 +91,6 @@ class Broker:
             "pnl": pnl,
             "stop_loss": stop_loss
         })
-
-        if self.stop_loss_logic:
-            del self.stop_loss_logic.highest_price_map[asset]
-            del self.stop_loss_logic.lowest_price_map[asset]
 
     def on_bar_end(self, current_time, price_map):
         """
@@ -109,13 +105,17 @@ class Broker:
 
         # 2) 止损检查
         if self.stop_loss_logic:
+
             positions_to_close = self.stop_loss_logic.check_stop_loss(account=self.account, price_map=price_map,
-                                                                      current_time=current_time)
+                                                                      current_time=current_time, holding=1)
+
             for (asset, direction) in positions_to_close:
                 if price_map.get(asset) is not None:
+                    if (asset, direction) not in self.account.positions:
+                        raise ValueError(f"{asset},{direction} not found")
                     self.close_position(asset, direction, price_map.get(asset), current_time, stop_loss=True)
                 else:
-                    print(f"warning,cannot find price_map{ asset,price_map.get(asset)}")
+                    print(f"warning,cannot find price_map{asset, price_map.get(asset)}")
 
 
 class Backtest:
@@ -168,7 +168,7 @@ class Backtest:
     def process_signal(self, signal, asset, price, current_time, current_market_cap):
         # 简化: signal=1 -> 开多, signal=-1 -> 开空, signal=0 -> 不操作
         position = self.pos_manager.get_allocate_pos(current_market_cap, self.broker.account.cash)
-        quantity = position / (price*1.001)
+        quantity = position / (price * 1.001)
         quantity = math.floor(quantity * 100) / 100  # 去尾法保证小数点后两位
         if self.broker.leverage_manager is not None:
             leverage = self.broker.leverage_manager.leverage
@@ -188,8 +188,9 @@ class Backtest:
         if signal == 1:
             if existing_long_key in holdings:
                 return
-            if existing_short_key in holdings:
-                self.broker.close_position(asset, "short", price, current_time)
+            # if existing_short_key in holdings:
+            #     self.broker.close_position(asset, "short", price, current_time)
+
             self.broker.open_position(
                 asset=asset,
                 direction="long",
@@ -200,10 +201,11 @@ class Backtest:
                 quantity=quantity  # 可以根据策略或资金管理计算
             )
         elif signal == -1:
-            if existing_long_key in holdings:
-                self.broker.close_position(asset, "long", price, current_time)
             if existing_short_key in holdings:
                 return
+            # if existing_long_key in holdings:
+            #     self.broker.close_position(asset, "long", price, current_time)
+
             self.broker.open_position(
                 asset=asset,
                 direction="short",
@@ -238,7 +240,8 @@ class Backtest:
                 total_market_value += abs(position.quantity * current_price)
             else:
                 # 如果找不到当前价格，抛出警告或记录日志
-                print(f"Warning: Current price for asset {asset} not found in data.,timestamp is {current_df.loc[0,'time']}")
+                print(
+                    f"Warning: Current price for asset {asset} not found in data.,timestamp is {current_df.loc[0, 'time']}")
                 continue
 
         return total_market_value
@@ -250,7 +253,6 @@ class Backtest:
         2) 所有持仓的市值
         """
         total_market_value = self.get_market_cap(current_df)
-
         net_value = self.broker.account.cash + total_market_value
         # 将当前时间、净值等信息保存
         self.net_value_history.append({
@@ -258,6 +260,3 @@ class Backtest:
             "net_value": round(net_value, 2),
             "cash": round(self.broker.account.cash, 2),
         })
-
-
-
