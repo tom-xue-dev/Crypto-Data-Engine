@@ -42,7 +42,7 @@ def load_filtered_data_as_list(start_time, end_time, asset_list, level: str):
         # 构造文件名，例如 "2023-01.pkl"
         filename = f"{period.year}-{period.month:02d}.pkl"
         script_path = Path(__file__).resolve()
-        base_path = script_path.parents[1] / "data" / "data_divided_by_mouth" / level
+        base_path = script_path.parents[1] / "data" / "data_divided_by_month" / level
         print(base_path)
         pickle_path = os.path.join(base_path, filename)
 

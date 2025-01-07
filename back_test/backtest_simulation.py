@@ -126,7 +126,7 @@ class Backtest:
      3. bar结束时，broker.on_bar_end -> 杠杆费 + 止损检查
     """
 
-    def __init__(self, broker: Broker, strategy_results: list, pos_manager=PositionManager()):
+    def __init__(self, broker: Broker, strategy_results: pd.DataFrame, pos_manager=PositionManager()):
         """
         :param broker: Broker对象，内部有account、leverage_manager、stop_loss_logic
         :param strategy_results: List[pd.DataFrame] 这里假设每个df对应一段时间(如每日/每小时)
@@ -137,26 +137,41 @@ class Backtest:
         self.net_value_history = []
 
     def run(self):
-        for df in self.strategy_results:
-            current_market_cap = self.get_market_cap(df)
-            price_map = {}
-            current_time = df['time'][0]
-            for idx, row in df.iterrows():
-                asset = row['asset']
-                price = row['close']
-                signal = row['signal']
+        # 获取所有时间点
+        all_times = self.strategy_results.index.get_level_values('time').unique()
 
-                # 1) 处理交易信号
-                self.process_signal(signal, asset, price, current_time, current_market_cap)
+        # 初始化存储净值历史
+        net_value_history = []
 
-                price_map[asset] = price
-            # 2) bar结束调用 on_bar_end
-            if price_map is not None:
+        # 矢量化遍历时间
+        for current_time in all_times:
+            # 筛选当前时间的分组数据
+            group_df = self.strategy_results.loc[current_time]
+            # 矢量化计算当前市值（示例：假设为 `close` 总和）
+            current_market_cap = self.get_market_cap(group_df)
+
+            # 矢量化构建 price_map
+            price_map = group_df['close'].to_dict()
+
+            # 矢量化处理信号
+            signals = group_df[['signal', 'close']].reset_index().to_dict('records')
+            for signal_data in signals:
+                self.process_signal(
+                    signal_data['signal'],
+                    signal_data['asset'],
+                    signal_data['close'],
+                    current_time,
+                    current_market_cap
+                )
+
+            # 矢量化调用 on_bar_end
+            if price_map:
                 self.broker.on_bar_end(current_time, price_map)
             else:
-                print(current_time)
-            # 3) 记录当前净值
-            self.log_net_value(df, current_time)
+                print(f"No prices found for time: {current_time}")
+
+            # 矢量化记录当前净值
+            self.log_net_value(group_df, current_time)
 
         return {
             "final_cash": self.broker.account.cash,
@@ -167,6 +182,7 @@ class Backtest:
 
     def process_signal(self, signal, asset, price, current_time, current_market_cap):
         # 简化: signal=1 -> 开多, signal=-1 -> 开空, signal=0 -> 不操作
+
         position = self.pos_manager.get_allocate_pos(current_market_cap, self.broker.account.cash)
         quantity = position / (price * 1.001)
         quantity = math.floor(quantity * 100) / 100  # 去尾法保证小数点后两位
@@ -184,13 +200,12 @@ class Backtest:
         existing_short_key = (asset, "short")
 
         holdings = self.broker.account.positions  # 当前持仓 dict
-
+        print("start open pos")
         if signal == 1:
             if existing_long_key in holdings:
                 return
             # if existing_short_key in holdings:
             #     self.broker.close_position(asset, "short", price, current_time)
-
             self.broker.open_position(
                 asset=asset,
                 direction="long",
@@ -231,7 +246,7 @@ class Backtest:
         total_market_value = 0
         holdings = self.broker.account.positions
 
-        price_map = dict(zip(current_df['asset'], current_df['close']))
+        price_map = dict(zip(current_df.index.get_level_values('asset'), current_df['close']))
 
         for (asset, _), position in holdings.items():
             if asset in price_map:
