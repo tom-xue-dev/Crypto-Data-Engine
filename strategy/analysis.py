@@ -79,39 +79,42 @@ def generate_signal(data, window, threshold, std_threshold=None):
             if i < window:
                 continue  # 跳过窗口不足的前几天
 
-            # 当前 close 和过去 window 天的最高价
+            # 计算最近 window/10 日与过去 window 区间内其他时段的标准差
+            recent_period_length = int(window / 10)
+            # 确保有足够的数据计算标准差
+            if i - recent_period_length < 0:
+                continue
+
+            recent_slice = group.iloc[i - recent_period_length:i]
+            remaining_slice = group.iloc[i - window:i - recent_period_length]
+            # 如果最近 period 的标准差大于剩余部分的标准差，则跳过本次循环
+            if recent_slice["high"].std() > remaining_slice["high"].std():
+                continue
+
+            # 当前时刻的最高价作为 close 价格（根据原代码逻辑，这里取 high）
             current_close = group.iloc[i]["high"]
-            past_max_high_idx = group.iloc[i - window:i]["high"].idxmax()  # 找到最高价所在的索引
+            # 计算过去 window 天内的最高价及其索引
+            past_window = group.iloc[i - window:i]
+            past_max_high_idx = past_window["high"].idxmax()  # 找到最高价所在的索引
             past_max_high = group.loc[past_max_high_idx, "high"]  # 获取过去最高价
-            past_low = group.loc[past_max_high_idx, "low"]  # 获取过去最高价对应的最低价
 
-            # 跳过最高价属于最近 window / 10 根 K 线的情况
+            # 跳过最高价属于最近 window/10 根 K 线的情况
             recent_kline_limit = max(i - int(window / 10), i - window)
+            # 使用 get_loc 将索引位置转换为整数位置进行比较
             if group.index.get_loc(past_max_high_idx) >= recent_kline_limit:
-                continue  # 如果最高价的索引在最近 window/10 根 K 线内，跳过
+                continue  # 如果最高价的索引在最近 window/10 根 K 线内，则跳过
 
-            condition_std_low = None
-            if std_threshold is not None:
-                past_close_std = group.iloc[i - window:i]["close"].std()
-                condition_std_low = past_close_std <= std_threshold
+            # 检查当前最高价与过去最高价的相对关系是否满足条件
+            condition_close_to_low = current_close * (1 - threshold) <= past_max_high <= current_close * (1 + threshold)
 
-            # 检查是否满足条件 1
-            condition_close_to_low = current_close * (1 - threshold) <= past_max_high <= current_close * (
-                    1 + threshold
-            )
+            if condition_close_to_low:
+                group.iloc[i, group.columns.get_loc("signal")] = 1
 
-            # 如果所有条件满足，则标记信号
-            if std_threshold is not None:
-                if condition_close_to_low and condition_std_low:
-                    group.iloc[i, group.columns.get_loc("signal")] = 1
-            else:
-                if condition_close_to_low:
-                    group.iloc[i, group.columns.get_loc("signal")] = 1
-
-        # 更新原始数据
+        # 将计算得到的信号更新回原始数据
         data.loc[group.index, "signal"] = group["signal"]
 
     return data
+
 
 
 def generate_signal_short(data, window, threshold, std_threshold=None):
@@ -139,36 +142,30 @@ def generate_signal_short(data, window, threshold, std_threshold=None):
             if i < window:
                 continue  # 跳过窗口不足的前几天
 
-            # 当前 close 和过去 window 天的最低价
-            current_close = group.iloc[i]["close"]
-            past_min_low_idx = group.iloc[i - window:i]["close"].idxmin()  # 找到最低价所在的索引
-            past_min_low = group.loc[past_min_low_idx, "close"]  # 获取过去最低价
+            current_high = group.iloc[i]["high"]
+            past_max_high_idx = group.iloc[i - window:i]["high"].idxmax()  # 找到最高价所在的索引
+            past_max_high = group.loc[past_max_high_idx, "high"]  # 获取过去最高价
+
+            current_close = group.iloc[i]["low"]
+            past_min_low_idx = group.iloc[i - window:i]["low"].idxmin()  # 找到最低价所在的索引
+            past_min_low = group.loc[past_min_low_idx, "low"]  # 获取过去最低价
 
             # 跳过最低价属于最近 window / 10 根 K 线的情况
             recent_kline_limit = min(i - int(window / 10), i - window)
             if group.index.get_loc(past_min_low_idx) <= recent_kline_limit:
                 continue  # 如果最低价的索引在最近 window/10 根 K 线内，跳过
 
-            # 检查过去 window 根 K 线的标准差是否低于阈值
-
-            # print(past_close_std)
-            condition_std_low = None
-            if std_threshold is not None:
-                past_close_std = group.iloc[i - window:i]["close"].std()
-                condition_std_low = past_close_std <= std_threshold
-
             # 检查是否满足条件 1
-            condition_close_to_low = current_close * (1 - threshold) <= past_min_low <= current_close * (
+            condition_long = current_close * (1 - threshold) <= past_min_low <= current_close * (
                     1 + threshold
             )
-
             # 如果所有条件满足，则标记信号
             if std_threshold is not None:
-                if condition_close_to_low and condition_std_low:
-                    group.iloc[i, group.columns.get_loc("signal")] = 1
+                pass
             else:
-                if condition_close_to_low:
+                if condition_long:
                     group.iloc[i, group.columns.get_loc("signal")] = 1
+
 
         # 更新原始数据
         data.loc[group.index, "signal"] = group["signal"]
@@ -193,8 +190,8 @@ def visualize_signals(data, asset):
     signals = asset_data['signal']
 
     # 找到 signal=1 的点
-    signal_times = times[signals == 1]
-    signal_prices = close_prices[signals == 1]
+    signal_times = times[signals == -1]
+    signal_prices = close_prices[signals == -1]
 
     # 绘图
     plt.figure(figsize=(12, 6))
@@ -223,7 +220,7 @@ def visualize_signals(data, asset):
 # start = "2023-1-1"
 # end = "2023-12-30"
 
-start = "2024-1-1"
+start = "2022-1-1"
 end = "2024-11-30"
 
 assets = select_assets(spot=True, n=300)
@@ -235,7 +232,7 @@ data = pd.concat(data, ignore_index=True)
 
 data = data.set_index(["time", "asset"])
 
-result = generate_signal(data.copy(), window=30, threshold=0.01, std_threshold=1)
+result = generate_signal(data.copy(), window=30, threshold=0.01)
 
 avg_return, prob_gain, count = future_performance(result, n_days=3)
 

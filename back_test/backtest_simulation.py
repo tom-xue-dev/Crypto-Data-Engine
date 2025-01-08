@@ -66,7 +66,7 @@ class Broker:
             raise ValueError(f"target asset{key} not in holdings")
         pos = self.account.positions.pop(key)
         if self.stop_loss_logic:
-            self.stop_loss_logic.holding_close(asset=asset,direction = direction)
+            self.stop_loss_logic.holding_close(asset=asset, direction=direction)
         # 结算盈亏
         # 多头收益：quantity * (price - entry_price)
         # 这里略写
@@ -200,7 +200,6 @@ class Backtest:
         existing_short_key = (asset, "short")
 
         holdings = self.broker.account.positions  # 当前持仓 dict
-        print("start open pos")
         if signal == 1:
             if existing_long_key in holdings:
                 return
@@ -248,15 +247,18 @@ class Backtest:
 
         price_map = dict(zip(current_df.index.get_level_values('asset'), current_df['close']))
 
-        for (asset, _), position in holdings.items():
+        for (asset, direction), position in list(holdings.items()):
             if asset in price_map:
                 current_price = price_map[asset]
                 # 计算持仓总市值（绝对值）
                 total_market_value += abs(position.quantity * current_price)
             else:
-                # 如果找不到当前价格，抛出警告或记录日志
-                print(
-                    f"Warning: Current price for asset {asset} not found in data.,timestamp is {current_df.loc[0, 'time']}")
+                # 如果找不到当前价格，抛出警告或记录日志,并且撤销买入操作
+                # print(
+                #     f"Warning: Current price for asset {asset} not found in data.,timestamp is {current_df.loc[0, 'time']}")
+                print(f"warning: {asset} not found in data")
+                self.broker.account.cash += abs(position.entry_price*position.quantity)
+                del self.broker.account.positions[(asset,direction)]
                 continue
 
         return total_market_value

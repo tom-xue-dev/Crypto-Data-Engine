@@ -3,7 +3,7 @@ from read_large_files import load_filtered_data_as_list, select_assets
 import time
 
 start = "2022-1-5"
-end = "2022-3-1"
+end = "2022-6-1"
 
 asset = []
 

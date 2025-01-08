@@ -236,7 +236,7 @@ class HoldNBarStopLossLogic(StopLossLogic):
 
         return positions_to_close
 
-    def holding_close(self, asset):
+    def holding_close(self, asset,**kwargs):
         del self.holding_time[asset]
 
 
@@ -263,7 +263,7 @@ class CostThresholdStrategy(StopLossLogic):
                 if curr_price < pos.entry_price * (1 - self.loss_threshold):
                     # 止损
                     positions_to_close.append((asset, direction))
-                if curr_price > pos.entry_price * (1 + self.gain_threshold):
+                elif curr_price > pos.entry_price * (1 + self.gain_threshold):
                     #止盈
                     positions_to_close.append((asset, direction))
 
@@ -271,7 +271,7 @@ class CostThresholdStrategy(StopLossLogic):
                 if curr_price > pos.entry_price * (1 + self.loss_threshold):
                     #止损
                     positions_to_close.append((asset, direction))
-                if curr_price < pos.entry_price * (1 - self.gain_threshold):
+                elif curr_price < pos.entry_price * (1 - self.gain_threshold):
                     positions_to_close.append((asset, direction))
 
         return positions_to_close
