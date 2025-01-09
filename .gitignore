@@ -1,2 +1,7 @@
 
 /data
+/back_test/__pycache__
+/back_test/__pycache__
+/back_test/__pycache__
+*.pyc
+/back_test

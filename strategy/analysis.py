@@ -93,7 +93,7 @@ def generate_signal(data, window, threshold, std_threshold=None):
             condition_std_low = None
             if std_threshold is not None:
                 past_close_std = group.iloc[i - window:i]["close"].std()
-                condition_std_low = past_close_std <= std_threshold
+                condition_std_low = past_close_std > std_threshold
 
             # 检查是否满足条件 1
             condition_close_to_low = current_close * (1 - threshold) <= past_max_high <= current_close * (
@@ -235,7 +235,7 @@ data = pd.concat(data, ignore_index=True)
 
 data = data.set_index(["time", "asset"])
 
-result = generate_signal(data.copy(), window=30, threshold=0.01, std_threshold=1)
+result = generate_signal(data.copy(), window=30, threshold=0.01, std_threshold=0.02)
 
 avg_return, prob_gain, count = future_performance(result, n_days=3)
 
