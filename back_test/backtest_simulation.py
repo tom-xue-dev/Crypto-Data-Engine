@@ -57,6 +57,7 @@ class Broker:
             "leverage": leverage
         })
         self.account.positions[(asset, direction)] = pos
+
         if self.stop_loss_logic:
             self.stop_loss_logic.init_holding(asset=asset, price=price, direction=direction)
 
@@ -65,7 +66,9 @@ class Broker:
         if key not in self.account.positions:
             raise ValueError(f"target asset{key} not in holdings")
         pos = self.account.positions.pop(key)
+
         if self.stop_loss_logic:
+            # print(f"undo{asset, direction}")
             self.stop_loss_logic.holding_close(asset=asset, direction=direction)
         # 结算盈亏
         # 多头收益：quantity * (price - entry_price)
@@ -183,7 +186,7 @@ class Backtest:
     def process_signal(self, signal, asset, price, current_time, current_market_cap):
         # 简化: signal=1 -> 开多, signal=-1 -> 开空, signal=0 -> 不操作
 
-        position = self.pos_manager.get_allocate_pos(current_market_cap, self.broker.account.cash)
+        position = self.pos_manager.get_allocate_pos(signal, current_market_cap, self.broker.account)
         quantity = position / (price * 1.001)
         quantity = math.floor(quantity * 100) / 100  # 去尾法保证小数点后两位
         if self.broker.leverage_manager is not None:
@@ -203,8 +206,8 @@ class Backtest:
         if signal == 1:
             if existing_long_key in holdings:
                 return
-            # if existing_short_key in holdings:
-            #     self.broker.close_position(asset, "short", price, current_time)
+            if existing_short_key in holdings:
+                self.broker.close_position(asset, "short", price, current_time)
             self.broker.open_position(
                 asset=asset,
                 direction="long",
@@ -217,8 +220,8 @@ class Backtest:
         elif signal == -1:
             if existing_short_key in holdings:
                 return
-            # if existing_long_key in holdings:
-            #     self.broker.close_position(asset, "long", price, current_time)
+            if existing_long_key in holdings:
+                self.broker.close_position(asset, "long", price, current_time)
 
             self.broker.open_position(
                 asset=asset,
@@ -257,8 +260,8 @@ class Backtest:
                 # print(
                 #     f"Warning: Current price for asset {asset} not found in data.,timestamp is {current_df.loc[0, 'time']}")
                 print(f"warning: {asset} not found in data")
-                self.broker.account.cash += abs(position.entry_price*position.quantity)
-                del self.broker.account.positions[(asset,direction)]
+                self.broker.account.cash += abs(position.entry_price * position.quantity)
+                del self.broker.account.positions[(asset, direction)]
                 continue
 
         return total_market_value

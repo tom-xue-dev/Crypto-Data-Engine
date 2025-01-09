@@ -227,7 +227,8 @@ class HoldNBarStopLossLogic(StopLossLogic):
         positions_to_close = []
         for (asset, direction), pos in account.positions.items():
             if asset not in self.holding_time:
-                # print(self.holding_time)
+                print(len(self.holding_time))
+                print(len(account.positions))
                 pass
             self.holding_time[asset] += 1
             if self.holding_time[asset] == self.windows:
@@ -236,7 +237,7 @@ class HoldNBarStopLossLogic(StopLossLogic):
 
         return positions_to_close
 
-    def holding_close(self, asset,**kwargs):
+    def holding_close(self, asset, **kwargs):
         del self.holding_time[asset]
 
 
@@ -246,7 +247,7 @@ class CostThresholdStrategy(StopLossLogic):
         self.loss_threshold = loss_threshold
         self.holding_cost = {}  # 用于跟踪持仓成本
 
-    def init_holding(self, asset, direction,price, **kwargs):
+    def init_holding(self, asset, direction, price, **kwargs):
         self.holding_cost[(asset, direction)] = price
 
     def check_stop_loss(self, account, current_time, price_map, **kwargs):
@@ -264,19 +265,19 @@ class CostThresholdStrategy(StopLossLogic):
                     # 止损
                     positions_to_close.append((asset, direction))
                 elif curr_price > pos.entry_price * (1 + self.gain_threshold):
-                    #止盈
+                    # 止盈
                     positions_to_close.append((asset, direction))
 
             elif direction == "short":
                 if curr_price > pos.entry_price * (1 + self.loss_threshold):
-                    #止损
+                    # 止损
                     positions_to_close.append((asset, direction))
                 elif curr_price < pos.entry_price * (1 - self.gain_threshold):
                     positions_to_close.append((asset, direction))
 
         return positions_to_close
 
-    def holding_close(self, asset,direction):
+    def holding_close(self, asset, direction):
         del self.holding_cost[(asset, direction)]
 
 
@@ -285,12 +286,29 @@ class PositionManager:
         self.threshold = threshold
         pass
 
-    def get_allocate_pos(self, market_cap, cash=0):
+    def get_allocate_pos(self, signal, market_cap, account: Account):
         """
-        market_cap为持仓总市值,
-        cash 为持仓的总现金（USDT）
-        :return:
+        检测多空持仓，限制单方持仓大于6成仓位
         """
-        total_cap = market_cap + cash
-        target_pos = min(total_cap * self.threshold, cash)
-        return target_pos
+        long_cap = 0
+        short_cap = 0
+        for (asset, direction), pos in account.positions.items():
+            if direction == "long":
+                long_cap += pos.entry_price * pos.quantity
+            elif direction == "short":
+                short_cap += pos.entry_price * pos.quantity
+
+        total_cap = market_cap + account.cash
+        target_pos = min(total_cap * self.threshold, account.cash)
+        if signal == 1:
+            if long_cap / total_cap > 0.4:
+                return target_pos/2
+            else:
+                return target_pos
+        elif signal == -1:
+            if short_cap / total_cap > 0.4:
+                return target_pos/2
+            else:
+                return target_pos
+        else:
+            return 0
