@@ -165,14 +165,20 @@ class StopLossLogic(ABC):
 
 
 class DefaultStopLossLogic(StopLossLogic):
-    def __init__(self, max_drawdown=0.5):
+    def __init__(self, max_drawdown=0.05):
         self.max_drawdown = max_drawdown
         self.highest_price_map = {}  # 用于多头跟踪最高价格
         self.lowest_price_map = {}  # 用于空头跟踪最低价格
 
     def init_holding(self, asset, price, **kwargs):
-        self.highest_price_map[asset] = price
-        self.lowest_price_map[asset] = price
+        if asset not in self.highest_price_map:
+            self.highest_price_map[asset] = price
+        else:
+            self.highest_price_map[asset] = max(self.highest_price_map[asset], price)
+        if asset not in self.lowest_price_map:
+            self.lowest_price_map[asset] = price
+        else:
+            self.lowest_price_map[asset] = min(self.lowest_price_map[asset], price)
 
     def check_stop_loss(self, account, price_map, current_time, **kwargs):
         """
@@ -203,7 +209,7 @@ class DefaultStopLossLogic(StopLossLogic):
 
         return positions_to_close
 
-    def holding_close(self, asset):
+    def holding_close(self, asset, **kwargs):
         del self.highest_price_map[asset]
         del self.lowest_price_map[asset]
 
@@ -301,13 +307,17 @@ class PositionManager:
         total_cap = market_cap + account.cash
         target_pos = min(total_cap * self.threshold, account.cash)
         if signal == 1:
+            if long_cap / total_cap > 0.6:
+                return 0
             if long_cap / total_cap > 0.4:
-                return target_pos/2
+                return target_pos / 2
             else:
                 return target_pos
         elif signal == -1:
             if short_cap / total_cap > 0.4:
-                return target_pos/2
+                return 0
+            if short_cap / total_cap > 0.2:
+                return target_pos / 2
             else:
                 return target_pos
         else:

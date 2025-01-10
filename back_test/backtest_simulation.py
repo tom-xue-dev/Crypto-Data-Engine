@@ -47,6 +47,19 @@ class Broker:
                 self.leverage_manager.settle_fees(self.account, current_time, price_map, is_open_close=True)
 
         pos = Position(asset, direction, quantity, price, leverage, position_type)
+
+        if (asset, direction) not in self.account.positions:
+            self.account.positions[(asset, direction)] = pos
+        else:
+
+            existing_pos = self.account.positions[(asset, direction)]
+            old_quantity = existing_pos.quantity
+            new_quantity = old_quantity + quantity
+            weighted_price = (old_quantity * existing_pos.entry_price + quantity * price) / new_quantity
+            existing_pos.quantity = new_quantity
+            existing_pos.entry_price = weighted_price
+            self.account.positions[(asset, direction)] = existing_pos
+
         self.account.record_transaction({
             "time": current_time,
             "action": "open",
@@ -56,10 +69,8 @@ class Broker:
             "price": price,
             "leverage": leverage
         })
-        self.account.positions[(asset, direction)] = pos
-
         if self.stop_loss_logic:
-            self.stop_loss_logic.init_holding(asset=asset, price=price, direction=direction)
+            self.stop_loss_logic.init_holding(asset=asset, price=self.account.positions[(asset, direction)].entry_price, direction=direction)
 
     def close_position(self, asset, direction, price, current_time, stop_loss=False):
         key = (asset, direction)
@@ -82,7 +93,8 @@ class Broker:
             pnl = pos.quantity * (price - pos.entry_price)
         else:
             pnl = -pos.quantity * (price - pos.entry_price)
-        total_gain = (pos.own_equity + pnl)
+        total_gain = (pos.entry_price * pos.quantity + pnl)
+
         self.account.cash += total_gain * 0.999  # 千分之一手续费
         self.account.record_transaction({
             "time": current_time,
@@ -204,8 +216,8 @@ class Backtest:
 
         holdings = self.broker.account.positions  # 当前持仓 dict
         if signal == 1:
-            if existing_long_key in holdings:
-                return
+            # if existing_long_key in holdings:
+            #     return
             if existing_short_key in holdings:
                 self.broker.close_position(asset, "short", price, current_time)
             self.broker.open_position(
@@ -218,8 +230,8 @@ class Backtest:
                 quantity=quantity  # 可以根据策略或资金管理计算
             )
         elif signal == -1:
-            if existing_short_key in holdings:
-                return
+            # if existing_short_key in holdings:
+            #     return
             if existing_long_key in holdings:
                 self.broker.close_position(asset, "long", price, current_time)
 

@@ -80,35 +80,35 @@ def process_asset_signals(group, window, threshold, std_threshold):
             continue  # 窗口不足时跳过
 
         # 波动率筛选
-        if std_threshold is not None:
-            recent_period_length = int(window / 10)
-            if i - recent_period_length >= 0:
-                recent_slice = group.iloc[i - recent_period_length:i]
-                recent_vol = recent_slice["pct_change_high"].std()
-                # 如果近期波动率未超过阈值，则跳过此次循环
-                if recent_vol > std_threshold:
-                    continue
+        # if std_threshold is not None:
+        #     recent_period_length = int(window / 10)
+        #     if i - recent_period_length >= 0:
+        #         recent_slice = group.iloc[i - recent_period_length:i]
+        #         recent_vol = recent_slice["pct_change_high"].std()
+        #         # 如果近期波动率未超过阈值，则跳过此次循环
+        #         if not recent_vol < std_threshold:
+        #             continue
 
         current_close = group.iloc[i]["close"]
-        past_window = group.iloc[i - window:i]
-        past_max_high_idx = past_window["high"].idxmax()
-        past_max_high = group.loc[past_max_high_idx, "close"]
-
-        # 跳过最高价属于最近 window/10 根 K 线的情况
-        recent_kline_limit = max(i - int(window / 10), i - window)
-        if group.index.get_loc(past_max_high_idx) >= recent_kline_limit:
-            continue
-
-        # 检查是否满足条件：当前价格与过去最高价在指定阈值范围内
-        condition_close_to_high = (current_close * (1 - threshold)
-                                   <= past_max_high
-                                   <= current_close * (1 + threshold))
-
-        if condition_close_to_high:
-            if group.iloc[i]["MA30"] < group.iloc[i]["MA5"]:
-                continue
-            group.iloc[i, group.columns.get_loc("signal")] = 1
-            continue
+        # past_window = group.iloc[i - window:i]
+        # past_max_high_idx = past_window["high"].idxmax()
+        # past_max_high = group.loc[past_max_high_idx, "close"]
+        #
+        # # 跳过最高价属于最近 window/10 根 K 线的情况
+        # recent_kline_limit = max(i - int(window / 10), i - window)
+        # if group.index.get_loc(past_max_high_idx) >= recent_kline_limit:
+        #     continue
+        #
+        # # 检查是否满足条件：当前价格与过去最高价在指定阈值范围内
+        # condition_close_to_high = (current_close * (1 - threshold)
+        #                            <= past_max_high
+        #                            <= current_close * (1 + threshold))
+        #
+        # if condition_close_to_high:
+        #     if group.iloc[i]["MA50"] < group.iloc[i]["MA1200"]:
+        #         continue
+        #     group.iloc[i, group.columns.get_loc("signal")] = 1
+        #     continue
 
         # --------------------------------------------
         past_window = group.iloc[i - window:i]
@@ -116,9 +116,10 @@ def process_asset_signals(group, window, threshold, std_threshold):
         past_min_low = group.loc[past_min_low_idx, "close"]
 
         # 跳过最高价属于最近 window/10 根 K 线的情况
-        recent_kline_limit = min(i - int(window / 10), i - window)
-        if group.index.get_loc(past_min_low_idx) >= recent_kline_limit:
-            continue
+        recent_kline_limit = max(i - int(window / 10), i - window)
+
+        # if group.index.get_loc(past_min_low_idx) >= recent_kline_limit:
+        #     continue
 
         # 检查是否满足条件：当前价格与过去最高价在指定阈值范围内
         condition_close_to_low = (current_close * (1 - threshold)
@@ -126,9 +127,13 @@ def process_asset_signals(group, window, threshold, std_threshold):
                                   <= current_close * (1 + threshold))
 
         if condition_close_to_low:
-            if group.iloc[i]["MA30"] < group.iloc[i]["MA5"]:
+            # if group.iloc[i]["MA1200"] < group.iloc[i]["MA50"]:
+            #     continue
+            if group.index.get_loc(past_min_low_idx) >= recent_kline_limit:
                 continue
-            group.iloc[i, group.columns.get_loc("signal")] = -1
+
+
+            group.iloc[i, group.columns.get_loc("signal")] = 1
 
     return group
 
@@ -206,37 +211,28 @@ if __name__ == "__main__":
     start = "2023-1-1"
     end = "2023-11-30"
 
-    assets = select_assets(spot=True, n=360)
+    #assets = select_assets(spot=True, n=100)
 
-    # assets = []
-    data = load_filtered_data_as_list(start, end, assets, level="1d")
+    assets = ["BTC-USDT_spot"]
+    data = load_filtered_data_as_list(start, end, assets, level="15min")
 
-    strategy = DualMAStrategy(dataset=data, asset=assets, short=5, long=30)
+    strategy = DualMAStrategy(dataset=data, asset=assets, short=50, long=1200)
 
     strategy.generate_signal()
+    data = strategy.dataset
 
-    data = pd.concat(strategy.dataset, ignore_index=True)
+    data = pd.concat(data, ignore_index=True)
 
     data = data.set_index(["time", "asset"])
 
-    result = generate_signal(data.copy(), window=30, threshold=0.01, std_threshold=0.02)
+    result = generate_signal(data.copy(), window=1200, threshold=0.005,std_threshold=0.004)
 
-    avg_return, prob_gain, count = future_performance(result, n_days=3)
+    count = 0
+    for i in range(5,300,20):
+        avg_return, prob_gain, count = future_performance(result, n_days=i)
+        print(f"未来 {i} 天的平均涨跌幅: {avg_return:.4f}")
+        print(f"未来 {i} 天的涨幅概率: {prob_gain:.2%}")
 
-    print(f"未来 3 天的平均涨跌幅: {avg_return:.4f}")
-    print(f"未来 3 天的涨幅概率: {prob_gain:.2%}")
-
-    avg_return, prob_gain, _ = future_performance(result, n_days=5)
-    print(f"未来 5 天的平均涨跌幅: {avg_return:.4f}")
-    print(f"未来 5 天的涨幅概率: {prob_gain:.2%}")
-
-    avg_return, prob_gain, _ = future_performance(result, n_days=10)
-    print(f"未来 10 天的平均涨跌幅: {avg_return:.4f}")
-    print(f"未来 10 天的涨幅概率: {prob_gain:.2%}")
-
-    avg_return, prob_gain, _ = future_performance(result, n_days=20)
-    print(f"未来 20 天的平均涨跌幅: {avg_return:.4f}")
-    print(f"未来 20 天的涨幅概率: {prob_gain:.2%}")
     print(f"数量 = {count}")
 
     #
