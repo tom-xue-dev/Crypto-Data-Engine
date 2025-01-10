@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from read_large_files import load_filtered_data_as_list, select_assets
 import pandas as pd
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 
 def future_performance(data, n_days):
@@ -114,66 +115,86 @@ def generate_signal(data, window, threshold, std_threshold=None):
     return data
 
 
-def generate_signal_short(data, window, threshold, std_threshold=None):
+def process_asset_signals_wrapper(params):
+    group, window, threshold, volatility_threshold = params
+    return process_asset_group(group, window, threshold, volatility_threshold)
+
+
+def calculate_garman_klass_volatility(group, window):
     """
-    生成交易信号列，基于过去 window 天内的最高价和当前 close 价格的比较，
-    同时考虑过去 window 根 K 线的标准差是否低于指定阈值。
-
-    参数:
-        data: DataFrame, 数据集
-        window: int, 回看窗口天数
-        threshold: float, 阈值（百分比，如 0.1 表示 10%）
-        std_threshold: float, 标准差阈值
-
-    返回:
-        带有 signal 列的 DataFrame
+    在 DataFrame 中添加 Garman-Klass 波动率列。
     """
-    # 添加 signal 列，初始化为 0
-    data["signal"] = 0
+    group['GK_vol'] = (
+            0.5 * (np.log(group['high'] / group['low'])) ** 2 -
+            (2 * np.log(2) - 1) / window * (np.log(group['close'] / group['open'])) ** 2
+    )
+    group['GK_vol_rolling'] = group['GK_vol'].rolling(window=window).mean()
+    return group
 
-    # 对每个资产进行操作
-    for asset, group in data.groupby("asset"):
-        group = group.copy()  # 防止修改原始数据
 
-        for i in range(len(group)):
-            if i < window:
-                continue  # 跳过窗口不足的前几天
+def process_asset_group(group, window, threshold, volatility_threshold):
+    """
+    对单个资产组的数据进行信号生成。
+    """
+    # 计算 Garman-Klass 波动率
+    group = calculate_garman_klass_volatility(group, window)
 
-            # 当前 close 和过去 window 天的最低价
-            current_close = group.iloc[i]["close"]
-            past_min_low_idx = group.iloc[i - window:i]["close"].idxmin()  # 找到最低价所在的索引
-            past_min_low = group.loc[past_min_low_idx, "close"]  # 获取过去最低价
+    group["signal"] = 0  # 初始化信号列
 
-            # 跳过最低价属于最近 window / 10 根 K 线的情况
-            recent_kline_limit = min(i - int(window / 10), i - window)
-            if group.index.get_loc(past_min_low_idx) <= recent_kline_limit:
-                continue  # 如果最低价的索引在最近 window/10 根 K 线内，跳过
+    for i in range(len(group)):
+        if i < window:
+            continue  # 跳过窗口不足的前几天
 
-            # 检查过去 window 根 K 线的标准差是否低于阈值
+        # 当前 close 和过去 window 天的最低价
+        current_close = group.iloc[i]["high"]
+        past_max_high_idx = group.iloc[i - window:i]["high"].idxmax()  # 找到最高价所在的索引
+        past_max_high = group.loc[past_max_high_idx, "high"]  # 获取过去最高价
 
-            # print(past_close_std)
-            condition_std_low = None
-            if std_threshold is not None:
-                past_close_std = group.iloc[i - window:i]["close"].std()
-                condition_std_low = past_close_std <= std_threshold
+        # 跳过最高价属于最近 window / 10 根 K 线的情况
+        recent_kline_limit = i - int(window / 10)
+        if group.index.get_loc(past_max_high_idx) >= recent_kline_limit:
+            continue  # 如果最高价的索引在最近 window/10 根 K 线内，跳过
 
-            # 检查是否满足条件 1
-            condition_close_to_low = current_close * (1 - threshold) <= past_min_low <= current_close * (
-                    1 + threshold
-            )
+        # 检查过去 window 根 K 线的 Garman-Klass 波动率是否低于阈值
+        condition_volatility_low = None
+        if volatility_threshold is not None:
+            past_gk_volatility = group.iloc[i - int(window / 10):i]["GK_vol_rolling"].mean()
+            condition_volatility_low = past_gk_volatility > volatility_threshold
 
-            # 如果所有条件满足，则标记信号
-            if std_threshold is not None:
-                if condition_close_to_low and condition_std_low:
-                    group.iloc[i, group.columns.get_loc("signal")] = 1
-            else:
-                if condition_close_to_low:
-                    group.iloc[i, group.columns.get_loc("signal")] = 1
+        # 检查是否满足条件 1
+        condition_close_to_low = current_close * (1 - threshold) <= past_max_high <= current_close * (
+                1 + threshold
+        )
 
-        # 更新原始数据
-        data.loc[group.index, "signal"] = group["signal"]
+        # 如果所有条件满足，则标记信号
+        if volatility_threshold is not None:
+            if condition_close_to_low and condition_volatility_low:
+                group.iloc[i, group.columns.get_loc("signal")] = 1
+        else:
+            if condition_close_to_low:
+                group.iloc[i, group.columns.get_loc("signal")] = 1
 
-    return data
+    return group
+
+
+def generate_signal_short(data, window, threshold, volatility_threshold=None, max_workers=4):
+    """
+    生成交易信号列，基于多线程处理。
+    """
+    # 按资产分组
+    grouped_data = [group for _, group in data.groupby("asset")]
+
+    params = [(group, window, threshold, volatility_threshold) for group in grouped_data]
+    # 使用线程池并行处理每个资产组
+
+    with ProcessPoolExecutor() as executor:
+        results = executor.map(process_asset_signals_wrapper, params)
+
+    result_df = pd.concat(results)
+    # 可选：按索引排序以恢复原始顺序
+    result_df = result_df.sort_index()
+
+    return result_df
 
 
 def visualize_signals(data, asset):
@@ -214,68 +235,52 @@ def visualize_signals(data, asset):
     plt.show()
 
 
-# start = "2021-1-1"
-# end = "2021-6-30"
+if __name__ == "__main__":
+    # start = "2021-1-1"
+    # end = "2021-6-30"
 
-# start = "2022-1-1"
-# end = "2022-12-30"
+    # start = "2022-1-1"
+    # end = "2022-12-30"
 
-# start = "2023-1-1"
-# end = "2023-12-30"
+    # start = "2023-1-1"
+    # end = "2023-12-30"
 
-start = "2024-1-1"
-end = "2024-11-30"
+    start = "2021-1-1"
+    end = "2024-11-30"
 
-assets = select_assets(spot=True, n=300)
+    assets = select_assets(spot=True, n=300)
 
-# assets = []
-data = load_filtered_data_as_list(start, end, assets, level="1d")
+    # assets = []
+    data = load_filtered_data_as_list(start, end, assets, level="1d")
 
-data = pd.concat(data, ignore_index=True)
+    data = pd.concat(data, ignore_index=True)
 
-data = data.set_index(["time", "asset"])
+    data = data.set_index(["time", "asset"])
 
-result = generate_signal(data.copy(), window=30, threshold=0.01, std_threshold=0.02)
+    result = generate_signal_short(data.copy(), window=30, threshold=0.01)
 
-avg_return, prob_gain, count = future_performance(result, n_days=3)
+    avg_return, prob_gain, count = future_performance(result, n_days=3)
 
-print(f"未来 3 天的平均涨跌幅: {avg_return:.4f}")
-print(f"未来 3 天的涨幅概率: {prob_gain:.2%}")
+    print(f"未来 3 天的平均涨跌幅: {avg_return:.4f}")
+    print(f"未来 3 天的涨幅概率: {prob_gain:.2%}")
 
-avg_return, prob_gain, _ = future_performance(result, n_days=5)
-print(f"未来 5 天的平均涨跌幅: {avg_return:.4f}")
-print(f"未来 5 天的涨幅概率: {prob_gain:.2%}")
+    avg_return, prob_gain, _ = future_performance(result, n_days=5)
+    print(f"未来 5 天的平均涨跌幅: {avg_return:.4f}")
+    print(f"未来 5 天的涨幅概率: {prob_gain:.2%}")
 
-avg_return, prob_gain,_= future_performance(result, n_days=10)
-print(f"未来 10 天的平均涨跌幅: {avg_return:.4f}")
-print(f"未来 10 天的涨幅概率: {prob_gain:.2%}")
+    avg_return, prob_gain, _ = future_performance(result, n_days=10)
+    print(f"未来 10 天的平均涨跌幅: {avg_return:.4f}")
+    print(f"未来 10 天的涨幅概率: {prob_gain:.2%}")
 
-avg_return, prob_gain, _ = future_performance(result, n_days=20)
-print(f"未来 20 天的平均涨跌幅: {avg_return:.4f}")
-print(f"未来 20 天的涨幅概率: {prob_gain:.2%}")
-print(f"数量 = {count}")
-# 调用函数生成信号
-# result = generate_signal_short(data.copy(), window=60, threshold=0.02, std_threshold=1)
-#
-# avg_return, prob_gain = future_performance(result, n_days=3)
-# print(f"未来 3 天的平均涨跌幅: {avg_return:.4f}")
-# print(f"未来 3 天的涨幅概率: {prob_gain:.2%}")
-#
-# avg_return, prob_gain = future_performance(result, n_days=5)
-# print(f"未来 5 天的平均涨跌幅: {avg_return:.4f}")
-# print(f"未来 5 天的涨幅概率: {prob_gain:.2%}")
-#
-# avg_return, prob_gain = future_performance(result, n_days=10)
-# print(f"未来 10 天的平均涨跌幅: {avg_return:.4f}")
-# print(f"未来 10 天的涨幅概率: {prob_gain:.2%}")
-#
-# avg_return, prob_gain = future_performance(result, n_days=20)
-# print(f"未来 20 天的平均涨跌幅: {avg_return:.4f}")
-# print(f"未来 20 天的涨幅概率: {prob_gain:.2%}")
-#
-for asset in assets:
-    if asset in result.index.get_level_values("asset"):
-        visualize_signals(result, asset)
-    else:
-        print(asset)
-# # 示例数据
+    avg_return, prob_gain, _ = future_performance(result, n_days=20)
+    print(f"未来 20 天的平均涨跌幅: {avg_return:.4f}")
+    print(f"未来 20 天的涨幅概率: {prob_gain:.2%}")
+    print(f"数量 = {count}")
+
+    #
+    for asset in assets:
+        if asset in result.index.get_level_values("asset"):
+            visualize_signals(result, asset)
+        else:
+            print(asset)
+    # # 示例数据
