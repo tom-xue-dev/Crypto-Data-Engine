@@ -159,7 +159,7 @@ def process_asset_group(group, window, threshold, volatility_threshold):
         condition_volatility_low = None
         if volatility_threshold is not None:
             past_gk_volatility = group.iloc[i - int(window / 10):i]["GK_vol_rolling"].mean()
-            condition_volatility_low = past_gk_volatility > volatility_threshold
+            condition_volatility_low = past_gk_volatility < volatility_threshold
 
         # 检查是否满足条件 1
         condition_close_to_low = current_close * (1 - threshold) <= past_max_high <= current_close * (
@@ -177,7 +177,7 @@ def process_asset_group(group, window, threshold, volatility_threshold):
     return group
 
 
-def generate_signal_short(data, window, threshold, volatility_threshold=None, max_workers=4):
+def generate_signal_short(data, window, threshold, volatility_threshold=None):
     """
     生成交易信号列，基于多线程处理。
     """
@@ -246,35 +246,23 @@ if __name__ == "__main__":
     # end = "2023-12-30"
 
     start = "2021-1-1"
-    end = "2024-11-30"
+    end = "2021-11-30"
 
-    assets = select_assets(spot=True, n=300)
+    assets = select_assets(spot=True, n=100)
 
     # assets = []
-    data = load_filtered_data_as_list(start, end, assets, level="1d")
+    data = load_filtered_data_as_list(start, end, assets, level="15min")
 
     data = pd.concat(data, ignore_index=True)
 
     data = data.set_index(["time", "asset"])
 
-    result = generate_signal_short(data.copy(), window=30, threshold=0.01)
+    result = generate_signal_short(data.copy(), window=1200, threshold=0.005, volatility_threshold=5e-05)
+    count = 0
+    for i in range(5,300,5):
+        avg_return, prob_gain, count = future_performance(result, n_days=i)
+        print(f"未来{i}根k线上涨概率为{prob_gain},上涨幅度{avg_return}")
 
-    avg_return, prob_gain, count = future_performance(result, n_days=3)
-
-    print(f"未来 3 天的平均涨跌幅: {avg_return:.4f}")
-    print(f"未来 3 天的涨幅概率: {prob_gain:.2%}")
-
-    avg_return, prob_gain, _ = future_performance(result, n_days=5)
-    print(f"未来 5 天的平均涨跌幅: {avg_return:.4f}")
-    print(f"未来 5 天的涨幅概率: {prob_gain:.2%}")
-
-    avg_return, prob_gain, _ = future_performance(result, n_days=10)
-    print(f"未来 10 天的平均涨跌幅: {avg_return:.4f}")
-    print(f"未来 10 天的涨幅概率: {prob_gain:.2%}")
-
-    avg_return, prob_gain, _ = future_performance(result, n_days=20)
-    print(f"未来 20 天的平均涨跌幅: {avg_return:.4f}")
-    print(f"未来 20 天的涨幅概率: {prob_gain:.2%}")
     print(f"数量 = {count}")
 
     #

@@ -314,9 +314,9 @@ class PositionManager:
             else:
                 return target_pos
         elif signal == -1:
-            if short_cap / total_cap > 0.4:
+            if short_cap / total_cap > 0.6:
                 return 0
-            if short_cap / total_cap > 0.2:
+            if short_cap / total_cap > 0.4:
                 return target_pos / 2
             else:
                 return target_pos
