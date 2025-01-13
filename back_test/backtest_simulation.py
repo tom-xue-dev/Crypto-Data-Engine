@@ -216,8 +216,8 @@ class Backtest:
 
         holdings = self.broker.account.positions  # 当前持仓 dict
         if signal == 1:
-            # if existing_long_key in holdings:
-            #     return
+            if existing_long_key in holdings:
+                return
             if existing_short_key in holdings:
                 self.broker.close_position(asset, "short", price, current_time)
             self.broker.open_position(

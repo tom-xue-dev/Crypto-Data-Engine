@@ -9,3 +9,5 @@ back_test/BTC_USDT_USDT_funding_rate_history.csv
 back_test/result.txt
 back_test/result.txt
 back_test/transactions.txt
+*.pkl
+/strategy_report/78bed-main

@@ -1,12 +1,140 @@
+import pickle
 import sys
 import matplotlib.pyplot as plt
 from read_large_files import load_filtered_data_as_list, select_assets
 import pandas as pd
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from strategy import DualMAStrategy
 
 
-def future_performance(data, n_days):
+def build_segments_n(dataset: pd.DataFrame, n: int) -> list[tuple[float, float]]:
+    """
+    将 dataset 按 time 维度切分成 2^n 个小块，
+    每块计算 (min_low, max_high) 并返回列表。
+    假设:
+      - MultiIndex: (time, asset)
+      - 列包含 ['low', 'high']
+      - len(unique_times) >= 2^n
+    """
+    times = dataset.index.get_level_values('time').unique().sort_values()
+    total_times = len(times)
+    num_segments = 2 ** n  # 要切分的段数
+
+    if total_times < num_segments:
+        raise ValueError(f"time 数量({total_times})不足以切分成 {num_segments} 份。")
+
+    step = total_times // num_segments  # 每段大小 (可能有余数)
+
+    segments = []
+    start = 0
+    for i in range(num_segments):
+        # 最后一段取到结尾，处理可能的余数
+        if i == num_segments - 1:
+            end = total_times
+        else:
+            end = start + step
+
+        # 切分 times
+        seg_times = times[start:end]
+        sub_df = dataset.loc[seg_times]
+
+        min_low = sub_df['low'].min()
+        max_high = sub_df['high'].max()
+        segments.append((min_low, max_high))
+
+        start = end
+
+    return segments
+
+
+def compare_and_merge(segA: tuple[float, float], segB: tuple[float, float]) -> tuple[
+    tuple[bool, bool], tuple[float, float]]:
+    """
+    比较 segA 与 segB 的 (min, max)，返回:
+    1) (is_min_lower, is_max_lower)
+    2) 合并后的新 segment (merged_min, merged_max)
+    """
+    minA, maxA = segA
+    minB, maxB = segB
+    is_min_lower = (minA < minB)
+    is_max_lower = (maxA < maxB)
+
+    # 合并后新的 segment
+    merged_min = min(minA, minB)
+    merged_max = max(maxA, maxB)
+    return (is_min_lower, is_max_lower), (merged_min, merged_max)
+
+
+def compare_segments_n(segments: list[tuple[float, float]]) -> list[tuple[bool, bool]]:
+    """
+    给定最底层 (2^n 个) segments，使用自底向上的两两合并，
+    每合并一次就记录一个 (is_min_lower, is_max_lower)。
+    最终返回所有比较结果的列表，总长度为 2^n - 1。
+    """
+    results = []
+    layer = segments[:]
+
+    # 不断两两合并，直到只剩一个
+    while len(layer) > 1:
+        next_layer = []
+        for i in range(0, len(layer), 2):
+            segA = layer[i]
+            segB = layer[i + 1]
+            (is_min_lower, is_max_lower), merged_seg = compare_and_merge(segA, segB)
+            results.append((is_min_lower, is_max_lower))
+            next_layer.append(merged_seg)
+        layer = next_layer
+    return results
+
+
+def check_halves_n(dataset: pd.DataFrame, n: int = 4) -> list[tuple[bool, bool]]:
+    """
+    综合入口:
+    1) 先按 time 切成 2^n 份，得到每份 (min_low, max_high)
+    2) 再自底向上合并并比较，返回 (is_min_lower, is_max_lower) 的列表
+       共会返回 2^n - 1 次比较结果
+    """
+    # 1) 建立 2^n 份 segments
+    segments = build_segments_n(dataset, n=n)
+    # 2) 自底向上合并并比较
+    results = compare_segments_n(segments)
+    return results
+
+
+def future_performance_task(data, n_days, signal):
+    """
+    独立任务函数，用于计算未来 n 天的平均涨跌幅和涨跌概率。
+    """
+    avg_return, prob_gain, count = future_performance(data, n_days, signal)
+    return n_days, avg_return, prob_gain, count
+
+
+# 使用进程池实现的代码
+def process_future_performance_in_pool(data, n_days_list, signal):
+    """
+    并行计算多个 n_days 对应的未来表现。
+
+    参数:
+        data: DataFrame, 包含 'signal' 和 'close' 列。
+        n_days_list: list, 包含多个 n_days 窗口。
+
+    返回:
+        results: list, 每个元素是 (n_days, avg_return, prob_gain, count)。
+    """
+    results = []
+    with ProcessPoolExecutor() as executor:
+        # 提交每个 n_days 的任务
+        futures = {executor.submit(future_performance_task, data, n_days, signal): n_days for n_days in n_days_list}
+
+        # 收集结果
+        for future in futures:
+            n_days, avg_return, prob_gain, count = future.result()
+            results.append((n_days, avg_return, prob_gain, count))
+    return results
+
+
+def future_performance(data, n_days, signal):
     """
     计算 signal = 1 的情况下，未来 n 天的平均涨跌幅和涨跌概率。
 
@@ -30,7 +158,7 @@ def future_performance(data, n_days):
         group = group.reset_index()  # 重置索引，方便按行号处理
 
         # 遍历 signal = 1 的行
-        for i in group[group["signal"] == 1].index:
+        for i in group[group["signal"] == signal].index:
             signal_count += 1  # 累加 signal = 1 的数量
 
             # 获取当前的 close 值
@@ -40,8 +168,8 @@ def future_performance(data, n_days):
             if i + n_days >= len(group):  # 如果未来 n 天不足，跳过
                 continue
 
-            # 计算未来 n 天的平均 close
-            future_close = group.loc[i + 1:i + n_days, "close"].mean()
+            # 计算未来 n 天的close
+            future_close = group.loc[i + n_days, "close"]
 
             # 计算涨跌幅
             return_pct = (future_close - current_close) / current_close
@@ -57,67 +185,6 @@ def future_performance(data, n_days):
 
 
 # 策略函数
-def generate_signal(data, window, threshold, std_threshold=None):
-    """
-    生成交易信号列，基于过去 window 天内的最高价和当前 close 价格的比较。
-
-    参数:
-        data: DataFrame, 数据集
-        window: int, 回看窗口天数
-        threshold: float, 阈值（百分比，如 0.1 表示 10%）
-
-    返回:
-        带有 signal 列的 DataFrame
-    """
-    # 添加 signal 列，初始化为 0
-    data["signal"] = 0
-
-    # 对每个资产进行操作
-    for asset, group in data.groupby("asset"):
-        group = group.copy()  # 防止修改原始数据
-
-        for i in range(len(group)):
-            if i < window:
-                continue  # 跳过窗口不足的前几天
-
-            # 当前 close 和过去 window 天的最高价
-            current_close = group.iloc[i]["high"]
-            past_max_high_idx = group.iloc[i - window:i]["high"].idxmax()  # 找到最高价所在的索引
-            past_max_high = group.loc[past_max_high_idx, "high"]  # 获取过去最高价
-            past_low = group.loc[past_max_high_idx, "low"]  # 获取过去最高价对应的最低价
-
-            # 跳过最高价属于最近 window / 10 根 K 线的情况
-            recent_kline_limit = max(i - int(window / 10), i - window)
-            if group.index.get_loc(past_max_high_idx) >= recent_kline_limit:
-                continue  # 如果最高价的索引在最近 window/10 根 K 线内，跳过
-
-            condition_std_low = None
-            if std_threshold is not None:
-                past_close_std = group.iloc[i - window:i]["close"].std()
-                condition_std_low = past_close_std > std_threshold
-
-            # 检查是否满足条件 1
-            condition_close_to_low = current_close * (1 - threshold) <= past_max_high <= current_close * (
-                    1 + threshold
-            )
-
-            # 如果所有条件满足，则标记信号
-            if std_threshold is not None:
-                if condition_close_to_low and condition_std_low:
-                    group.iloc[i, group.columns.get_loc("signal")] = 1
-            else:
-                if condition_close_to_low:
-                    group.iloc[i, group.columns.get_loc("signal")] = 1
-
-        # 更新原始数据
-        data.loc[group.index, "signal"] = group["signal"]
-
-    return data
-
-
-def process_asset_signals_wrapper(params):
-    group, window, threshold, volatility_threshold = params
-    return process_asset_group(group, window, threshold, volatility_threshold)
 
 
 def calculate_garman_klass_volatility(group, window):
@@ -132,47 +199,57 @@ def calculate_garman_klass_volatility(group, window):
     return group
 
 
+def process_asset_signals_wrapper(params):
+    group, window, threshold, volatility_threshold = params
+    return process_asset_group(group, window, threshold, volatility_threshold)
+
+
 def process_asset_group(group, window, threshold, volatility_threshold):
     """
     对单个资产组的数据进行信号生成。
     """
-    # 计算 Garman-Klass 波动率
-    group = calculate_garman_klass_volatility(group, window)
 
     group["signal"] = 0  # 初始化信号列
 
     for i in range(len(group)):
-        if i < window:
+        if i - int(window / 50) < window * 5:
             continue  # 跳过窗口不足的前几天
 
-        # 当前 close 和过去 window 天的最低价
-        current_close = group.iloc[i]["high"]
-        past_max_high_idx = group.iloc[i - window:i]["high"].idxmax()  # 找到最高价所在的索引
-        past_max_high = group.loc[past_max_high_idx, "high"]  # 获取过去最高价
+        recent_kline_limit = i - int(window / 100)
 
-        # 跳过最高价属于最近 window / 10 根 K 线的情况
-        recent_kline_limit = i - int(window / 10)
-        if group.index.get_loc(past_max_high_idx) >= recent_kline_limit:
-            continue  # 如果最高价的索引在最近 window/10 根 K 线内，跳过
-
-        # 检查过去 window 根 K 线的 Garman-Klass 波动率是否低于阈值
-        condition_volatility_low = None
-        if volatility_threshold is not None:
-            past_gk_volatility = group.iloc[i - int(window / 10):i]["GK_vol_rolling"].mean()
-            condition_volatility_low = past_gk_volatility < volatility_threshold
-
+        condition_long = False
+        sub_df = group.iloc[i - window:i]
+        current_close_long = group.iloc[i]["close"]
+        ans = check_halves_n(sub_df)
+        count_first_true = sum(1 for x in ans if x[0])
+        count_sec_true = sum(1 for x in ans if x[1])
+        # print(f"第1个元素为 True 的元组数量: {count_first_true}")
+        # print(f"第2个元素为 True 的元组数量: {count_sec_true}")
+        if count_first_true > 10 and count_sec_true > 10:
+            condition_long = True
+        #over_look_past_long = group.iloc[i - window * 5:i]["close"].idxmax()
         # 检查是否满足条件 1
-        condition_close_to_low = current_close * (1 - threshold) <= past_max_high <= current_close * (
-                1 + threshold
-        )
+        # 当前收盘必须大于等于之前的最低收盘价
+        # current_close_short = group.iloc[i]["low"]
+        # past_min_low_idx = group.iloc[i - window:i]["low"].idxmin()  # 找到最高价所在的索引
+        # past_min_low = group.loc[past_min_low_idx, "low"]  # 获取过去最高价
+        #
+        # condition_short = past_min_low >= current_close_short * (
+        #         1 + threshold
+        # )
 
-        # 如果所有条件满足，则标记信号
-        if volatility_threshold is not None:
-            if condition_close_to_low and condition_volatility_low:
-                group.iloc[i, group.columns.get_loc("signal")] = 1
-        else:
-            if condition_close_to_low:
-                group.iloc[i, group.columns.get_loc("signal")] = 1
+        # if condition_long and condition_short:
+        #     continue
+
+        if condition_long:
+            # if group.index.get_loc(past_max_high_idx) >= recent_kline_limit:
+            #     continue  # 如果最高价的索引在最近 window/10 根 K 线内，跳过
+            # if group.iloc[i]["MA50"] < group.iloc[i - 50]["MA50"]:
+            #     continue
+            # if group.loc[over_look_past_long, "high"] * 0.5 < current_close_long < group.loc[
+            #     over_look_past_long, "high"]:  # 超远搜索过去2个月的最高价格
+            #     continue
+            group.iloc[i, group.columns.get_loc("signal")] = 1
 
     return group
 
@@ -210,7 +287,7 @@ def visualize_signals(data, asset):
 
     # 提取时间、收盘价和信号
     times = asset_data.index.get_level_values('time')
-    close_prices = asset_data['close']
+    close_prices = asset_data['high']
     signals = asset_data['signal']
 
     # 找到 signal=1 的点
@@ -245,25 +322,30 @@ if __name__ == "__main__":
     # start = "2023-1-1"
     # end = "2023-12-30"
 
-    start = "2021-1-1"
-    end = "2021-11-30"
+    start = "2022-1-1"
+    end = "2024-11-30"
 
-    assets = select_assets(spot=True, n=100)
-
-    # assets = []
+    assets = select_assets(spot=True, n=200)
+    print(assets)
+    # assets = ["REN-USDT_spot"]
     data = load_filtered_data_as_list(start, end, assets, level="15min")
-
+    # strategy.calculate_MA(period=300)
+    # strategy.calculate_MA(period=1000)
     data = pd.concat(data, ignore_index=True)
 
     data = data.set_index(["time", "asset"])
+    result = generate_signal_short(data, window=1200, threshold=0.01)
+    with open("data.pkl", "wb") as file:
+        pickle.dump(result, file)
+    n_days_list = list(range(5, 600, 20))
+    results = process_future_performance_in_pool(result, n_days_list, signal=1)
+    # 输出结果
+    for n_days, avg_return, prob_gain, count in results:
+        print(f"未来{n_days}根k线上涨概率为{prob_gain},上涨幅度{avg_return},总数{count}")
 
-    result = generate_signal_short(data.copy(), window=1200, threshold=0.005, volatility_threshold=5e-05)
-    count = 0
-    for i in range(5,300,5):
-        avg_return, prob_gain, count = future_performance(result, n_days=i)
-        print(f"未来{i}根k线上涨概率为{prob_gain},上涨幅度{avg_return}")
-
-    print(f"数量 = {count}")
+    results = process_future_performance_in_pool(result, n_days_list, signal=-1)
+    for n_days, avg_return, prob_gain, count in results:
+        print(f"未来{n_days}根k线上涨概率为{prob_gain},上涨幅度{avg_return},总数{count}")
 
     #
     for asset in assets:

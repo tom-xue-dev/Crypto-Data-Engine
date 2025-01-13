@@ -37,7 +37,7 @@ def days_to_quarterly_settlement(date):
 
 
 class Strategy:
-    def __init__(self, dataset: list, asset: list):
+    def __init__(self, dataset: pd.DataFrame, asset: list):
         """
         初始化具体策略，可以在此定义一些默认参数或初始化逻辑。
         """
@@ -108,62 +108,87 @@ class BasisArbitrageStrategy(Strategy):
         print(self.dataset['DTS'])
 
 
-class DualMAStrategy(Strategy):
-    def __init__(self, dataset: list, asset: list, long: int, short: int):
+class DualMAStrategy():
+    def __init__(self, dataset: pd.DataFrame, long_period: int, short_period: int):
         """
-        双均线策略
-        :param dataset:
-        :param asset:
-        :param long: 长周期
-        :param short:短周期
+        双均线策略（重构版本）
+        - dataset: 包含 [time, asset, open, high, low, close, ...] 等列的数据
+        - long_period: 长周期
+        - short_period: 短周期
         """
-        super().__init__(dataset, asset)
-        self.long_period = long
-        self.short_period = short
-        self.calculate_MA(self.long_period)
-        self.calculate_MA(self.short_period)
+        self.dataset = dataset
+        self.long_period = long_period
+        self.short_period = short_period
 
-    def calculate_MA(self, period):
-        """
-        计算MA均线,以收盘价为例
-        :return:
-        """
-        full_df = pd.concat(self.dataset, ignore_index=True)
-        # 确保数据按 time 排序（如果 time 可以转为 datetime 更好）
-        full_df['time'] = pd.to_datetime(full_df['time'])
-        full_df = full_df.sort_values(['asset', 'time'])
-        # 按 name 分组，对 close 列进行 rolling mean
-        full_df[f'MA{period}'] = full_df.groupby('asset')['close'].transform(
-            lambda x: x.rolling(period).mean())
-        df = full_df
-        grouped = df.groupby('time')
-        self.dataset = [group.reset_index(drop=True) for _, group in grouped]
+        # 计算均线并生成交易信号
+        self.calculate_MA()
+        #self.generate_signal()
 
-    def generate_signal(self) -> None:
+    def calculate_MA(self):
         """
-        生成信号，默认短期MA上穿长期时用收盘价开多，信号为1
-        反之开空 信号为-1
-        :return: None
+        计算MA均线, 以收盘价为例
+        将数据按照 ['asset','time'] 排序并设置为 MultiIndex，便于分组滚动计算
         """
+        # 将数据按照 asset、time 排序，并设置为多级索引
+        # self.dataset.sort_values(['asset', 'time'], inplace=True)
+        # self.dataset.set_index(['time', 'asset'], inplace=True)
 
-        for index, time_frame_df in enumerate(self.dataset):
-            if index < self.long_period:
-                time_frame_df['signal'] = 0
-                continue
-            prev_df = self.dataset[index - 1]
-            # 开多的情况
-            long_condition = (prev_df[f'MA{self.short_period}'] < prev_df[f'MA{self.long_period}']) & (
-                    time_frame_df[f'MA{self.short_period}'] >= time_frame_df[f'MA{self.long_period}'])
-            # 开空的情况
-            short_condition = (prev_df[f'MA{self.short_period}'] > prev_df[f'MA{self.long_period}']) & (
-                    time_frame_df[f'MA{self.short_period}'] <= time_frame_df[f'MA{self.long_period}'])
-            # 初始化 signal 列为 0
-            time_frame_df['signal'] = 0
-            # 更新满足条件的信号
-            time_frame_df.loc[long_condition, 'signal'] = 1
-            time_frame_df.loc[short_condition, 'signal'] = -1
+        # 分资产滚动计算长短均线
+        self.dataset[f'MA{self.long_period}'] = (
+            self.dataset
+            .groupby(level='asset')['close']
+            .rolling(self.long_period)
+            .mean()
+            .values
+        )
+        self.dataset[f'MA{self.short_period}'] = (
+            self.dataset
+            .groupby(level='asset')['close']
+            .rolling(self.short_period)
+            .mean()
+            .values
+        )
+    def generate_signal(self):
+        """
+        生成信号：
+        - 短期MA上穿长期MA --> 开多 signal = 1
+        - 短期MA下穿长期MA --> 开空 signal = -1
+        - 其余情况 signal = 0
+        """
+        def _signal_generation(df):
+            # 复制一份，避免对原 DataFrame 产生副作用
+            df = df.copy()
+            df['signal'] = 0
 
-        return
+            # 上一根K线短期MA < 长期MA，当前短期MA >= 长期MA --> 做多
+            cond_long = (
+                (df[f'MA_{self.short_period}'].shift(1) < df[f'MA_{self.long_period}'].shift(1)) &
+                (df[f'MA_{self.short_period}'] >= df[f'MA_{self.long_period}'])
+            )
+
+            # 上一根K线短期MA > 长期MA，当前短期MA <= 长期MA --> 做空
+            cond_short = (
+                (df[f'MA_{self.short_period}'].shift(1) > df[f'MA_{self.long_period}'].shift(1)) &
+                (df[f'MA_{self.short_period}'] <= df[f'MA_{self.long_period}'])
+            )
+
+            df.loc[cond_long, 'signal'] = 1
+            df.loc[cond_short, 'signal'] = -1
+
+            return df
+
+        # 按资产分组，然后应用信号生成逻辑
+        self.dataset = (
+            self.dataset
+            .groupby(level='asset', group_keys=False)
+            .apply(_signal_generation)
+        )
+
+    def get_dataset(self) -> pd.DataFrame:
+        """
+        返回带有均线及信号列的结果 DataFrame
+        """
+        return self.dataset
 
 
 if __name__ == "__main__":

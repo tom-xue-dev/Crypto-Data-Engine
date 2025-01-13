@@ -307,7 +307,7 @@ class PositionManager:
         total_cap = market_cap + account.cash
         target_pos = min(total_cap * self.threshold, account.cash)
         if signal == 1:
-            if long_cap / total_cap > 0.6:
+            if long_cap / total_cap > 0.9:
                 return 0
             if long_cap / total_cap > 0.4:
                 return target_pos / 2
