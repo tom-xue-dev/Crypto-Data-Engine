@@ -8,3 +8,4 @@
 /sklearn-env
 *.pyc
 /back_test
+*.pkl
