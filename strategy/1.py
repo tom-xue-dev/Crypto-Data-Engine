@@ -1,104 +1,84 @@
 import pickle
-import sys
-import matplotlib.pyplot as plt
-from read_large_files import load_filtered_data_as_list, select_assets
-import pandas as pd
+
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-from strategy import DualMAStrategy
+import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+import statsmodels.api as sm
+from read_large_files import load_filtered_data_as_list, select_assets
+from scipy.stats import pearsonr
 
-from analysis import process_future_performance_in_pool
+# start = "2021-10-1"
+# end = "2022-12-30"
 
+start = "2017-10-1"
+end = "2020-12-30"
+# assets = select_assets(spot=True, n=30)
+assets = ['BTC-USDT_spot']
 
-def calculate_garman_klass_volatility(group, window):
-    """
-    在 DataFrame 中添加 Garman-Klass 波动率列。
-    """
-    group['GK_vol'] = (
-            0.5 * (np.log(group['high'] / group['low'])) ** 2 -
-            (2 * np.log(2) - 1) / window * (np.log(group['close'] / group['open'])) ** 2
-    )
-    group['GK_vol_rolling'] = group['GK_vol'].rolling(window=window).mean()
-    return group
+data = load_filtered_data_as_list(start, end, assets, level="1d")
+# with open("data_BTC.pkl", "rb") as f:
+#     data = pickle.load(f)
+print(assets)
+data = pd.concat(data, ignore_index=True)
+data = data.set_index(["time", "asset"])
+slopes = []  # 保存每个窗口的斜率
+future_returns = []  # 保存每个窗口的未来涨跌幅
+window_size = 20
+M = 300
+z_scores = []
+avg_changes = []
+beta_values = []
+signals = []
+for asset, df in data.groupby('asset'):
+    for i in range(0, len(df)):
+        # 提取滑动窗口数据
+        if i < window_size or i +10 >= len(df):
+            data.loc[df.index[i], 'signal'] = 0
+            continue
+        x_window = df['low'].iloc[i - window_size:i].values  # 自变量
+        y_window = df['high'].iloc[i - window_size:i].values  # 因变量
+        current_price = df['close'].iloc[i]
+        future_price = df['close'].iloc[i + 10]
 
+        sigma_low = np.std(y_window, ddof=1)  # 样本标准差
+        sigma_high = np.std(x_window, ddof=1)
+        rho = np.corrcoef(y_window, x_window)[0, 1]
+        beta = rho * (sigma_high / sigma_low)
+        # print(beta,beta1)
+        beta_values.append(beta)
+        data.loc[df.index[i], 'signal'] = 0
+        # 如果已经累积了至少 M 个斜率值，则计算 z-score
+        if len(beta_values) >= M:
+            mean = np.mean(beta_values[-M:])
+            std = np.std(beta_values[-M:])
+            z_score = (beta - mean) / std * rho ** 2
+            avg_change = (future_price - current_price) / current_price
+            avg_changes.append(avg_change)
+            signals.append(mean)
+            if mean > 0.8:
+                data.loc[df.index[i], 'signal'] = 1
 
-def process_asset_signals_wrapper(params):
-    group, window, threshold, volatility_threshold = params
-    return process_asset_group(group, window, threshold, volatility_threshold)
+#print(data)
+with open("data_signal.pkl", 'wb') as f:
+    pickle.dump(data, f)
+data1 = pd.DataFrame({
+    'zscore': signals,
+    'avg_change': avg_changes
+})
+bins = np.linspace(0.718, 1, 20)
+data1['zscore_bin'] = pd.cut(data1['zscore'], bins=bins)
 
+# 按区间分组并过滤样本量大于一定数量的区间
+min_samples = 10  # 设置最小样本数量
+grouped = data1.groupby('zscore_bin').filter(lambda x: len(x) >= min_samples)
 
-def process_asset_group(group, window, threshold, volatility_threshold):
-    """
-    对单个资产组的数据进行信号生成。
-    """
+# 统计区间的平均涨跌幅和样本量
+result = grouped.groupby('zscore_bin').agg(
+    avg_change_mean=('avg_change', 'mean'),  # 平均涨跌幅
+    sample_count=('avg_change', 'count'),  # 样本数量
+    win_rate=('avg_change', lambda x: (x > 0).mean())  # 胜率
+).reset_index()
 
-    for i in range(len(group)):
-        if i - int(window / 50) < window * 5:
-            continue  # 跳过窗口不足的前几天
-        if group.iloc[i]["signal"] == 1:
-
-            if not group.iloc[i]["MA50"] > group.iloc[i]["MA2400"]:
-                group.loc[group.index[i], "signal"] = 0
-                continue
-            if not group.iloc[i-200]["MA50"] > group.iloc[i]["MA50"]:
-                group.loc[group.index[i], "signal"] = 0
-                continue
-            if not group.iloc[i-400]["MA100"] > group.iloc[i]["MA100"]:
-                group.loc[group.index[i], "signal"] = 0
-                continue
-
-    return group
-
-
-def generate_signal(data, window, threshold, volatility_threshold=None):
-    """
-    生成交易信号列，基于多线程处理。
-    """
-    # 按资产分组
-    grouped_data = [group for _, group in data.groupby("asset")]
-
-    params = [(group, window, threshold, volatility_threshold) for group in grouped_data]
-    # 使用线程池并行处理每个资产组
-
-    with ProcessPoolExecutor() as executor:
-        results = executor.map(process_asset_signals_wrapper, params)
-
-    result_df = pd.concat(results)
-    # 可选：按索引排序以恢复原始顺序
-    result_df = result_df.sort_index()
-
-    return result_df
-
-
-if __name__ == "__main__":
-    # 从 .pkl 文件中加载数据
-
-    with open("data.pkl", "rb") as file:
-        data = pickle.load(file)
-    print(data.iloc[0])
-    strategy = DualMAStrategy(dataset=data, long_period=100, short_period=200)
-    print("start generate 100")
-    data = strategy.dataset
-    print("start generate 50")
-    strategy_2 = DualMAStrategy(dataset=data, long_period=50, short_period=2400)
-    # print(data[:len(data) // 4])
-
-    data = strategy_2.dataset
-    data = generate_signal(data, 1200, 0.01)
-    n_splits = 24
-    split_size = len(data) // n_splits  # 每等分的大小
-    # 循环处理每个部分
-    for i in range(n_splits):
-        start_idx = i * split_size
-        end_idx = (i + 1) * split_size if i < n_splits - 1 else len(data)  # 确保最后一部分包括所有剩余行
-        subset = data[start_idx:end_idx]  # 当前部分
-        n_days_list = list(range(5, 600, 20))
-        print(subset.iloc[0])
-        results = process_future_performance_in_pool(subset, n_days_list, signal=1)
-        for n_days, avg_return, prob_gain, count in results:
-            print(f"未来{n_days}根k线上涨概率为{prob_gain},上涨幅度{avg_return},总数{count}")
-        print()
-    #
-
-    # 输出结果
-
+print(result)
