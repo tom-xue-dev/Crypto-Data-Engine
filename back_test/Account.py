@@ -160,7 +160,7 @@ class FundingFeesManager:
 
 class StopLossLogic(ABC):
     @abstractmethod
-    def check_stop_loss(self, account, price_map, current_time):
+    def check_stop_loss(self, **kwargs):
         pass
 
 
@@ -267,6 +267,7 @@ class CostThresholdStrategy(StopLossLogic):
             if (asset, direction) not in self.holding_cost:
                 raise ValueError(f"holding {asset} not exist")
             if direction == "long":
+                continue
                 if curr_price < pos.entry_price * (1 - self.loss_threshold):
                     # 止损
                     positions_to_close.append((asset, direction))
@@ -287,12 +288,57 @@ class CostThresholdStrategy(StopLossLogic):
         del self.holding_cost[(asset, direction)]
 
 
+class CostATRStrategy(StopLossLogic):
+    def __init__(self, long_gain_times=4, long_loss_times=2, short_gain_times=1, short_loss_times=1):
+        self.holding_cost = {}  # 用于跟踪持仓成本
+        self.long_gain_times = long_gain_times
+        self.long_loss_times = long_loss_times
+        self.short_gain_times = short_gain_times
+        self.short_loss_times = short_loss_times
+
+    def init_holding(self, asset, direction, price, **kwargs):
+        self.holding_cost[(asset, direction)] = price
+
+    def check_stop_loss(self, account, current_time, price_map, atr_value, **kwargs):
+        """
+        price_map为一个字典，为当前时间戳所有的资产信息
+        """
+        positions_to_close = []
+
+        for (asset, direction), pos in account.positions.items():
+            curr_price = price_map.get(asset)
+            atr = atr_value[asset]
+            if (asset, direction) not in self.holding_cost:
+                raise ValueError(f"holding {asset} not exist")
+            # print(pos.entry_price, self.loss_times * atr)
+            if direction == "long":
+                if curr_price < pos.entry_price - self.long_loss_times * atr:
+                    # 止损
+                    positions_to_close.append((asset, direction))
+                elif curr_price > pos.entry_price + self.long_gain_times * atr:
+                    # 止盈
+                    positions_to_close.append((asset, direction))
+
+            elif direction == "short":
+                if curr_price < pos.entry_price - self.short_gain_times * atr:
+                    # 止损
+                    positions_to_close.append((asset, direction))
+                elif curr_price > pos.entry_price + self.short_loss_times * atr:
+                    # 止盈
+                    positions_to_close.append((asset, direction))
+
+        return positions_to_close
+
+    def holding_close(self, asset, direction):
+        del self.holding_cost[(asset, direction)]
+
+
 class PositionManager:
     def __init__(self, threshold=0.05):
         self.threshold = threshold
         pass
 
-    def get_allocate_pos(self, signal, market_cap, account: Account):
+    def get_allocate_pos(self, asset, price, signal, market_cap, account: Account, atr_value):
         """
         检测多空持仓，限制单方持仓大于6成仓位
         """
@@ -304,21 +350,61 @@ class PositionManager:
             elif direction == "short":
                 short_cap += pos.entry_price * pos.quantity
 
+        direct = "long" if signal == 1 else "short"
+        asset_pos = 0
+        if (asset, direct) in account.positions:
+            asset_pos = account.positions[(asset, direct)].quantity * price
+
         total_cap = market_cap + account.cash
-        target_pos = min(total_cap * self.threshold, account.cash)
+        if asset_pos > total_cap * self.threshold:
+            return 0
+        target_pos = min(total_cap * self.threshold - asset_pos, account.cash)
         if signal == 1:
-            if long_cap / total_cap > 0.9:
-                return 0
-            if long_cap / total_cap > 0.4:
-                return target_pos / 2
-            else:
-                return target_pos
-        elif signal == -1:
-            if short_cap / total_cap > 0.6:
-                return 0
-            if short_cap / total_cap > 0.4:
-                return target_pos / 2
-            else:
-                return target_pos
+            return target_pos
+        elif signal == -1 or signal == -2:
+            return target_pos
+        else:
+            return 0
+
+
+class AtrPositionManager:
+    def __init__(self, loss_times=1, risk_percent=0.01):
+        self.holding_cost = {}  # 用于跟踪持仓成本
+        self.loss_times = loss_times
+        self.risk_percent = risk_percent
+
+    def get_allocate_pos(self, asset, price, signal, market_cap, account: Account, atr_value):
+        """
+        检测多空持仓，限制单方持仓大于6成仓位
+        """
+        long_cap = 0
+        short_cap = 0
+        for (asset, direction), pos in account.positions.items():
+            if direction == "long":
+                long_cap += pos.entry_price * pos.quantity
+            elif direction == "short":
+                short_cap += pos.entry_price * pos.quantity
+
+        direct = "long" if signal == 1 else "short"
+        asset_pos = 0
+        if (asset, direct) in account.positions:
+            asset_pos = account.positions[(asset, direct)].quantity * price
+        atr = atr_value[asset]
+        total_cap = market_cap + account.cash
+
+        risk_amount = total_cap * self.risk_percent
+        per_unit_risk = atr * self.loss_times
+        position_size = risk_amount / per_unit_risk * price
+        target_pos = min(position_size, account.cash)
+        if signal == 1:
+            return target_pos
+        elif signal == -1 or signal == -2:
+            return target_pos
+            # if short_cap / total_cap > 0.6:
+            #     return 0
+            # if short_cap / total_cap > 0.4:
+            #     return target_pos / 2
+            # else:
+            #     return target_pos
         else:
             return 0

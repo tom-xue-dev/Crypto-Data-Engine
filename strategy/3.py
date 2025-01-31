@@ -15,16 +15,15 @@ def calculate_garman_klass_volatility(group, window):
 
 
 if __name__ == "__main__":
-    with open("data_filter_2.pkl", "rb") as file:
+    with open("data_signal(33,600,2.0).pkl", "rb") as file:
         data = pickle.load(file)
-    data = data.set_index(['time', 'asset'])
 
-    window = 50
+    window = 200
     result = data.groupby(level='asset', group_keys=False).apply(calculate_garman_klass_volatility, window=window)
 
     for t, group in result.groupby('asset'):
-        condition = (group["GK_vol_rolling"] > 1e-4) & (group["signal"] == 1)
-        result.loc[group.index[condition], 'signal'] = 0
+        condition = (group["GK_vol"] > group['GK_vol_rolling'] + 5*group["GK_vol"].rolling(window=window).std())
+        result.loc[group.index[condition], 'signal'] = -1
 
     n_days_list = list(range(5, 600, 20))
 

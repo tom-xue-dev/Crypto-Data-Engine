@@ -1,7 +1,7 @@
 import pickle
 import sys
 import matplotlib.pyplot as plt
-from read_large_files import load_filtered_data_as_list, select_assets
+from read_large_files import load_filtered_data_as_list, select_assets, map_and_load_pkl_files
 import pandas as pd
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
@@ -49,24 +49,22 @@ def build_segments_n(dataset: pd.DataFrame, n: int) -> list[tuple[float, float]]
 
 
 def compare_and_merge(segA: tuple[float, float], segB: tuple[float, float]) -> tuple[
-    tuple[bool, bool], tuple[float, float]]:
-    """
-    比较 segA 与 segB 的 (min, max)，返回:
-    1) (is_min_lower, is_max_lower)
-    2) 合并后的新 segment (merged_min, merged_max)
-    """
+    tuple[bool, bool], tuple[bool, bool], tuple[float, float]]:
     minA, maxA = segA
     minB, maxB = segB
     is_min_lower = (minA < minB)
     is_max_lower = (maxA < maxB)
 
+    is_min_higher = (minA > minB)
+    is_max_higher = (maxA > maxB)
+
     # 合并后新的 segment
     merged_min = min(minA, minB)
     merged_max = max(maxA, maxB)
-    return (is_min_lower, is_max_lower), (merged_min, merged_max)
+    return (is_min_lower, is_max_lower), (is_min_higher, is_max_higher), (merged_min, merged_max)
 
 
-def compare_segments_n(segments: list[tuple[float, float]]) -> list[tuple[bool, bool]]:
+def compare_segments_n(segments: list[tuple[float, float]]) -> list[tuple[bool, bool, bool, bool]]:
     """
     给定最底层 (2^n 个) segments，使用自底向上的两两合并，
     每合并一次就记录一个 (is_min_lower, is_max_lower)。
@@ -77,18 +75,24 @@ def compare_segments_n(segments: list[tuple[float, float]]) -> list[tuple[bool, 
 
     # 不断两两合并，直到只剩一个
     while len(layer) > 1:
+        weight = 0
+        for i in range(1, 5):
+            if len(layer) == pow(2, i):
+                weight = 4 - i
         next_layer = []
         for i in range(0, len(layer), 2):
             segA = layer[i]
             segB = layer[i + 1]
-            (is_min_lower, is_max_lower), merged_seg = compare_and_merge(segA, segB)
-            results.append((is_min_lower, is_max_lower))
+            (is_min_lower, is_max_lower), (is_min_higher, is_max_higher), merged_seg = compare_and_merge(segA, segB)
+            results.append(
+                (is_min_lower * weight, is_max_lower * weight, is_min_higher * weight, is_max_higher * weight))
             next_layer.append(merged_seg)
         layer = next_layer
+
     return results
 
 
-def check_halves_n(dataset: pd.DataFrame, n: int = 4) -> list[tuple[bool, bool]]:
+def check_halves_n(dataset: pd.DataFrame, n: int = 3):
     """
     综合入口:
     1) 先按 time 切成 2^n 份，得到每份 (min_low, max_high)
@@ -99,7 +103,7 @@ def check_halves_n(dataset: pd.DataFrame, n: int = 4) -> list[tuple[bool, bool]]
     segments = build_segments_n(dataset, n=n)
     # 2) 自底向上合并并比较
     results = compare_segments_n(segments)
-    return results
+    return segments, results
 
 
 def future_performance_task(data, n_days, signal):
@@ -152,7 +156,6 @@ def future_performance(data, n_days, signal):
 
     # 初始化 signal = 1 的数量
     signal_count = 0
-
     # 按资产分组计算
     for asset, group in data.groupby("asset"):
         group = group.reset_index()  # 重置索引，方便按行号处理
@@ -200,57 +203,49 @@ def calculate_garman_klass_volatility(group, window):
 
 
 def process_asset_signals_wrapper(params):
-    group, window, threshold, volatility_threshold = params
-    return process_asset_group(group, window, threshold, volatility_threshold)
+    group, window = params
+    return process_asset_group(group, window)
 
 
-def process_asset_group(group, window, threshold, volatility_threshold):
+def process_asset_group(group, window):
     """
     对单个资产组的数据进行信号生成。
     """
 
-    group["signal"] = 0  # 初始化信号列
-
+    group["signal"] = group["count_first"] = group["count_sec"] = 0  # 初始化信号列
+    # group["high_low_array"] = "0"
     for i in range(len(group)):
-        if i - int(window / 50) < window * 5:
+        if i - window <= 0:
             continue  # 跳过窗口不足的前几天
-
-        recent_kline_limit = i - int(window / 100)
-
         condition_long = False
+        condition_short = False
         sub_df = group.iloc[i - window:i]
-        current_close_long = group.iloc[i]["close"]
-        ans = check_halves_n(sub_df)
-        count_first_true = sum(1 for x in ans if x[0])
-        count_sec_true = sum(1 for x in ans if x[1])
+        current_close = group.iloc[i]["close"]
+        prev_close = group.iloc[i - window]["close"]
+        segments, ans = check_halves_n(sub_df)
+        count_first_true = sum(x[0] for x in ans)
+        count_sec_true = sum(x[1] for x in ans)
+
+        count_third_true = sum(x[2] for x in ans)  # 前段区间最低值是否更高
+        count_forth_true = sum(x[3] for x in ans)  # 前段区间最高值是否更高
         # print(f"第1个元素为 True 的元组数量: {count_first_true}")
         # print(f"第2个元素为 True 的元组数量: {count_sec_true}")
-        if count_first_true > 10 and count_sec_true > 10:
+        # print(count_third_true,count_forth_true,current_close)
+        if count_first_true > 6 or count_sec_true > 6:
             condition_long = True
-        #over_look_past_long = group.iloc[i - window * 5:i]["close"].idxmax()
-        # 检查是否满足条件 1
-        # 当前收盘必须大于等于之前的最低收盘价
-        # current_close_short = group.iloc[i]["low"]
-        # past_min_low_idx = group.iloc[i - window:i]["low"].idxmin()  # 找到最高价所在的索引
-        # past_min_low = group.loc[past_min_low_idx, "low"]  # 获取过去最高价
-        #
-        # condition_short = past_min_low >= current_close_short * (
-        #         1 + threshold
-        # )
-
-        # if condition_long and condition_short:
-        #     continue
-
+        if count_first_true < 3 or count_sec_true < 3:
+            condition_short = True
+        # if count_third_true > 8 and count_forth_true > 8:
+        #     condition_short = True
+        # if count_third_true < 3 and count_third_true < 3:
+        #     condition_long = True
+        group.iloc[i, group.columns.get_loc("count_first")] = count_first_true
+        group.iloc[i, group.columns.get_loc("count_sec")] = count_sec_true
+        # print(str(segments))
         if condition_long:
-            # if group.index.get_loc(past_max_high_idx) >= recent_kline_limit:
-            #     continue  # 如果最高价的索引在最近 window/10 根 K 线内，跳过
-            # if group.iloc[i]["MA50"] < group.iloc[i - 50]["MA50"]:
-            #     continue
-            # if group.loc[over_look_past_long, "high"] * 0.5 < current_close_long < group.loc[
-            #     over_look_past_long, "high"]:  # 超远搜索过去2个月的最高价格
-            #     continue
             group.iloc[i, group.columns.get_loc("signal")] = 1
-
+        if condition_short:
+            group.iloc[i, group.columns.get_loc("signal")] = -2
     return group
 
 
@@ -261,7 +256,7 @@ def generate_signal_short(data, window, threshold, volatility_threshold=None):
     # 按资产分组
     grouped_data = [group for _, group in data.groupby("asset")]
 
-    params = [(group, window, threshold, volatility_threshold) for group in grouped_data]
+    params = [(group, window) for group in grouped_data]
     # 使用线程池并行处理每个资产组
 
     with ProcessPoolExecutor() as executor:
@@ -291,8 +286,8 @@ def visualize_signals(data, asset):
     signals = asset_data['signal']
 
     # 找到 signal=1 的点
-    signal_times = times[signals == 1]
-    signal_prices = close_prices[signals == 1]
+    signal_times = times[signals == -2]
+    signal_prices = close_prices[signals == -2]
 
     # 绘图
     plt.figure(figsize=(12, 6))
@@ -322,32 +317,33 @@ if __name__ == "__main__":
     # start = "2023-1-1"
     # end = "2023-12-30"
 
-    start = "2022-1-1"
-    end = "2024-11-30"
+    start = "2018-11-1"
+    end = "2019-11-30"
 
-    assets = select_assets(spot=True, n=200)
-    print(assets)
-    # assets = ["REN-USDT_spot"]
-    data = load_filtered_data_as_list(start, end, assets, level="15min")
+    assets = select_assets(spot=True, n=5)
+
+    # print(assets)
+    #assets = ['OCEAN-USDT_spot']
+    data = map_and_load_pkl_files(start_time=start, asset_list=assets, end_time=end, level='15min')
     # strategy.calculate_MA(period=300)
     # strategy.calculate_MA(period=1000)
-    data = pd.concat(data, ignore_index=True)
-
-    data = data.set_index(["time", "asset"])
-    result = generate_signal_short(data, window=1200, threshold=0.01)
+    # print(data)
+    result = generate_signal_short(data, window=32, threshold=1)
+    print(result)
     with open("data.pkl", "wb") as file:
         pickle.dump(result, file)
     n_days_list = list(range(5, 600, 20))
     results = process_future_performance_in_pool(result, n_days_list, signal=1)
+
     # 输出结果
-    for n_days, avg_return, prob_gain, count in results:
-        print(f"未来{n_days}根k线上涨概率为{prob_gain},上涨幅度{avg_return},总数{count}")
-
-    results = process_future_performance_in_pool(result, n_days_list, signal=-1)
-    for n_days, avg_return, prob_gain, count in results:
-        print(f"未来{n_days}根k线上涨概率为{prob_gain},上涨幅度{avg_return},总数{count}")
-
+    # for n_days, avg_return, prob_gain, count in results:
+    #     print(f"未来{n_days}根k线上涨概率为{prob_gain},上涨幅度{avg_return},总数{count}")
     #
+    # results = process_future_performance_in_pool(result, n_days_list, signal=-1)
+    # for n_days, avg_return, prob_gain, count in results:
+    #     print(f"未来{n_days}根k线上涨概率为{prob_gain},上涨幅度{avg_return},总数{count}")
+    #
+    # #
     for asset in assets:
         if asset in result.index.get_level_values("asset"):
             visualize_signals(result, asset)

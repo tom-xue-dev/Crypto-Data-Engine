@@ -7,7 +7,8 @@ from read_large_files import load_filtered_data_as_list, select_assets
 import time
 from strategy import DualMAStrategy
 from backtest_simulation import Backtest, Broker
-from Account import Account, PositionManager, DefaultStopLossLogic, HoldNBarStopLossLogic, CostThresholdStrategy
+from Account import Account, PositionManager, DefaultStopLossLogic, HoldNBarStopLossLogic, CostThresholdStrategy, \
+    CostATRStrategy,AtrPositionManager
 from mann import MannKendallTrendByRow, filter_signals_by_daily_vectorized
 from back_test_evaluation import PerformanceAnalyzer
 from concurrent.futures import ProcessPoolExecutor
@@ -216,21 +217,24 @@ if __name__ == "__main__":
     # #
     # strategy_results = pd.concat(strategy_results, ignore_index=True)
     # strategy_results = strategy_results.set_index(["time", "asset"])
-    with open("data_filter_3.pkl", "rb") as file:
+    with open("data.pkl", "rb") as file:
         strategy_results = pickle.load(file)
-    #strategy_results = strategy_results.set_index(["time", "asset"])
-    account = Account(initial_cash=100000)
-    #stop = CostThresholdStrategy(gain_threshold=0.05, loss_threshold=0.05)
-    stop = HoldNBarStopLossLogic(windows=350)
-    # stop = DefaultStopLossLogic(max_drawdown=0.08)
+    #strategy_results = strategy_results[:len(strategy_results)//2]
+    print(strategy_results)
+    # strategy_results = strategy_results.set_index(["time", "asset"])
+    account = Account(initial_cash=13000)
+    #stop = CostThresholdStrategy(gain_threshold=0.2, loss_threshold=0.2)
+    stop = HoldNBarStopLossLogic(windows=75)
+    #stop = DefaultStopLossLogic(max_drawdown=0.05)
+    #stop = CostATRStrategy()
     broker = Broker(account, stop_loss_logic=stop)
-    pos_manager = PositionManager(threshold=0.1)
+    #pos_manager = AtrPositionManager(risk_percent=0.05,loss_times=1)
+    pos_manager = PositionManager(threshold=0.5)
     backtester = Backtest(broker, strategy_results, pos_manager)
     print("start_running")
     s = time.time()
     result = backtester.run()
     e = time.time()
-    print(e - s)
 
     analyser = PerformanceAnalyzer(result["net_value_history"])
 

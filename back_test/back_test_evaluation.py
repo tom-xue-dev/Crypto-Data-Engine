@@ -4,11 +4,17 @@ from matplotlib import pyplot as plt
 
 
 class PerformanceAnalyzer:
-    def __init__(self, net_value_df: pd.DataFrame):
+    def __init__(self, net_value_df: pd.DataFrame, asset_name: str = None, asset_data: pd.DataFrame = None):
         """
         net_value_df: DataFrame，至少包含 ['time', 'net_value'] 字段。
         时间可以是索引或者一列，根据你的数据格式定。
         """
+        self.asset_name = asset_name
+        if not asset_name is None:
+            if asset_name not in asset_data.index.get_level_values('asset'):
+                raise ValueError(f"指定的资产名称 '{asset_name}' 不在数据中。")
+            self.asset_net_value_df = asset_data.loc[(slice(None), asset_name), :].reset_index(level='asset', drop=True)
+
         self.net_value_df = net_value_df.copy()
         self._prepare_data()
 
@@ -30,12 +36,27 @@ class PerformanceAnalyzer:
         # 计算收益率 (如按 bar 计算)
         self.net_value_df['returns'] = self.net_value_df['net_value'].pct_change().fillna(0)
 
+        self.net_value_df['normalized_net_value'] = (
+                self.net_value_df['net_value'] / self.net_value_df['net_value'].iloc[0]
+        )
+        if self.asset_name:
+            self.asset_net_value_df['normalized_net_value'] = (
+                    self.asset_net_value_df['close'] / self.asset_net_value_df['close'].iloc[0]
+            )
+
     def plot_net_value(self):
         """
         绘制净值曲线
         """
+        # self.net_value_df, self.asset_net_value_df = self.net_value_df.align(
+        #     self.asset_net_value_df, join='inner'
+        # )
         plt.figure(figsize=(10, 6))
-        plt.plot(self.net_value_df.index, self.net_value_df['net_value'], label='Net Value')
+
+        plt.plot(self.net_value_df.index, self.net_value_df['normalized_net_value'], label='Account Net Value')
+        if self.asset_name:
+            plt.plot(self.net_value_df.index, self.asset_net_value_df['normalized_net_value'],
+                     label=f'{self.asset_name} Net Value')
         plt.title('Net Value Over Time')
         plt.xlabel('Time')
         plt.ylabel('Net Value')

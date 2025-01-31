@@ -86,10 +86,10 @@ def load_filtered_data_as_list(start_time, end_time, asset_list, level: str):
     return filtered_list
 
 
-def map_and_load_pkl_files(level: str):
+def map_and_load_pkl_files(level: str, asset_list=None, start_time=None, end_time=None):
     # 获取文件列表，按名称排序（假设文件名格式为 YYYY-MM.pkl）
     script_path = Path(__file__).resolve()
-    folder_path = script_path.parents[1] / "data" / "data_divided_by_mouth" / level
+    folder_path = script_path.parents[1] / "data" / "big_files" / level
 
     files = sorted([f for f in os.listdir(folder_path) if f.endswith('.pkl')])
 
@@ -102,13 +102,40 @@ def map_and_load_pkl_files(level: str):
 
             # 使用 pickle 加载数据
             loaded_data = pickle.loads(mm[:])
-            data.append((file_name, loaded_data))  # 保存文件名和对应数据
-
-            # 关闭 mmap
             mm.close()
 
-    return data
+            # 现在 loaded_data 是一个 MultiIndex DataFrame
+            if isinstance(loaded_data, pd.DataFrame):  # 确保它是 DataFrame
+                # 检查 MultiIndex 是否存在
+                if isinstance(loaded_data.index, pd.MultiIndex):
+                    df = loaded_data
+                    # 过滤时间范围
+                    if start_time and end_time:
+                        # 假设 time 列是索引的第一层
+                        df = df[(df.index.get_level_values('time') >= start_time) &
+                                (df.index.get_level_values('time') <= end_time)]
 
+                    # 过滤资产列表
+                    if asset_list:
+                        df = df[df.index.get_level_values('asset').isin(asset_list)]
+
+                    # 如果 DataFrame 仍然有数据，则加入结果列表
+                    if not df.empty:
+                        data.append((file_name, df))
+                    else:
+                        asset_list.append(select_assets(spot=True,n=1))
+                else:
+                    print(f"警告：{file_name} 的索引不是 MultiIndex 类型。")
+            else:
+                print(f"警告：{file_name} 的数据不是 DataFrame 类型。")
+
+    # 拼接所有符合条件的 DataFrame（保持 MultiIndex）
+    if data:
+        combined_df = pd.concat([df for _, df in data], axis=0)
+        return combined_df
+    else:
+        print("没有符合条件的数据。")
+        return pd.DataFrame()  # 返回一个空的 DataFrame
 
 def select_assets(future = False, spot = False, n = 5):
     """

@@ -1,286 +1,178 @@
+import pickle
+import sys
+import ast
+import statsmodels.api as sm
 import numpy as np
 import pandas as pd
-from read_large_files import load_filtered_data_as_list, select_assets
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, confusion_matrix
-from imblearn.over_sampling import SMOTE
-import matplotlib.pyplot as plt
+from strategy import DualMAStrategy
+from read_large_files import map_and_load_pkl_files, select_assets
 
-def generate_signal(data, window, threshold, std_threshold=None):
+
+def calc_beta(df: pd.DataFrame, window_size: int):
+    df["beta"] = np.nan
+    for asset, group in df.groupby('asset'):
+        for i in range(window_size, len(group)):
+            x_window = group.iloc[i - window_size:i]["low"].values
+            y_window = group.iloc[i - window_size:i]["high"].values
+            X = sm.add_constant(x_window)
+            model = sm.OLS(y_window, X)
+            results = model.fit()
+            beta = results.params[1]
+            df.loc[group.index[i], "beta"] = beta
+    pd.set_option('display.max_columns', 20)
+    return df
+
+
+def calculate_garman_klass_volatility(group, window):
     """
-    生成交易信号列，基于过去 window 天内的最高价和当前 close 价格的比较。
-
-    参数:
-        data: DataFrame, 数据集
-        window: int, 回看窗口天数
-        threshold: float, 阈值（百分比，如 0.1 表示 10%）
-
-    返回:
-        带有 signal 列的 DataFrame
+    在 DataFrame 中添加 Garman-Klass 波动率列。
     """
-    # 添加 signal 列，初始化为 0
-    data["signal"] = 0
+    group['GK_vol'] = (
+            0.5 * (np.log(group['high'] / group['low'])) ** 2 -
+            (2 * np.log(2) - 1) / window * (np.log(group['close'] / group['open'])) ** 2
+    )
+    group['GK_vol_rolling'] = group['GK_vol'].rolling(window=window).mean()
+    return group
 
-    # 对每个资产进行操作
-    for asset, group in data.groupby("asset"):
-        group = group.copy()  # 防止修改原始数据
 
-        for i in range(len(group)):
-            if i < window:
-                continue  # 跳过窗口不足的前几天
-
-            # 当前 close 和过去 window 天的最高价
-            current_close = group.iloc[i]["high"]
-            past_max_high_idx = group.iloc[i - window:i]["high"].idxmax()  # 找到最高价所在的索引
-            past_max_high = group.loc[past_max_high_idx, "high"]  # 获取过去最高价
-            past_low = group.loc[past_max_high_idx, "low"]  # 获取过去最高价对应的最低价
-
-            # 跳过最高价属于最近 window / 10 根 K 线的情况
-            recent_kline_limit = max(i - int(window / 10), i - window)
-            if group.index.get_loc(past_max_high_idx) >= recent_kline_limit:
-                continue  # 如果最高价的索引在最近 window/10 根 K 线内，跳过
-
-            condition_std_low = None
-            if std_threshold is not None:
-                past_close_std = group.iloc[i - window:i]["close"].std()
-                condition_std_low = past_close_std <= std_threshold
-
-            # 检查是否满足条件 1
-            condition_close_to_low = current_close * (1 - threshold) <= past_max_high <= current_close * (
-                    1 + threshold
-            )
-
-            # 如果所有条件满足，则标记信号
-            if std_threshold is not None:
-                if condition_close_to_low and condition_std_low:
-                    group.iloc[i, group.columns.get_loc("signal")] = 1
-            else:
-                if condition_close_to_low:
-                    group.iloc[i, group.columns.get_loc("signal")] = 1
-
-        # 更新原始数据
-        data.loc[group.index, "signal"] = group["signal"]
-
-    return data
-
-def make_features_and_labels(data: pd.DataFrame,
-                             future_n: int = 5) -> pd.DataFrame:
+def calculate_atr(df, time_period=14):
     """
-    基于多重索引 (time, asset) 的行情数据，生成随机森林所需的特征和标签。
+    计算ATR（平均真实波动幅度）并将其插入到原始DataFrame中。
 
     参数：
-    -------
-    data : pd.DataFrame
-        MultiIndex = (time, asset)，含列 [open, high, low, close]。
-    future_n : int
-        未来多少根K线后判断涨跌（默认5）。
+        df (pd.DataFrame): MultiIndex DataFrame，索引为time和asset，列包含open, high, low, close。
+        time_period (int): ATR的计算周期，默认值为14。
 
     返回：
-    -------
-    df_features : pd.DataFrame
-        新增了以下列：
-        - 'ma_5': 过去5日均线
-        - 'ma_10': 过去10日均线
-        - 'ma_20': 过去20日均线
-        - 'ma_30': 过去30日均线
-        - 'ma_90': 过去90日均线
-        - 'feature_range80': p90 和 p10 的均值
-        - 'std_5': 过去5日标准差
-        - 'std_10': 过去10日标准差
-        - 'std_20': 过去20日标准差
-        - 'label': (0/1)，0表示下跌/持平，1表示上涨
+        pd.DataFrame: 带有新增ATR列的DataFrame。
     """
+    # 验证列是否存在
+    required_columns = {'high', 'low', 'close'}
+    if not required_columns.issubset(df.columns):
+        raise ValueError(f"DataFrame 必须包含以下列：{required_columns}")
 
-    def p10(s):
-        return s.quantile(0.10)
+    # 计算真实波幅（True Range, TR）
+    df['prev_close'] = df.groupby('asset')['close'].shift(1)
+    df['tr'] = df[['high', 'low', 'prev_close']].apply(
+        lambda row: max(row['high'] - row['low'],
+                        abs(row['high'] - row['prev_close']),
+                        abs(row['low'] - row['prev_close'])), axis=1
+    )
 
-    def p90(s):
-        return s.quantile(0.90)
+    # 计算ATR（使用简单移动平均）
+    df['atr'] = df.groupby('asset')['tr'].transform(lambda x: x.rolling(window=time_period, min_periods=1).mean())
 
-    # 确保按 time 排序
-    data = data.sort_index(level='time').copy()
+    # 删除中间列
+    df.drop(columns=['prev_close', 'tr'], inplace=True)
 
-    # 对每个资产进行一次 groupby
-    def calculate_features(group):
-        # 计算 p10 和 p90
-        group['p10'] = group['close'].rolling(30, min_periods=30).apply(p10)
-        group['p90'] = group['close'].rolling(30, min_periods=30).apply(p90)
-        group['feature_range80'] = (group['p90'] + group['p10']) / 2
-
-        # 计算不同窗口的移动均线
-        for window in [5, 30, 90]:
-            group[f'ma_{window}'] = group['close'].rolling(window=window, min_periods=window).mean()
-
-        # 计算标准差
-        group['std_5'] = group['close'].rolling(window=5, min_periods=5).std()
-        group['std_10'] = group['close'].rolling(window=10, min_periods=10).std()
-        group['std_20'] = group['close'].rolling(window=20, min_periods=20).std()
-
-        # 计算未来收盘价
-        group['future_close'] = group['close'].shift(-future_n)
-
-        # 定义标签
-        group['label'] = (group['future_close'] > group['close']).astype(int)
-
-        return group
-
-    # 应用计算
-    data = data.groupby(level='asset').apply(calculate_features)
-
-    # 清理无效行：rolling或shift导致的 NaN
-    required_columns = [f'ma_{window}' for window in [5, 30, 90]] + ['std_5', 'std_10', 'std_20', 'label']
-    data.dropna(subset=required_columns, inplace=True)
-
-    return data
+    return df
 
 
-def train_random_forest_and_predict(df_train: pd.DataFrame,
-                                    df_test: pd.DataFrame):
-    """
-    在训练集上训练随机森林，并在测试集上做预测，输出分类结果。
-    """
-    # 特征列 & 标签列
-    features = ['ma_5', 'ma_30', 'ma_90', 'std_5', 'std_10','std_20', 'feature_range80', 'close','signal']
-    target = 'label'
+def filter_data(data_set):
+    for t, group in data.groupby('time'):
+        for index, row in group.iterrows():
+            if not row['beta'] > 1:  # 判断条件
+                if data_set.loc[index, 'signal'] == 1:
+                    data_set.loc[index, 'signal'] = 0  # 满足条件更新 'signal' 列
+            if row['beta'] < 0.7:
+                if data_set.loc[index, 'signal'] == -1:
+                    data_set.loc[index, 'signal'] = -2
+            if not row['beta'] < 0.7:
+                if data_set.loc[index, 'signal'] == -1:
+                    data_set.loc[index, 'signal'] = 0
+        first_sum = group['count_first'].sum()
+        sec_sum = group['count_sec'].sum()
+        if first_sum + sec_sum < 30:
+            data_set.loc[group.index, 'signal'] = -1
+            # if row['beta'] > 1:  # 判断条件
+            #     if data_set.loc[index, 'signal'] == -1:
+            #         data_set.loc[index, 'signal'] = 0
+            # if row['beta'] < 0.6:
+            #     if data_set.loc[index, 'signal'] == -1:
+            #         data_set.loc[index, 'signal'] = -2
 
-    X_train = df_train[features].values
-    y_train = df_train[target].values
+    return data_set
 
-    X_test = df_test[features].values
-    y_test = df_test[target].values
-
-    # 初始化随机森林
-    rf = RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42, class_weight='balanced')
-
-    rf.fit(X_train, y_train)
-
-    # 预测
-    y_pred = rf.predict(X_test)
-
-    # 打印评估
-    print("Confusion Matrix:")
-    print(confusion_matrix(y_test, y_pred))
-    print("\nClassification Report:")
-    print(classification_report(y_test, y_pred))
-
-    # 将结果存储到 df_test 中
-    df_test['pred_label'] = y_pred
-    feature_importance = rf.feature_importances_
-    plt.barh(features, feature_importance)
-    plt.show()
-    # 返回模型 & 测试集(含预测结果)
-    return rf, df_test
-
-
-def train_test_split_by_time(df_features: pd.DataFrame, train_ratio=0.8):
-    """
-    按时间顺序进行切分，将前 train_ratio 部分数据作为训练集，后面部分作为测试集。
-    """
-    df_features = df_features.copy()
-
-    # 获取所有 time 索引，并按顺序去重
-    # multiIndex 的 level=0 是 time，unique后再sort
-    all_times = df_features.index.get_level_values('time').unique()
-    all_times = sorted(all_times)
-
-    split_point = int(len(all_times) * train_ratio)
-    train_time = all_times[:split_point]
-    test_time = all_times[split_point:]
-
-    df_train = df_features.loc[df_features.index.get_level_values('time').isin(train_time)]
-    df_test = df_features.loc[df_features.index.get_level_values('time').isin(test_time)]
-
-    return df_train, df_test
+i = 0
+while i < 10:
+    start = "2019-1-1"
+    end = "2022-12-30"
+    assets = select_assets(spot=True, n=1)
+    # assets = ['BTC-USDT_spot']
+    data = map_and_load_pkl_files(start_time=start, end_time=end, asset_list=assets, level='15min')
+    if data.empty:
+        i -= 1
+        continue
+    #data = calculate_atr(df=data)
+    data = calc_beta(data, window_size=32)
+    print(data)
+    with open(f"data{i}.pkl", "wb") as f:
+        pickle.dump(data, f)
+    i+=1
+# print(assets)
+# with open("data.pkl", "rb") as f:
+#     data = pickle.load(f)
+#
+# strategy = DualMAStrategy(dataset=data, long_period=150, short_period=5)
+# data = strategy.dataset
 
 
-def main_flow(data, window_size=100, future_n=5, train_ratio=0.8):
-    """
-    整合整个流程：
-    1) 生成特征和label
-    2) 按时间切分train/test
-    3) 训练随机森林并预测
-    """
-    # 1) 生成特征 & label
-    df_features = make_features_and_labels(data, future_n=future_n)
+# for i, current_index in enumerate(data.index):
+#     current_close = data.loc[current_index]['MA150']
+#     prev_index = data.index[i - 20]
+#     pre_close = data.loc[prev_index, 'MA150']
+#     if current_close < pre_close:
+#         if data.loc[current_index]['signal'] == 1:
+#             data.loc[current_index,'signal'] = 0
 
-    # 2) 划分训练和测试集
-    df_train, df_test = train_test_split_by_time(df_features, train_ratio=train_ratio)
+# for t, df in data.groupby('time'):
+#     for i in range(len(df)):
+#         if df.loc[df.index[i], "signal"] == 1:
+#             if df.loc[df.index[i], "GK_vol"] > df.loc[df.index[i], "GK_vol_rolling"] * 3:
+#                 data.loc[df.index[i], "signal"] = -1
+#
+# with open("data_atr.pkl", "wb") as f:
+#     pickle.dump(data, f)
 
-    # 3) 训练模型并预测
-    model, df_test_pred = train_random_forest_and_predict(df_train, df_test)
-
-    return model, df_train, df_test_pred
-
-
-def future_performance(data, n_days):
-    """
-    计算 signal = 1 的情况下，未来 n 天的平均涨跌幅和涨跌概率。
-
-    参数:
-        data: DataFrame, 包含 'signal' 列和 'close' 列的数据集（MultiIndex）
-        n_days: int, 未来天数窗口
-
-    返回:
-        avg_return: float, 平均涨跌幅
-        prob_gain: float, 涨幅概率
-        signal_count: int, signal = 1 的数量
-    """
-    # 初始化列表存储未来的涨跌幅
-    future_returns = []
-
-    # 初始化 signal = 1 的数量
-    signal_count = 0
-
-    # 按资产分组计算
-    for asset, group in data.groupby("asset"):
-        group = group.reset_index()  # 重置索引，方便按行号处理
-
-        # 遍历 signal = 1 的行
-        for i in group[group["signal"] == 1].index:
-            signal_count += 1  # 累加 signal = 1 的数量
-
-            # 获取当前的 close 值
-            current_close = group.loc[i, "close"]
-
-            # 检查未来 n 天是否有足够的数据
-            if i + n_days >= len(group):  # 如果未来 n 天不足，跳过
-                continue
-
-            # 计算未来 n 天的平均 close
-            future_close = group.loc[i + 1:i + n_days, "close"].mean()
-
-            # 计算涨跌幅
-            return_pct = (future_close - current_close) / current_close
-            future_returns.append(return_pct)
-
-    # 计算平均涨跌幅
-    avg_return = np.mean(future_returns) if future_returns else 0
-
-    # 计算涨跌概率
-    prob_gain = np.mean(np.array(future_returns) > 0) if future_returns else 0
-
-    return avg_return, prob_gain, signal_count
+# 计算上影线长度
+# start = "2020-11-1"
+# end = "2022-11-30"
+#
+# assets = select_assets(spot=True, n=1)
+#
+# data = map_and_load_pkl_files(asset_list=assets,start_time=start,end_time=end,level="1d")
 
 
-start = "2023-1-1"
-end = "2024-11-30"
+# data['upper_shadow'] = data['high'] - data[['open', 'close']].max(axis=1)
+# data['lower_shadow'] = data[['open', 'close']].min(axis=1) - data['low']
+#
+# # # 计算过去 5 天成交量的均值
+# data['volume_mean_5'] = data['volume'].rolling(window=5, min_periods=1).mean()
+# #
+# # # 筛选条件
+# # # 1. 上影线长度显著（可定义一个阈值，比如上影线占总波动的比例超过一定值）
+# # # 2. 当前成交量大于过去 5 天均值
+# threshold = 0.5  # 定义上影线的阈值（如占总波动幅度的 50%）
+# # data['is_long_upper_shadow'] = (
+# #         (data['upper_shadow'] > threshold * (data['high'] - data['low']))
+# # )
+# data['is_long_upper_shadow'] = (
+#         (data['close'] - data['open']) / data['open'] < -0.05
+# )
+# data['is_long_lower_shadow'] = (
+#         (data['lower_shadow'] > threshold * (data['high'] - data['low'])) &  # 下影线很长
+#         (data['volume'] > data['volume_mean_5'])  # 成交量大于过去 5 天均值
+# )
+#
+# data.loc[data['is_long_upper_shadow'] & (data['signal'] == 1), 'signal'] = -2
+# data.loc[data['is_long_lower_shadow'], 'signal'] = 1
 
-assets = select_assets(spot=True, n=300)
+# 示例
 
-# assets = []
-data = load_filtered_data_as_list(start, end, assets, level="1d")
+# result.index = result.index.droplevel(0)  # 移除多余的 'asset' 层级
+# data['RSRI'] = result
 
-data = pd.concat(data, ignore_index=True)
 
-data = data.set_index(["time", "asset"])
-
-data = generate_signal(data.copy(), window=30, threshold=0.01, std_threshold=1)
-# 假设 data 是你的 MultiIndex DataFrame: index=(time, asset), columns=[open, high, low, close]
-model, df_train, df_test_pred = main_flow(
-    data,
-    window_size=100,  # 回看100根K线做分位计算
-    future_n=5,  # 预测5根K线后涨跌
-    train_ratio=0.8
-)
-
-# 查看测试集的一部分预测结果
+# 上一步 result 会是一个 DataFrame，列和原来一样 ['high', 'low']，
+# 但它们其实都一样，因为我们返回的是同一个标量beta
+# 可以取其中一列赋给 data['RSRI']：

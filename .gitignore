@@ -11,3 +11,5 @@ back_test/result.txt
 back_test/transactions.txt
 *.pkl
 /strategy_report/78bed-main
+*.pyc
+*.pyc
