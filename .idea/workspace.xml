@@ -4,30 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="43a80aa9-5ae9-44fa-896d-27c06c7df6fa" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/strategy/Kalman.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/strategy/LLT.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/strategy/MA_slope.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/strategy/auto_corr.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/strategy/cross-sectional_mom.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/strategy/cumsum_filter.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/strategy/merge.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/back_test/Account.py" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/Account.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/back_test/back_test_evaluation.py" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/back_test_evaluation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/back_test/backtest_simulation.py" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/backtest_simulation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/back_test/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/back_test/result.txt" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/result.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/back_test/transactions.txt" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/transactions.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/strategy/1.py" beforeDir="false" afterPath="$PROJECT_DIR$/strategy/1.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/strategy/2.py" beforeDir="false" afterPath="$PROJECT_DIR$/strategy/2.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/strategy/3.py" beforeDir="false" afterPath="$PROJECT_DIR$/strategy/3.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/strategy/analysis.py" beforeDir="false" afterPath="$PROJECT_DIR$/strategy/analysis.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/strategy/load.py" beforeDir="false" afterPath="$PROJECT_DIR$/strategy/load.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/strategy/momentun_strategy.py" beforeDir="false" afterPath="$PROJECT_DIR$/strategy/momentun_strategy.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/strategy/read_large_files.py" beforeDir="false" afterPath="$PROJECT_DIR$/strategy/read_large_files.py" afterDir="false" />
-    </list>
+    <list default="true" id="43a80aa9-5ae9-44fa-896d-27c06c7df6fa" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -56,15 +33,23 @@
   &quot;associatedIndex&quot;: 4
 }</component>
   <component name="ProjectId" id="2oueMOXWj7BFuuUG92LXQQNyQ9n" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
+    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
     &quot;Python.1.executor&quot;: &quot;Run&quot;,
+    &quot;Python.101.executor&quot;: &quot;Run&quot;,
     &quot;Python.2.executor&quot;: &quot;Run&quot;,
     &quot;Python.3.executor&quot;: &quot;Run&quot;,
+    &quot;Python.53.executor&quot;: &quot;Run&quot;,
+    &quot;Python.54.executor&quot;: &quot;Run&quot;,
+    &quot;Python.99.executor&quot;: &quot;Run&quot;,
     &quot;Python.Account.executor&quot;: &quot;Run&quot;,
     &quot;Python.Kalman.executor&quot;: &quot;Run&quot;,
     &quot;Python.LLT.executor&quot;: &quot;Run&quot;,
@@ -102,7 +87,7 @@
     &quot;Python.test.executor&quot;: &quot;Run&quot;,
     &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;back__test&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;feature&quot;,
     &quot;last_opened_file_path&quot;: &quot;D:/anaconda/python312.dll&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
   }
@@ -160,5 +145,8 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <option name="ADD_EXTERNAL_FILES_SILENTLY" value="true" />
   </component>
 </project>
