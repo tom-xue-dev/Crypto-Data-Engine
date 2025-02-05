@@ -117,8 +117,7 @@ def map_and_load_pkl_files(level: str, asset_list=None, start_time=None, end_tim
                         df = df[(df.index.get_level_values('time') >= start_time) &
                                 (df.index.get_level_values('time') <= end_time)]
 
-                    # 过滤资产列表
-                    if asset_list:
+                    if asset_list is not None:
                         df = df[df.index.get_level_values('asset').isin(asset_list)]
 
                     # 如果 DataFrame 仍然有数据，则加入结果列表
