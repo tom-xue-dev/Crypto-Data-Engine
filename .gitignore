@@ -13,3 +13,4 @@ back_test/transactions.txt
 /strategy_report/78bed-main
 *.pyc
 *.pyc
+*.csv
