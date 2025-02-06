@@ -5,13 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="43a80aa9-5ae9-44fa-896d-27c06c7df6fa" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/feature/feature_generation.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/feature/utils.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/feature/future_implementation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/BTC-trading.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/BTC-trading.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/DeepSeek-V3" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/1.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/1.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/101.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/101.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/read_large_files.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/read_large_files.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/feature/feature_generation.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/feature_generation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/feature/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/utils.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -78,6 +77,7 @@
     "Python.feature_generation.executor": "Run",
     "Python.filter_data.executor": "Run",
     "Python.funding_fees.executor": "Run",
+    "Python.future_implementation.executor": "Run",
     "Python.generate_pickles.executor": "Run",
     "Python.get_btc_info.executor": "Run",
     "Python.get_info.executor": "Run",

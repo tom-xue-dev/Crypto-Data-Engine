@@ -5,16 +5,41 @@ from pandas.core.algorithms import rank as rk
 
 ### Initial Operations
 def returns(df):
-    return df.groupby(level='asset', group_keys=False).rolling(2).apply(lambda x: x.iloc[-1] / x.iloc[0]) - 1
+    return df.groupby(level='asset', group_keys=False).apply(lambda x: x-x.shift(-1)) - 1
+
 
 
 def vwap(df):
     """
-    volume-weighted average price 
+    计算累计 VWAP（Volume Weighted Average Price）
+
+    对于每个资产，计算截止到每个时间点的累计 VWAP，即：
+      累计 VWAP = 累计 (price * volume) / 累计 volume
+
+    参数:
+      df: 包含多级索引的 DataFrame，索引第一级为 'time'，
+          第二级为 'asset'，并且至少包含 'close' 和 'volume' 两列。
+
+    返回:
+      一个 Series，索引与 df 相同，表示每个 (time, asset) 的累计 VWAP。
     """
-    return (df.groupby(level="asset", group_keys=False).volume * df.groupby(level="asset",
-                                                                            group_keys=False).close) / df.groupby(
-        level="asset", group_keys=False).volume
+    # 复制数据并确保按照时间排序（对每个资产都按时间排序）
+    df = df.copy().sort_index(level='time')
+
+    # 计算每笔交易的价格 * 成交量
+    df['price_volume'] = (df.close + df.high + df.low) / 3 * df['volume']
+
+    # 对每个资产计算累积求和
+    df['cum_price_volume'] = df.groupby(level='asset')['price_volume'].cumsum()
+    df['cum_volume'] = df.groupby(level='asset')['volume'].cumsum()
+
+    # 计算累计 VWAP，注意处理 cum_volume 为 0 的情况
+    df['vwap'] = df['cum_price_volume'] / df['cum_volume']
+    df.loc[df['cum_volume'] == 0, 'vwap'] = np.nan
+
+    # 返回累计 VWAP 列
+    # return df['vwap']
+    return (df.close + df.high + df.low) / 3
 
 
 def adv(df, d):
@@ -44,7 +69,7 @@ def stddev(df, window=10):
     :param window: the rolling window.
     :return: a pandas DataFrame with the time-series min over the past 'window' days.
     """
-    return df.groupby(level='asset', group_keys=False).rolling(window).std()
+    return df.groupby(level='asset', group_keys=False).rolling(window).std().droplevel(0)
 
 
 def scale(df, k=1):
@@ -86,7 +111,7 @@ def decay_linear(df, period=10):
     weights = np.array(range(1, period + 1))
     sum_weights = np.sum(weights)
     return df.groupby(level='asset', group_keys=False).rolling(period).apply(
-        lambda x: np.sum(weights * x) / sum_weights)
+        lambda x: np.sum(weights * x) / sum_weights).droplevel(0)
 
 
 def delta(df, d):
@@ -102,10 +127,10 @@ def corr(x, y, d):
     time-serial correlation of x and y for the past d days 
     """
     df = pd.concat([x, y], axis=1, keys=["df1", "df2"])
+    df = df.dropna()
     rolling_corr_all = df.groupby(level="asset", group_keys=False).apply(
         lambda x: x["df1"].rolling(window=d).corr(x["df2"])
     )
-
     return rolling_corr_all
 
 
@@ -136,18 +161,18 @@ def ts_max(df, d=10):
     :param d: number of days to look back (rolling window)
     :return: Pandas series
     """
-    return df.groupby(level="asset", group_keys=False).rolling(d).max()
+    return df.groupby(level="asset", group_keys=False).rolling(d).max().droplevel(0)
 
 
 def ts_min(df, d=10):
     """
-    The rolling min over the last d days. 
+    The rolling min over the last d days.
 
     :param df: data frame containing prices
     :param d: number of days to look back (rolling window)
     :return: Pandas series
     """
-    return df.groupby(level="asset", group_keys=False).rolling(d).min()
+    return df.groupby(level="asset", group_keys=False).rolling(d).min().droplevel(0)
 
 
 def ts_argmax(df, d):
@@ -158,7 +183,7 @@ def ts_argmax(df, d):
     :param d: number of days to look back (rolling window)
     :return: Pandas Series
     """
-    return df.groupby(level="asset", group_keys=False).rolling(d).apply(np.argmax).add(1)
+    return df.groupby(level="asset", group_keys=False).rolling(d).apply(np.argmax).add(1).droplevel(0)
 
 
 def ts_argmin(df, d):
@@ -169,7 +194,7 @@ def ts_argmin(df, d):
     :param d: number of days to look back (rolling window)
     :return: Pandas Series
     """
-    return df.groupby(level="asset", group_keys=False).rolling(d).apply(np.argmin).add(1)
+    return df.groupby(level="asset", group_keys=False).rolling(d).apply(np.argmin).add(1).droplevel(0)
 
 
 def ts_rank(df, d):
@@ -180,8 +205,7 @@ def ts_rank(df, d):
     :param d: number of days to look back (rolling window)
     :return: Pandas Series
     """
-
-    return df.groupby(level="asset", group_keys=False).rolling(d).apply(lambda x: pd.Series(x).rank(pct=True).iloc[-1])
+    return df.groupby(level="asset", group_keys=False).rolling(d).apply(lambda x: pd.Series(x).rank(pct=True).iloc[-1]).droplevel(0)
 
 
 def ts_sum(df, window=10):
@@ -191,4 +215,4 @@ def ts_sum(df, window=10):
     :param window: the rolling window size.
     :return: a pandas DataFrame with the rolling sum over the past 'window' days per asset.
     """
-    return df.groupby(level='asset', group_keys=False).rolling(window).sum()
+    return df.groupby(level='asset', group_keys=False).rolling(window).sum().droplevel(0)
