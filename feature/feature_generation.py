@@ -572,7 +572,7 @@ def alpha57(df):
     Alpha#57
     (0 - (1 * ((close - vwap) / decay_linear(rank(ts_argmax(close, 30)), 2)))) 
     """
-    return (0 - (1 * ((df.close - df.vwap) / u.decay_linear(u.rank(u.ts_argmax(df.close, 30)), 2))))
+    return 0 - (1 * ((df.close - df.vwap) / u.decay_linear(u.rank(u.ts_argmax(df.close, 30)), 2)))
 
 
 def alpha58(df):

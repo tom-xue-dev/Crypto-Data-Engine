@@ -1,14 +1,14 @@
 import pandas as pd
 from read_large_files import load_filtered_data_as_list, map_and_load_pkl_files, select_assets
-from feature_generation import alpha1 as alpha
+from feature_generation import alpha54 as alpha
 import utils as u
 
-start = "2022-1-1"
-end = "2022-12-31"
-assets = select_assets(start_time=start, spot=True, n=10)
+start = "2021-1-1"
+end = "2021-12-31"
+assets = select_assets(start_time=start, spot=True, m=10)
 # print(assets)
 # assets = ['BTC-USDT_spot','ETH-USDT_spot']
-data = map_and_load_pkl_files(asset_list=assets, start_time=start, end_time=end, level="15min")
+data = map_and_load_pkl_files(asset_list=assets, start_time=start, end_time=end, level="1d")
 
 pd.set_option('display.max_rows', 100)
 pd.set_option('display.max_columns', 100)
@@ -16,7 +16,8 @@ pd.set_option('display.max_columns', 100)
 data['returns'] = data.groupby('asset')['close'].pct_change()
 data['vwap'] = u.vwap(data)
 
-data['future_return'] = data.groupby('asset')['close'].apply(lambda x: x.rolling(10).mean()).droplevel(0)
+data['future_return'] = data.groupby('asset')['close'].apply(lambda x: x.shift(-2) / x - 1).droplevel(0)
+
 data['alpha'] = alpha(data)
 print(len(data))
 data = data.dropna()
