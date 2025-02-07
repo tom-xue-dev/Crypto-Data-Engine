@@ -20,7 +20,8 @@ def alpha1(df):
     :param df: dataframe
     :return: 
     """
-    temp1 = pd.Series(np.where((df.returns < 0), u.stddev(df.returns, 20), df.close), index=df.index)
+    temp1 = pd.Series(np.where((df.returns < 0), u.stddev(df.returns, 2), df.close), index=df.index)
+    print((u.ts_argmax(temp1 ** 2, 5)) - 0.5)
     return (u.rank(u.ts_argmax(temp1 ** 2, 5)) - 0.5)
 
 
@@ -39,7 +40,7 @@ def alpha3(df):
     Alpha#3
     (-1 * correlation(rank(open), rank(volume), 10))
     """
-    return (-1 * u.corr(u.rank(df.open), u.rank(df.volume), 10))
+    return u.rank(-1 * u.corr(df.open, df.volume,10))
 
 
 def alpha4(df):
@@ -47,6 +48,7 @@ def alpha4(df):
     Alpha #4
     (-1 * Ts_Rank(rank(low), 9))
     """
+    print(u.rank(df.low))
     return (-1 * u.ts_rank(u.rank(df.low), 9))
 
 
@@ -83,6 +85,7 @@ def alpha8(df):
     sum(returns, 5)), 10))))
     """
     temp1 = (u.ts_sum(df.open, 5) * u.ts_sum(df.returns, 5))
+    print(temp1)
     temp2 = u.delay((u.ts_sum(df.open, 5) * u.ts_sum(df.returns, 5)), 10)
     return (-1 * u.rank(temp1 - temp2))
 
@@ -182,6 +185,7 @@ def alpha18(df):
     correlation(close, open, 10))))
     """
     temp1 = u.stddev(abs((df.close - df.open)), 5)
+    print(temp1)
     temp2 = df.close - df.open
     temp3 = u.corr(df.close, df.open, 10)
     return (-1 * u.rank(temp1 + temp2 + temp3))
@@ -236,8 +240,23 @@ def alpha23(df):
     Alpha#23
     (((sum(high, 20) / 20) < high) ? (-1 * delta(high, 2)) : 0) 
     """
-    return pd.Series(np.where((u.ts_sum(df.high, 20) / 20) < df.high, (-1 * u.delta(df.high, 2)), 0), df.index)
+    high_sum_20 = u.ts_sum(df.high, 20)  # 过去 20 天的求和
+    delta_high_2 = u.delta(df.high, 2)   # 2 日差分
 
+    # 取三方索引交集，以确保三者都能对齐
+    common_idx = df.index.intersection(high_sum_20.index).intersection(delta_high_2.index)
+
+    # 在共同索引上进行计算
+    # (sum(high, 20)/20 < high) ? (-1 * delta(high, 2)) : 0
+    cond = (high_sum_20.loc[common_idx] / 20) < df.high.loc[common_idx]
+    values = np.where(cond, -1 * delta_high_2.loc[common_idx], 0)
+
+    # 生成结果 Series，索引为 common_idx
+    out = pd.Series(values, index=common_idx, name='alpha23')
+
+    # 如果希望最终和 df 同样的索引，可以再 reindex
+    out = out.reindex(df.index, fill_value=0)
+    return out
 
 def alpha24(df):
     """
@@ -248,8 +267,12 @@ def alpha24(df):
     (-1 * (close - ts_min(close, 100))) : (-1 * delta(close, 3))) 
     """
     decision = u.delta((u.ts_sum(df.close, 100) / 100), 100) / u.delay(df.close, 100) <= 0.05
+    print(decision)
+    print(u.ts_min(df.close, 100))
     if_true = (-1 * (df.close - u.ts_min(df.close, 100)))
+    print(if_true)
     if_false = (-1 * u.delta(df.close, 3))
+    print(pd.Series(np.where(decision, if_true, if_false), df.index))
     return pd.Series(np.where(decision, if_true, if_false), df.index)
 
 
@@ -295,6 +318,12 @@ def alpha29(df):
     temp1 = u.scale(np.log(u.ts_sum(u.ts_min(u.rank(u.rank((-1 * u.rank(u.delta((df.close - 1), 5))))), 2), 1)))
     temp2 = u.product(u.rank(u.rank(temp1)), 1)
     temp3 = u.ts_rank(u.delay((-1 * df.returns), 6), 5)
+    #combined_index = temp1.index.intersection(temp2.index)
+    # temp1 = temp1.loc[combined_index]
+    # temp2 = temp2.loc[combined_index]
+    print(temp1.index)
+    print(temp2.index)
+    print(temp3.index)
     return (np.where(temp1 < temp2, temp1, temp2) + temp3)
 
 
@@ -319,6 +348,8 @@ def alpha31(df):
     """
     temp1 = u.rank(u.rank(u.rank(u.decay_linear((-1 * u.rank(u.rank(u.delta(df.close, 10)))), 10))))
     temp2 = u.rank((-1 * u.delta(df.close, 3))) + np.sign(u.scale(u.corr(u.adv(df, 20), df.low, 12)))
+    print(temp1.index)
+    print(temp2.index)
     return temp1 + temp2
 
 
