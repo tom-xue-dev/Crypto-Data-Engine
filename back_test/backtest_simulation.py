@@ -226,19 +226,19 @@ class Backtest:
             if existing_long_key in holdings:
                 return
             if existing_short_key in holdings:
-                return
                 self.broker.close_position(asset, "short", price, current_time)
+                return
             if quantity <= 0.001:  # 余额不足
                 return
-            # self.broker.open_position(
-            #     asset=asset,
-            #     direction="long",
-            #     price=price,
-            #     leverage=leverage,  # 或从别处读取
-            #     current_time=current_time,
-            #     position_type="spot",
-            #     quantity=quantity  # 可以根据策略或资金管理计算
-            # )
+            self.broker.open_position(
+                asset=asset,
+                direction="long",
+                price=price,
+                leverage=leverage,  # 或从别处读取
+                current_time=current_time,
+                position_type="spot",
+                quantity=quantity  # 可以根据策略或资金管理计算
+            )
         elif signal == -1:
             if existing_short_key in holdings:
                 return
