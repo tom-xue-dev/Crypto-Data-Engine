@@ -202,6 +202,16 @@ def alpha19(df):
     return (temp1 * temp2)
 
 
+def alpha19_1(df):
+    """
+    Alpha#19
+    ((-1 * sign(((close - delay(close, 7)) + delta(close, 7)))) *
+    (1 + rank((1 + sum(returns, 250)))))
+    """
+    temp1 = (-1 * np.sign(((df.close - u.delay(df.close, 7)) + u.delta(df.close, 7))))
+    temp2 = 1 + u.ts_sum(df.returns, 250)
+    return (temp1 * temp2)
+
 def alpha20(df):
     """
     Alpha#20

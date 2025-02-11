@@ -217,3 +217,4 @@ def ts_sum(df, window=10):
     :return: a pandas DataFrame with the rolling sum over the past 'window' days per asset.
     """
     return df.groupby(level='asset', group_keys=False).rolling(window).sum().droplevel(0)
+
