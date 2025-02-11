@@ -5,9 +5,45 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from read_large_files import load_filtered_data_as_list, map_and_load_pkl_files, select_assets
 from feature_generation import alpha1, alpha6, alpha8, alpha10, alpha19, alpha20, alpha24, alpha25, alpha26, alpha32, \
-    alpha35, alpha44, alpha46, alpha49, alpha51, alpha68, alpha84, alpha94, alpha95, alpha2
+    alpha35, alpha44, alpha46, alpha49, alpha51, alpha68, alpha84, alpha94, alpha95, alpha2,alpha102
 import utils as u
 
+
+def triple_barrier_labeling(prices, upper_pct=0.03, lower_pct=0.03, max_time=30):
+    """
+    采用 NumPy 向量化方式计算 Triple Barrier Labeling，提高计算效率。
+
+    参数:
+    prices: pd.Series, 价格数据
+    upper_pct: float, 上界百分比 (默认 3%)
+    lower_pct: float, 下界百分比 (默认 3%)
+    max_time: int, 最长持有期 (默认 10 天)
+
+    返回:
+    labels: pd.Series, -1 (下限触发), 0 (时间到期), 1 (上限触发)
+    """
+    price_idx = prices.index
+    prices = prices.to_numpy()  # 转换为 NumPy 数组，提高计算效率
+    n = len(prices)
+    labels = np.zeros(n, dtype=int)  # 预填充 0
+    upper_barrier = prices * (1 + upper_pct)
+    lower_barrier = prices * (1 - lower_pct)
+
+    for t in range(n - max_time):
+        future_prices = prices[t + 1: t + max_time + 1]
+
+        # 找到第一个触碰上/下界的位置
+        hit_upper = np.where(future_prices >= upper_barrier[t])[0]
+        hit_lower = np.where(future_prices <= lower_barrier[t])[0]
+
+        if hit_upper.size > 0 and (hit_lower.size == 0 or hit_upper[0] < hit_lower[0]):
+            labels[t] = 1  # 触碰上界
+        elif hit_lower.size > 0 and (hit_upper.size == 0 or hit_lower[0] < hit_upper[0]):
+            labels[t] = -1  # 触碰下界
+        else:
+            labels[t] = 0  # 仅时间屏障触发
+
+    return pd.Series(labels, index=price_idx)
 
 def symmetric_cusum_filter(returns, threshold):
     """
@@ -15,7 +51,6 @@ def symmetric_cusum_filter(returns, threshold):
     """
     events = []
     s_pos, s_neg = 0, 0  # 初始化正负累计和
-    print(returns)
     for t, r in returns.items():
         s_pos = max(0, s_pos + r)
         s_neg = min(0, s_neg + r)
@@ -68,28 +103,25 @@ def generate_filter_df(data, sample_column='close', threshold=5 * 0.007):
 
 
 if __name__ == '__main__':
-    start = "2022-1-1"
+    start = "2020-1-1"
     end = "2024-12-31"
-    assets = select_assets(start_time=start, spot=True, n=50)
+    assets = select_assets(start_time=start, spot=True, n=20)
     # print(assets)
     # assets = ['BTC-USDT_spot']
     data = map_and_load_pkl_files(asset_list=assets, start_time=start, end_time=end, level="15min")
     data['future_return'] = data.groupby('asset')['close'].apply(lambda x: x.shift(-10) / x - 1).droplevel(0)
-
+    #data['label'] = data.groupby(level='asset', group_keys=False)['close'].apply(triple_barrier_labeling)
     data['vwap'] = u.vwap(data)
     # 计算每个资产的对数收益率（当前与前一时点比较）
-    print(len(data))
+    #print(len(data))
     data = generate_filter_df(data, sample_column='close', threshold=5 * 0.007)
     # 计算每个 asset 对应的列数（特征数量）
     # 计算每个 asset 在 MultiIndex DataFrame 中的行数
-    row_counts = data.groupby(level="asset").size()
-
-    # 输出结果
-    print(row_counts)
+    # print(data['label'].value_counts())
 
     data = data.dropna()
 
-    #
+
     # alpha_funcs = [
     #     ('alpha1', alpha1),
     #     ('alpha6', alpha6),
@@ -101,19 +133,18 @@ if __name__ == '__main__':
     #     ('alpha32', alpha32),
     #     ('alpha35', alpha35),
     #     ('alpha46', alpha46),
-    #     ('alpha49', alpha49),
     # ]
     # #
     # for col_name, func in alpha_funcs:
     #     data[col_name] = func(data)
-    #
-    # # data['alpha8'] = alpha8(data)
-    # # data['alpha'] = alpha84(data)
-    # data = data.dropna()
-    # # print("max is",np.max(data['alpha']))
-    # # print(data['alpha'])
-    # data['label'] = np.where(data['future_return'] > 0, 1, 0)
-    #
+
+    # data['alpha8'] = alpha8(data)
+    data['alpha'] = alpha102(data)
+
+    # print("max is",np.max(data['alpha']))
+    # print(data['alpha'])
+
+    data = data.dropna()
     # train_dict = {
     #     'alpha1': data['alpha1'].values,
     #     'alpha6': data['alpha6'].values,
@@ -125,19 +156,18 @@ if __name__ == '__main__':
     #     'alpha32': data['alpha32'].values,
     #     'alpha35': data['alpha35'].values,
     #     'alpha46': data['alpha46'].values,
-    #     'alpha49': data['alpha49'].values,
     #     'label': data['label'].values
     # }
+    #
     # #
-    # # #
-    # # print(train_dict)
-    # #
+    # print(train_dict)
+    #
     # with open('data.pkl', 'wb') as f:
     #     pickle.dump(train_dict, f)
-    # print(data)
+    print(data)
     pd.set_option('display.max_rows', 100)
     pd.set_option('display.max_columns', 100)
     print(len(data))
-    daily_ic = data.groupby('asset').apply(lambda x: x['alpha1'].corr(x['future_return'], method='spearman'))
+    daily_ic = data.groupby('asset').apply(lambda x: x['alpha'].corr(x['future_return'], method='spearman'))
     print("IC:", daily_ic.mean())
     print("IR", daily_ic.mean() / daily_ic.std())

@@ -2,9 +2,11 @@ import pickle
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import pearsonr
-
+from collections import Counter
 with open('data.pkl', 'rb') as f:
     data = pickle.load(f)
+
+
 
 for key,item in data.items():
     # plt.plot(item)
@@ -16,11 +18,11 @@ for key,item in data.items():
 #     "alpha94", "alpha95"
 # ]
 
-del data['label']
+# del data['label']
 # del data['alpha84']
 # del data['alpha6']
 # del data ['alpha10']
-del data['alpha49']
+# del data['zscore_RSI']
 
 # del data ['alpha20']
 
