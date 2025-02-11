@@ -20,9 +20,8 @@ def alpha1(df):
     :param df: dataframe
     :return: 
     """
-    temp1 = pd.Series(np.where((df.returns < 0), u.stddev(df.returns, 2), df.close), index=df.index)
-    print((u.ts_argmax(temp1 ** 2, 5)) - 0.5)
-    return (u.rank(u.ts_argmax(temp1 ** 2, 5)) - 0.5)
+    temp1 = pd.Series(np.where((df.returns < 0), u.stddev(df.returns, 20), df.close), index=df.index)
+    return (u.ts_argmax(temp1 ** 2, 5)) - 0.5
 
 
 def alpha2(df):
@@ -30,9 +29,9 @@ def alpha2(df):
     Alpha#2
     (-1 * correlation(rank(delta(log(volume), 2)), rank(((close - open) / open)), 6))
     """
-    tmp_1 = u.rank(u.delta(np.log(df.volume), 2))
-    tmp_2 = u.rank(((df.close - df.open) / df.open))
-    return (-1 * u.corr(tmp_1, tmp_2, 6))
+    tmp_1 = u.delta(np.log(df.volume), 2)
+    tmp_2 = ((df.close - df.open) / df.open)
+    return (-1 * u.corr(tmp_1, tmp_2, 10))
 
 
 def alpha3(df):
@@ -40,7 +39,7 @@ def alpha3(df):
     Alpha#3
     (-1 * correlation(rank(open), rank(volume), 10))
     """
-    return u.rank(-1 * u.corr(df.open, df.volume,10))
+    return (-1 * u.corr(u.rank(df.open), u.rank(df.volume), 10))
 
 
 def alpha4(df):
@@ -48,7 +47,6 @@ def alpha4(df):
     Alpha #4
     (-1 * Ts_Rank(rank(low), 9))
     """
-    print(u.rank(df.low))
     return (-1 * u.ts_rank(u.rank(df.low), 9))
 
 
@@ -84,10 +82,10 @@ def alpha8(df):
     (-1 * rank(((sum(open, 5) * sum(returns, 5)) - delay((sum(open, 5) * 
     sum(returns, 5)), 10))))
     """
-    temp1 = (u.ts_sum(df.open, 5) * u.ts_sum(df.returns, 5))
-    print(temp1)
+    temp1 = u.ts_sum(df.returns, 5)
     temp2 = u.delay((u.ts_sum(df.open, 5) * u.ts_sum(df.returns, 5)), 10)
-    return (-1 * u.rank(temp1 - temp2))
+
+    return temp1
 
 
 def alpha9(df):
@@ -108,10 +106,10 @@ def alpha10(df):
     rank(((0 < ts_min(delta(close, 1), 4)) ? delta(close, 1) : ((ts_max(delta(close, 1), 4) < 0)
     ? delta(close, 1) : (-1 * delta(close, 1)))))
     """
-    tempd1 = u.delta(df.close, 1)
+    tempd1 = u.delta(df.log_close, 1)
     tempmin = u.ts_min(tempd1, 4)
     tempmax = u.ts_max(tempd1, 4)
-    return u.rank(pd.Series(np.where(tempmin > 0, tempd1, np.where(tempmax < 0, tempd1, (-1 * tempd1))), df.index))
+    return pd.Series(np.where(tempmin > 0, tempd1, np.where(tempmax < 0, tempd1, (-1 * tempd1))), df.index)
 
 
 def alpha11(df):
@@ -185,10 +183,9 @@ def alpha18(df):
     correlation(close, open, 10))))
     """
     temp1 = u.stddev(abs((df.close - df.open)), 5)
-    print(temp1)
     temp2 = df.close - df.open
     temp3 = u.corr(df.close, df.open, 10)
-    return (-1 * u.rank(temp1 + temp2 + temp3))
+    return temp1 + temp2 + temp3
 
 
 def alpha19(df):
@@ -198,19 +195,9 @@ def alpha19(df):
     (1 + rank((1 + sum(returns, 250)))))
     """
     temp1 = (-1 * np.sign(((df.close - u.delay(df.close, 7)) + u.delta(df.close, 7))))
-    temp2 = (1 + u.rank((1 + u.ts_sum(df.returns, 250))))
-    return (temp1 * temp2)
-
-
-def alpha19_1(df):
-    """
-    Alpha#19
-    ((-1 * sign(((close - delay(close, 7)) + delta(close, 7)))) *
-    (1 + rank((1 + sum(returns, 250)))))
-    """
-    temp1 = (-1 * np.sign(((df.close - u.delay(df.close, 7)) + u.delta(df.close, 7))))
     temp2 = 1 + u.ts_sum(df.returns, 250)
     return (temp1 * temp2)
+
 
 def alpha20(df):
     """
@@ -218,9 +205,9 @@ def alpha20(df):
     (((-1 * rank((open - delay(high, 1)))) * rank((open - delay(close, 1)))) * 
     rank((open - delay(low, 1)))) 
     """
-    temp1 = (-1 * u.rank((df.open - u.delay(df.high, 1))))
-    temp2 = u.rank((df.open - u.delay(df.close, 1)))
-    temp3 = u.rank((df.open - u.delay(df.low, 1)))
+    temp1 = (df.open - u.delay(df.high, 1))
+    temp2 = (df.open - u.delay(df.close, 1))
+    temp3 = (df.open - u.delay(df.low, 1))
     return (temp1 * temp2 * temp3)
 
 
@@ -242,7 +229,7 @@ def alpha22(df):
     Alpha#22
     (-1 * (delta(correlation(high, volume, 5), 5) * rank(stddev(close, 20))))
     """
-    return (-1 * (u.delta(u.corr(df.high, df.volume, 5), 5) * u.rank(u.stddev(df.close, 20))))
+    return (-1 * (u.delta(u.corr(df.high, df.volume, 5), 5) * u.stddev(df.close, 20)))
 
 
 def alpha23(df):
@@ -250,23 +237,8 @@ def alpha23(df):
     Alpha#23
     (((sum(high, 20) / 20) < high) ? (-1 * delta(high, 2)) : 0) 
     """
-    high_sum_20 = u.ts_sum(df.high, 20)  # 过去 20 天的求和
-    delta_high_2 = u.delta(df.high, 2)   # 2 日差分
+    return pd.Series(np.where((u.ts_sum(df.high, 20) / 20) < df.high, (-1 * u.delta(df.high, 2)), 0), df.index)
 
-    # 取三方索引交集，以确保三者都能对齐
-    common_idx = df.index.intersection(high_sum_20.index).intersection(delta_high_2.index)
-
-    # 在共同索引上进行计算
-    # (sum(high, 20)/20 < high) ? (-1 * delta(high, 2)) : 0
-    cond = (high_sum_20.loc[common_idx] / 20) < df.high.loc[common_idx]
-    values = np.where(cond, -1 * delta_high_2.loc[common_idx], 0)
-
-    # 生成结果 Series，索引为 common_idx
-    out = pd.Series(values, index=common_idx, name='alpha23')
-
-    # 如果希望最终和 df 同样的索引，可以再 reindex
-    out = out.reindex(df.index, fill_value=0)
-    return out
 
 def alpha24(df):
     """
@@ -276,13 +248,9 @@ def alpha24(df):
     ((delta((sum(close, 100) / 100), 100) / delay(close, 100)) == 0.05)) ? 
     (-1 * (close - ts_min(close, 100))) : (-1 * delta(close, 3))) 
     """
-    decision = u.delta((u.ts_sum(df.close, 100) / 100), 100) / u.delay(df.close, 100) <= 0.05
-    print(decision)
-    print(u.ts_min(df.close, 100))
-    if_true = (-1 * (df.close - u.ts_min(df.close, 100)))
-    print(if_true)
-    if_false = (-1 * u.delta(df.close, 3))
-    print(pd.Series(np.where(decision, if_true, if_false), df.index))
+    decision = u.delta((u.ts_sum(df.log_close, 50) / 50), 50) / u.delay(df.log_close, 50) <= 0.05
+    if_true = (-1 * (df.log_close - u.ts_min(df.log_close, 50)))
+    if_false = (-1 * u.delta(df.log_close, 5))
     return pd.Series(np.where(decision, if_true, if_false), df.index)
 
 
@@ -291,7 +259,7 @@ def alpha25(df):
     Alpha#25
     rank(((((-1 * returns) * adv20) * vwap) * (high - close)))
     """
-    return u.rank(((((-1 * df.returns) * u.adv(df, 20)) * df.vwap) * (df.high - df.close)))
+    return (((-1 * df.returns) * u.adv(df, 20)) * df.vwap) * (df.high - df.close)
 
 
 def alpha26(df):
@@ -328,12 +296,6 @@ def alpha29(df):
     temp1 = u.scale(np.log(u.ts_sum(u.ts_min(u.rank(u.rank((-1 * u.rank(u.delta((df.close - 1), 5))))), 2), 1)))
     temp2 = u.product(u.rank(u.rank(temp1)), 1)
     temp3 = u.ts_rank(u.delay((-1 * df.returns), 6), 5)
-    #combined_index = temp1.index.intersection(temp2.index)
-    # temp1 = temp1.loc[combined_index]
-    # temp2 = temp2.loc[combined_index]
-    print(temp1.index)
-    print(temp2.index)
-    print(temp3.index)
     return (np.where(temp1 < temp2, temp1, temp2) + temp3)
 
 
@@ -358,8 +320,6 @@ def alpha31(df):
     """
     temp1 = u.rank(u.rank(u.rank(u.decay_linear((-1 * u.rank(u.rank(u.delta(df.close, 10)))), 10))))
     temp2 = u.rank((-1 * u.delta(df.close, 3))) + np.sign(u.scale(u.corr(u.adv(df, 20), df.low, 12)))
-    print(temp1.index)
-    print(temp2.index)
     return temp1 + temp2
 
 
@@ -379,7 +339,7 @@ def alpha33(df):
     Alpha#33
     rank((-1 * ((1 - (open / close))^1)))
     """
-    return u.rank((-1 * ((1 - (df.open / df.close)) ** 1)))
+    return -1 * ((1 - (df.open / df.close)) ** 1)
 
 
 def alpha34(df):
@@ -408,11 +368,11 @@ def alpha36(df):
     (0.7 * rank((open - close)))) + (0.73 * rank(Ts_Rank(delay((-1 * returns), 6), 5)))) + 
     rank(abs(correlation(vwap, adv20, 6)))) + (0.6 * rank((((sum(close, 200) / 200) - open) * (close - open))))) 
     """
-    temp1 = (2.21 * u.rank(u.corr((df.close - df.open), u.delay(df.volume, 1), 15)))
-    temp2 = (0.7 * u.rank((df.open - df.close)))
-    temp3 = (0.73 * u.rank(u.ts_rank(u.delay((-1 * df.returns), 6), 5)))
-    temp4 = u.rank(abs(u.corr(df.vwap, u.adv(df, 20), 6)))
-    temp5 = (0.6 * u.rank((((sum(df.close, 200) / 200) - df.open) * (df.close - df.open))))
+    temp1 = (2.21 * u.corr((df.close - df.open), u.delay(df.volume, 1), 15))
+    temp2 = (0.7 * (df.open - df.close))
+    temp3 = (0.73 * u.ts_rank(u.delay((-1 * df.returns), 6), 5))
+    temp4 = abs(u.corr(df.vwap, u.adv(df, 20), 6))
+    temp5 = (0.6 * (((sum(df.close, 200) / 200) - df.open) * (df.close - df.open)))
     return ((((temp1 + temp2) + temp3) + temp4) + temp5)
 
 
@@ -462,7 +422,7 @@ def alpha42(df):
     Alpha#42
     (rank((vwap - close)) / rank((vwap + close))) 
     """
-    return (u.rank((df.vwap - df.close)) / u.rank((df.vwap + df.close)))
+    return (df.vwap - df.close) / (df.vwap + df.close)
 
 
 def alpha43(df):
@@ -478,7 +438,7 @@ def alpha44(df):
     Alpha#44
     (-1 * correlation(high, rank(volume), 5))
     """
-    return (-1 * u.corr(df.high, u.rank(df.volume), 5))
+    return (-1 * u.corr(df.high, df.volume, 10))
 
 
 def alpha45(df):
@@ -487,9 +447,9 @@ def alpha45(df):
     (-1 * ((rank((sum(delay(close, 5), 20) / 20)) * correlation(close, volume, 2)) 
     * rank(correlation(sum(close, 5), sum(close, 20), 2)))) 
     """
-    temp1 = u.rank((u.ts_sum(u.delay(df.close, 5), 20) / 20))
+    temp1 = (u.ts_sum(u.delay(df.close, 5), 20) / 20)
     temp2 = u.corr(df.close, df.volume, 2)
-    temp3 = u.rank(u.corr(u.ts_sum(df.close, 5), u.ts_sum(df.close, 20), 2))
+    temp3 = u.corr(u.ts_sum(df.close, 5), u.ts_sum(df.close, 20), 2)
     return (-1 * ((temp1 * temp2) * temp3))
 
 
@@ -501,10 +461,11 @@ def alpha46(df):
     ((-1 * 1) * (close - delay(close, 1)))))
     """
     decision1 = (0.25 < (
-            ((u.delay(df.close, 20) - u.delay(df.close, 10)) / 10) - ((u.delay(df.close, 10) - df.close) / 10)))
-    decision2 = ((((u.delay(df.close, 20) - u.delay(df.close, 10)) / 10) - (
-            (u.delay(df.close, 10) - df.close) / 10)) < 0)
-    iffalse = ((-1 * 1) * (df.close - u.delay(df.close, 1)))
+            ((u.delay(df.log_close, 20) - u.delay(df.log_close, 10)) / 10) - (
+                (u.delay(df.log_close, 10) - df.log_close) / 10)))
+    decision2 = ((((u.delay(df.log_close, 20) - u.delay(df.log_close, 10)) / 10) - (
+            (u.delay(df.log_close, 10) - df.log_close) / 10)) < 0)
+    iffalse = ((-1 * 1) * (df.log_close - u.delay(df.log_close, 1)))
     return pd.Series(np.where(decision1, (-1 * 1), np.where(decision2, 1, iffalse)), index=df.index)
 
 
@@ -534,10 +495,11 @@ def alpha49(df):
     (((((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close, 10) - close) / 10)) < 
     (-1 * 0.1)) ? 1 : ((-1 * 1) * (close - delay(close, 1))))
     """
-    temp1 = ((u.delay(df.close, 20) - u.delay(df.close, 10)) / 10)
-    temp2 = ((u.delay(df.close, 10) - df.close) / 10)
-    return pd.Series(np.where(((temp1 - temp2) < (-1 * 0.1)), 1, ((-1 * 1) * (df.close - u.delay(df.close, 1)))),
-                     index=df.index)
+    temp1 = ((u.delay(df.log_close, 20) - u.delay(df.log_close, 10)) / 10)
+    temp2 = ((u.delay(df.log_close, 10) - df.log_close) / 10)
+    return pd.Series(
+        np.where(((temp1 - temp2) < (-1 * 0.1)), 1, ((-1 * 1) * (df.log_close - u.delay(df.log_close, 1)))),
+        index=df.index)
 
 
 def alpha50(df):
@@ -554,9 +516,9 @@ def alpha51(df):
     (((((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close, 10) - close) / 10)) 
     < (-1 * 0.05)) ? 1 : ((-1 * 1) * (close - delay(close, 1))))
     """
-    condition = ((((u.delay(df.close, 20) - u.delay(df.close, 10)) / 10)
-                  - ((u.delay(df.close, 10) - df.close) / 10)) < (-1 * 0.05))
-    return pd.Series(np.where(condition, 1, ((-1 * 1) * (df.close - u.delay(df.close, 1)))), df.index)
+    condition = ((((u.delay(df.log_close, 20) - u.delay(df.log_close, 10)) / 10)
+                  - ((u.delay(df.log_close, 10) - df.log_close) / 10)) < (-1 * 0.05))
+    return pd.Series(np.where(condition, 1, ((-1 * 1) * (df.log_close - u.delay(df.log_close, 1)))), df.index)
 
 
 def alpha52(df):
@@ -567,7 +529,7 @@ def alpha52(df):
     """
 
     temp1 = ((-1 * u.ts_min(df.low, 5)) + u.delay(u.ts_min(df.low, 5), 5))
-    temp2 = u.rank(((u.ts_sum(df.returns, 240) - u.ts_sum(df.returns, 20)) / 220))
+    temp2 = ((u.ts_sum(df.returns, 240) - u.ts_sum(df.returns, 20)) / 220)
 
     return (temp1 * temp2) * u.ts_rank(df.volume, 5)
 
@@ -596,7 +558,7 @@ def alpha55(df):
     """
     temp1 = (df.close - u.ts_min(df.low, 12))
     temp2 = (u.ts_max(df.high, 12) - u.ts_min(df.low, 12))
-    return -1 * u.corr(u.rank((temp1 / temp2)), u.rank(df.volume), 6)
+    return -1 * u.corr((temp1 / temp2), df.volume, 6)
 
 
 def alpha56(df):
@@ -641,7 +603,7 @@ def alpha60(df):
     - scale(rank(ts_argmax(close, 10))))))
     """
     temp1 = u.scale(u.rank(((((df.close - df.low) - (df.high - df.close)) / (df.high - df.low)) * df.volume)))
-    return (0 - (1 * ((2 * temp1) - u.scale(u.rank(u.ts_argmax(df.close, 10))))))
+    return (0 - (1 * ((2 * temp1) - u.scale(u.ts_argmax(df.close, 10)))))
 
 
 def alpha61(df):
@@ -651,8 +613,8 @@ def alpha61(df):
 
     Rounded the days to int since partial lookback 
     """
-    s1 = u.rank((df.vwap - u.ts_min(df.vwap, 16)))
-    s2 = u.rank(u.corr(df.vwap, u.adv(df, 180), 18))
+    s1 = (df.vwap - u.ts_min(df.vwap, 16))
+    s2 = u.corr(df.vwap, u.adv(df, 180), 18)
 
     common_index = s1.index.intersection(s2.index)
     s1_aligned = s1.loc[common_index]
@@ -696,8 +658,8 @@ def alpha64(df):
     + (vwap * (1 -0.178404))), 3.69741))) * -1) 
     """
     temp1 = u.ts_sum(((df.open * 0.178404) + (df.low * (1 - 0.178404))), 13)
-    temp2 = u.rank(u.corr(temp1, u.ts_sum(u.adv(df, 120), 18), 17))
-    temp3 = u.rank(u.delta(((((df.high + df.low) / 2) * 0.178404) + (df.vwap * (1 - 0.178404))), 4))
+    temp2 = u.corr(temp1, u.ts_sum(u.adv(df, 120), 18), 17)
+    temp3 = u.delta(((((df.high + df.low) / 2) * 0.178404) + (df.vwap * (1 - 0.178404))), 4)
     common_index = temp2.index.intersection(temp3.index)
     s1_aligned = temp2.loc[common_index]
     s2_aligned = temp3.loc[common_index]
@@ -723,7 +685,7 @@ def alpha66(df):
     + Ts_Rank(decay_linear(((((low * 0.96633) 
     + (low * (1 - 0.96633))) - vwap) / (open - ((high + low) / 2))), 11.4157), 6.72611)) * -1) 
     """
-    temp1 = u.rank(u.decay_linear(u.delta(df.vwap, 4), 7))
+    temp1 = u.decay_linear(u.delta(df.vwap, 4), 7)
     temp2 = (((df.low * 0.96633) + (df.low * (1 - 0.96633))) - df.vwap)
     temp3 = (df.open - ((df.high + df.low) / 2))
     return ((temp1 + u.ts_rank(u.decay_linear((temp2 / temp3), 11), 7)) * -1)
@@ -744,9 +706,9 @@ def alpha68(df):
     ((Ts_Rank(correlation(rank(high), rank(adv15), 8.91644), 13.9333) 
     < rank(delta(((close * 0.518371) + (low * (1 - 0.518371))), 1.06157))) * -1)
     """
-    temp1 = u.ts_rank(u.corr(u.rank(df.high), u.rank(u.adv(df, 15)), 9), 14)
-    temp2 = u.rank(u.delta(((df.close * 0.518371) + (df.low * (1 - 0.518371))), 1))
-    return u.rank(u.delta(((df.close * 0.518371) + (df.low * (1 - 0.518371))), 1))
+    temp1 = u.ts_rank(u.corr(df.high, u.adv(df, 15), 9), 14)
+    temp2 = u.delta(((df.close * 0.518371) + (df.low * (1 - 0.518371))), 1)
+    return temp1
 
 
 def alpha69(df):
@@ -791,8 +753,8 @@ def alpha72(df):
     rank(decay_linear(correlation(Ts_Rank(vwap, 3.72469), 
     Ts_Rank(volume, 18.5188), 6.86671),2.95011))) 
     """
-    temp1 = u.rank(u.decay_linear(u.corr(((df.high + df.low) / 2), u.adv(df, 40), 9), 10))
-    temp2 = u.rank(u.decay_linear(u.corr(u.ts_rank(df.vwap, 4), u.ts_rank(df.volume, 19), 7), 3))
+    temp1 = u.decay_linear(u.corr(((df.high + df.low) / 2), u.adv(df, 40), 9), 10)
+    temp2 = u.decay_linear(u.corr(u.ts_rank(df.vwap, 4), u.ts_rank(df.volume, 19), 7), 3)
     return (temp1 / temp2)
 
 
@@ -803,7 +765,7 @@ def alpha73(df):
     Ts_Rank(decay_linear(((delta(((open * 0.147155) + (low * (1 - 0.147155))), 2.03608) 
     / ((open * 0.147155) + (low * (1 - 0.147155)))) * -1), 3.33829), 16.7411)) * -1)
     """
-    temp1 = u.rank(u.decay_linear(u.delta(df.vwap, 5), 3))
+    temp1 = u.decay_linear(u.delta(df.vwap, 5), 3)
     temp2 = u.delta(((df.open * 0.147155) + (df.low * (1 - 0.147155))), 2)
     temp3 = ((df.open * 0.147155) + (df.low * (1 - 0.147155)))
     temp4 = u.ts_rank(u.decay_linear(((temp2 / temp3) * -1), 2), 17)
@@ -817,8 +779,8 @@ def alpha74(df):
     < rank(correlation(rank(((high * 0.0261661) 
     + (vwap * (1 - 0.0261661)))), rank(volume), 11.4791))) * -1)
     """
-    temp1 = u.rank(u.corr(df.close, u.ts_sum(u.adv(df, 30), 37), 15))
-    temp2 = u.rank(u.corr(u.rank(((df.high * 0.0261661) + (df.vwap * (1 - 0.0261661)))), u.rank(df.volume), 11))
+    temp1 = u.corr(df.close, u.ts_sum(u.adv(df, 30), 37), 15)
+    temp2 = u.corr(u.rank(((df.high * 0.0261661) + (df.vwap * (1 - 0.0261661)))), u.rank(df.volume), 11)
     common_index = temp1.index.intersection(temp2.index)
     s1_aligned = temp1.loc[common_index]
     s2_aligned = temp2.loc[common_index]
@@ -855,8 +817,8 @@ def alpha77(df):
     min(rank(decay_linear(((((high + low) / 2) + high) - (vwap + high)), 20.0451)),
     rank(decay_linear(correlation(((high + low) / 2), adv40, 3.1614), 5.64125))) 
     """
-    temp1 = u.rank(u.decay_linear(((((df.high + df.low) / 2) + df.high) - (df.vwap + df.high)), 20))
-    temp2 = u.rank(u.decay_linear(u.corr(((df.high + df.low) / 2), u.adv(df, 40), 3), 6))
+    temp1 = u.decay_linear(((((df.high + df.low) / 2) + df.high) - (df.vwap + df.high)), 20)
+    temp2 = u.decay_linear(u.corr(((df.high + df.low) / 2), u.adv(df, 40), 3), 6)
     common_index = temp1.index.intersection(temp2.index)
     temp1 = temp1.loc[common_index]
     temp2 = temp2.loc[common_index]
@@ -920,7 +882,7 @@ def alpha83(df):
     ((rank(delay(((high - low) / (sum(close, 5) / 5)), 2)) * rank(rank(volume))) 
     / (((high - low) / (sum(close, 5) / 5)) / (vwap - close)))
     """
-    temp1 = u.rank(u.delay(((df.high - df.low) / (u.ts_sum(df.close, 5) / 5)), 2)) * u.rank(u.rank(df.volume))
+    temp1 = u.delay(((df.high - df.low) / (u.ts_sum(df.close, 5) / 5)), 2)
     temp2 = (((df.high - df.low) / (u.ts_sum(df.close, 5) / 5)) / (df.vwap - df.close))
     return (temp1 / temp2)
 
@@ -931,7 +893,7 @@ def alpha84(df):
     SignedPower(Ts_Rank((vwap - ts_max(vwap, 15.3217)), 20.7127), 
     delta(close, 4.96796)) 
     """
-    return (u.ts_rank((df.vwap - u.ts_max(df.vwap, 15)), 21) ** u.delta(df.close, 5))
+    return u.ts_rank((df.vwap - u.ts_max(df.vwap, 15)), 21)
 
 
 def alpha85(df):
@@ -941,8 +903,8 @@ def alpha85(df):
     9.61331))^rank(correlation(Ts_Rank(((high + low) / 2), 3.70596), 
     Ts_Rank(volume, 10.1595), 7.11408))) 
     """
-    temp1 = u.rank(u.corr(((df.high * 0.876703) + (df.close * (1 - 0.876703))), u.adv(df, 30), 10))
-    temp2 = u.rank(u.corr(u.ts_rank(((df.high + df.low) / 2), 4), u.ts_rank(df.volume, 10), 7))
+    temp1 = u.corr(((df.high * 0.876703) + (df.close * (1 - 0.876703))), u.adv(df, 30), 10)
+    temp2 = u.corr(u.ts_rank(((df.high + df.low) / 2), 4), u.ts_rank(df.volume, 10), 7)
     return (temp1 ** temp2)
 
 
@@ -953,7 +915,7 @@ def alpha86(df):
     < rank(((open + close) - (vwap + open)))) * -1)
     """
     temp1 = u.ts_rank(u.corr(df.close, u.ts_sum(u.adv(df, 20), 15), 6), 20)
-    temp2 = u.rank(((df.open + df.close) - (df.vwap + df.open)))
+    temp2 = ((df.open + df.close) - (df.vwap + df.open))
     common_index = temp1.index.intersection(temp2.index)
     temp1 = temp1.loc[common_index]
     temp2 = temp2.loc[common_index]
@@ -1021,11 +983,11 @@ def alpha92(df):
     6.80584))
     """
     temp1 = u.ts_rank(u.decay_linear(((((df.high + df.low) / 2) + df.close) < (df.low + df.open)), 15), 19)
-    temp2 = u.ts_rank(u.decay_linear(u.corr(u.rank(df.low), u.rank(u.adv(df, 30)), 8), 7), 7)
-    common_index = temp1.index.intersection(temp2.index)
-    temp1 = temp1.loc[common_index]
-    temp2 = temp2.loc[common_index]
-    return pd.Series(np.where(temp1 < temp2, temp1, temp2), index=temp1.index)
+    # temp2 = u.ts_rank(u.decay_linear(u.corr(u.rank(df.low), u.rank(u.adv(df, 30)), 8), 7), 7)
+    # common_index = temp1.index.intersection(temp2.index)
+    # temp1 = temp1.loc[common_index]
+    # temp2 = temp2.loc[common_index]
+    return temp1
 
 
 def alpha93(df):
@@ -1044,7 +1006,7 @@ def alpha94(df):
     ((rank((vwap - ts_min(vwap, 11.5783)))^Ts_Rank(correlation(Ts_Rank(vwap,
     19.6462), Ts_Rank(adv60, 4.02992), 18.0926), 2.70756)) * -1) 
     """
-    temp1 = u.rank((df.vwap - u.ts_min(df.vwap, 12)))
+    temp1 = (df.vwap - u.ts_min(df.vwap, 12))
     temp2 = u.ts_rank(u.corr(u.ts_rank(df.vwap, 20), u.ts_rank(u.adv(df, 60), 4), 18), 3)
     return ((temp1 ** temp2) * -1)
 
@@ -1055,13 +1017,13 @@ def alpha95(df):
     (rank((open - ts_min(open, 12.4105))) < Ts_Rank((rank(correlation(sum(((high + low)
     / 2), 19.1351), sum(adv40, 19.1351), 12.8742))^5), 11.7584)) 
     """
-    temp1 = u.rank((df.open - u.ts_min(df.open, 12)))
+    temp1 = (df.open - u.ts_min(df.open, 12))
     temp2 = u.corr(u.ts_sum(((df.high + df.low) / 2), 19), u.ts_sum(u.adv(df, 40), 19), 13)
-    temp3 = u.ts_rank((u.rank(temp2) ** 5), 12)
-    common_index = temp1.index.intersection(temp3.index)
-    temp1 = temp1.loc[common_index]
-    temp3 = temp3.loc[common_index]
-    return (temp1 < temp3)
+    temp3 = u.ts_rank((temp2 ** 5), 12)
+    # common_index = temp1.index.intersection(temp3.index)
+    # temp1 = temp1.loc[common_index]
+    # temp3 = temp3.loc[common_index]
+    return temp1
 
 
 def alpha96(df):
@@ -1109,8 +1071,8 @@ def alpha99(df):
     ((rank(correlation(sum(((high + low) / 2), 19.8975), sum(adv60, 19.8975), 8.8136)) 
     < rank(correlation(low, volume, 6.28259))) * -1) 
     """
-    temp1 = u.rank(u.corr(u.ts_sum(((df.high + df.low) / 2), 20), u.ts_sum(u.adv(df, 60), 20), 9))
-    temp2 = u.rank(u.corr(df.low, df.volume, 6))
+    temp1 = u.corr(u.ts_sum(((df.high + df.low) / 2), 20), u.ts_sum(u.adv(df, 60), 20), 9)
+    temp2 = u.corr(df.low, df.volume, 6)
     common_index = temp1.index.intersection(temp2.index)
     temp1 = temp1.loc[common_index]
     temp2 = temp2.loc[common_index]
@@ -1134,4 +1096,61 @@ def alpha101(df):
     Alpha#101
     ((close - open) / ((high - low) + .001)) 
     """
-    return ((df.close - df.open) / ((df.high - df.low) + 1e-6))
+    return ((df.close - df.open) / ((df.high - df.low) + df.high * 1e-6))
+
+
+def alpha102(df):
+    threshold = 0.5  # 举例阈值
+
+    # 这里 raw=True 表示传入的 x 为 numpy 数组
+
+    threshold = 0.5  # 设定的阈值，可根据实际情况调整
+    window_size = 120  # 滚动窗口长度
+
+    def triangle_pattern(x):
+        """
+        x: 滚动窗口内的收盘价数组，长度为 window_size，
+           其中 x[-1] 为当前（窗口最后一天）的收盘价。
+
+        逻辑说明：
+        1. 首先判断窗口内所有的价格是否都不大于当前价格 + threshold，
+           如果存在超出，则直接返回 0，不符合要求。
+        2. 计算连续价格的差分 diff = np.diff(x)。
+        3. 统计 diff 中正值和负值的数量：
+             - 如果正值数量多于负值，说明大部分价格在上升，即低点不断抬升，
+               可归类为上升三角形，返回 1。
+             - 如果负值数量多于正值，则归类为下降三角形，返回 2。
+             - 如果正负相当，则返回 0，表示趋势不明显。
+        """
+        current_price = x[-1]
+
+        # 条件1：窗口内所有价格必须 <= 当前价格 + threshold
+        if not np.all(x <= current_price + current_price * 0.01):
+            return 0
+
+        # 计算连续差分
+        diff = np.diff(x)
+
+        # 统计正差分和负差分的数量
+        n_pos = np.sum(diff > 0)
+        n_neg = np.sum(diff < 0)
+        print(n_pos,n_neg)
+        if n_pos > n_neg*1.2:
+            return 1  # 上升三角形
+        elif n_neg > n_pos*1.2:
+            return -1  # 下降三角形
+        else:
+            return 0  # 无明显趋势
+
+    # 对每个资产使用 groupby 和 rolling.apply 来应用上述逻辑
+    df['triangle_pattern'] = (
+        df.groupby('asset')['close']
+        .rolling(window=window_size)
+        .apply(triangle_pattern, raw=True)
+        .reset_index(level=0, drop=True)
+    )
+
+    # 利用 groupby 与 rolling.apply 对每个资产进行滚动计算
+
+    print(df['triangle_pattern'])
+    return (df['triangle_pattern'])
