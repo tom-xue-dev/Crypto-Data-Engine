@@ -14,3 +14,4 @@ back_test/transactions.txt
 *.pyc
 *.pyc
 *.csv
+/feature/.idea
