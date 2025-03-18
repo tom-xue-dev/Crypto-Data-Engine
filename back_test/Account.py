@@ -267,7 +267,6 @@ class CostThresholdStrategy(StopLossLogic):
             if (asset, direction) not in self.holding_cost:
                 raise ValueError(f"holding {asset} not exist")
             if direction == "long":
-                continue
                 if curr_price < pos.entry_price * (1 - self.loss_threshold):
                     # 止损
                     positions_to_close.append((asset, direction))
@@ -361,7 +360,7 @@ class PositionManager:
         target_pos = min(total_cap * self.threshold - asset_pos, account.cash)
         if signal == 1:
             return target_pos
-        elif signal == -1 or signal == -2:
+        elif signal == 2:
             return target_pos
         else:
             return 0

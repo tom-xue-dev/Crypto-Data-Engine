@@ -1,197 +1,234 @@
-import pickle
+import sys
 
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from read_large_files import load_filtered_data_as_list, map_and_load_pkl_files, select_assets
-from technical_analysis import trend_analysis
-from CUSUM_filter import generate_filter_df, triple_barrier_labeling
-from labeling import parallel_apply_triple_barrier, triple_barrier_labeling
-from feature_generation import alpha102
-import utils as u
-import talib
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+from read_large_files import map_and_load_pkl_files, select_assets
+import os
 
-from feature_generation import alpha1, alpha6, alpha8, alpha10, alpha19, alpha20, alpha24, alpha25, alpha26, alpha32, \
-    alpha35, alpha44, alpha46, alpha49, alpha51, alpha68, alpha84, alpha94, alpha95, alpha2, alpha102
-
-
-if __name__ == '__main__':
-    pattern_functions = talib.get_function_groups()["Pattern Recognition"]
-    select_columns = ['CDLHANGINGMAN', 'CDLSHOOTINGSTAR', 'CDLSTALLEDPATTERN', 'CDLTHRUSTING', 'CDLADVANCEBLOCK',
-                      'CDLDOJISTAR', 'CDLINVERTEDHAMMER', 'CDLTASUKIGAP', 'CDLHIKKAKE', 'CDLHIKKAKEMOD',
-                      'CDLXSIDEGAP3METHODS', 'CDLHAMMER', 'CDLHARAMICROSS', 'CDLTASUKIGAP']
-    print(pattern_functions)
-    start = "2020-1-1"
-    end = "2024-12-31"
-    assets = select_assets(start_time=start, spot=True, n=50)
-    # print(assets)
-    # assets = ['BTC-USDT_spot']
-    data = map_and_load_pkl_files(asset_list=assets, start_time=start, end_time=end, level="15min")
-    data['future_return'] = data.groupby('asset')['close'].apply(lambda x: x.shift(-10) / x - 1).droplevel(0)
-    data['vwap'] = u.vwap(data)
-    print("start label")
-    data['label'] = parallel_apply_triple_barrier(data)
-    # 计算各个 label 的数量
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
-
-    # data['label'] = np.where(data['future_return'] > 0, 1, 0)
-
-
-    # 计算每个 asset 对应的列数（特征数量）
-    # 计算每个 asset 在 MultiIndex DataFrame 中的行数
-    # print(data['label'].value_counts())
-
-    def compute_patterns(df):
-        """对每个 `asset` 组计算所有形态"""
-        result = {}
-        for pattern in pattern_functions:
-            result[pattern] = getattr(talib, pattern)(df["open"], df["high"], df["low"], df["close"]) / 100
-        return pd.DataFrame(result, index=df.index)
+# ========== 1. 生成伪造数据 ==============
 
 
-    data = generate_filter_df(data, threshold=5 * 0.007)
-    label_counts = data['label'].value_counts()
-
-    # 输出每个 label 的数量，如果某个 label 不存在则返回 0
-    print("label==0:", label_counts.get(0, 0))
-    print("label==1:", label_counts.get(1, 0))
-    print("label==2:", label_counts.get(2, 0))
-    print("start func")
-    data[pattern_functions] = data.groupby(level="asset", group_keys=False).apply(compute_patterns)
-    print(data[select_columns].columns)
-    alpha_funcs = [
-        ('alpha1', alpha1),
-        ('alpha6', alpha6),
-        ('alpha8', alpha8),
-        ('alpha10', alpha10),
-        ('alpha19', alpha19),
-        ('alpha24', alpha24),
-        ('alpha26', alpha26),
-        ('alpha32', alpha32),
-        ('alpha35', alpha35),
-        ('alpha46', alpha46),
-    ]
-    for col_name, func in alpha_funcs:
-        data[col_name] = func(data)
-    data = data.dropna()
-
-    train_dict1 = {col: data[col].values for col in select_columns}
-
-    train_dict2 = {
-        'alpha1': data['alpha1'].values,
-        'alpha6': data['alpha6'].values,
-        'alpha8': data['alpha8'].values,
-        'alpha10': data['alpha10'].values,
-        'alpha19': data['alpha19'].values,
-        'alpha24': data['alpha24'].values,
-        'alpha26': data['alpha26'].values,
-        'alpha32': data['alpha32'].values,
-        'alpha35': data['alpha35'].values,
-        'alpha46': data['alpha46'].values,
-        'label': data['label'].values
-    }
-
-    # 方法1：使用 update 方法
-    train_dict = train_dict1.copy()  # 先复制一个字典
-    train_dict.update(train_dict2)
-
-    with open('data.pkl', 'wb') as f:
-        pickle.dump(train_dict, f)
+# ========== 2. 添加滚动特征 (简化) ==========
+def add_features(df, window=10):
+    df_ = df.copy()
+    df_['mean_close'] = df_.groupby('asset')['close'].rolling(window).mean().values
+    df_['std_close'] = df_.groupby('asset')['close'].rolling(window).std().values
+    return df_
 
 
-    def compute_accuracy(df):
-        """计算每个形态对 label=1（上涨）和 label=-1（下跌）的预测准确率"""
-        accuracy_up = {}  # 预测上涨的准确率
-        accuracy_down = {}  # 预测下跌的准确率
+def factor_ic_analysis(df_factor):
+    """
+    输入含有 [pred_factor, label] 的 DataFrame
+    输出它们的 Pearson 相关系数
+    """
+    corr_pearson = df_factor['pred_factor'].corr(df_factor['label'], method='pearson')
+    print(f"Pearson IC = {corr_pearson:.4f}")
 
-        for pattern in pattern_functions:  # 遍历所有 K 线形态
-            signal = df[pattern]
-
-            # 预测上涨（100）且实际也上涨（label=1）
-            correct_up = (signal == 100) & (df["label"] == 1)
-            # 预测下跌（-100）且实际也下跌（label=-1）
-            correct_down = (signal == -100) & (df["label"] == -1)
-
-            # 计算准确率
-            accuracy_up[pattern] = correct_up.mean()  # 计算看涨信号的正确率
-            accuracy_down[pattern] = correct_down.mean()  # 计算看跌信号的正确率
-
-        return pd.DataFrame({"Up_Accuracy": accuracy_up, "Down_Accuracy": accuracy_down})
+    # 如果想要秩相关系数（Spearman），也可以：
+    corr_spearman = df_factor['pred_factor'].corr(df_factor['label'], method='spearman')
+    print(f"Spearman IC = {corr_spearman:.4f}")
 
 
-    def compute_signal_accuracy(df):
-        """
-        对 DataFrame df 中每个形态（pattern）下的各个信号值计算预测准确率。
+def collect_factor_and_label(model, dataset, device='cpu'):
+    """
+    对传入的 dataset 做一次推断，返回 DataFrame:
+        index: 样本的顺序（或自行构造 time/asset 索引）
+        columns: [pred_factor, label]
+    其中 pred_factor 即模型的预测值，可视为“因子”
+    label 即真实未来收益率
+    """
+    model.eval()
+    loader = DataLoader(dataset, batch_size=32, shuffle=False)
 
-        假设：
-          - df 中包含各个形态的列，其列名由 pattern_functions 列表给出
-          - df 中有一列 "label"，其中 1 表示上涨，-1 表示下跌
-        返回：
-          - 一个字典，形如 {pattern: {signal_value: accuracy, ...}, ...}
-        """
-        accuracy = {}
-        for pattern in pattern_functions:
-            pattern_signals = df[pattern]
-            # 获取该形态中所有出现的信号值
-            unique_signals = pattern_signals.unique()
-            signal_accuracy = {}
-            for sig in unique_signals:
-                # 对于信号值为 0（或中性信号），可以选择跳过（或单独统计）
-                if sig == 0:
-                    continue
-                # 筛选出该信号值对应的样本
-                mask = (pattern_signals == sig)
-                n_samples = mask.sum()
-                # 如果该信号出现次数太少（例如少于10次），可以考虑忽略
-                if n_samples < 10:
-                    continue
-                # 根据信号判断预测方向：
-                # 若 sig > 0，则认为预测上涨；若 sig < 0，则认为预测下跌
-                if sig > 0:
-                    correct = (df.loc[mask, "label"] == 1)
-                else:  # sig < 0
-                    correct = (df.loc[mask, "label"] == -1)
-                accuracy_val = correct.mean()  # 正确率
-                signal_accuracy[sig] = accuracy_val
-            accuracy[pattern] = signal_accuracy
-        return accuracy
+    all_preds = []
+    all_labels = []
 
-    # 示例 1：对整个数据集计算各形态下每个信号的预测准确率
-    # signal_accuracy_all = compute_signal_accuracy(data)
-    # print("各形态下各信号的预测准确率：")
-    # for pattern, signal_dict in signal_accuracy_all.items():
-    #     print(f"\nPattern: {pattern}")
-    #     for sig, acc in signal_dict.items():
-    #         print(f"  Signal {sig}: Accuracy = {acc:.2%}")
-    #
-    # # 示例 2：如果数据中包含多个资产，并且希望按资产分组统计，再聚合得到总体情况
-    # # 假设 data 的索引中有一个 level 是 "asset"
-    # signal_accuracy_by_asset = data.groupby(level="asset").apply(compute_signal_accuracy)
+    with torch.no_grad():
+        for x_batch, y_batch in loader:
+            x_batch = x_batch.to(device)
+            preds = model(x_batch).squeeze(-1)  # (batch,)
 
-    # signal_accuracy_by_asset 的结构为：
-    # asset1 -> {pattern1: {sig: acc, ...}, pattern2: {...}, ...}
-    # asset2 -> {pattern1: {sig: acc, ...}, pattern2: {...}, ...}
-    #
-    # 如果希望对所有资产的结果进行聚合，可以自行实现数据合并，
-    # 例如计算每个形态下、每个信号值在所有资产上的平均准确率：
-    # from collections import defaultdict
-    #
-    # # 建立一个嵌套字典存储聚合结果：{pattern: {signal_value: [acc1, acc2, ...], ...}, ...}
-    # aggregate_accuracy = defaultdict(lambda: defaultdict(list))
-    #
-    # for asset, asset_result in signal_accuracy_by_asset.items():
-    #     for pattern, signal_dict in asset_result.items():
-    #         for sig, acc in signal_dict.items():
-    #             aggregate_accuracy[pattern][sig].append(acc)
-    #
-    # # 计算平均准确率
-    # average_accuracy = {}
-    # for pattern, sig_dict in aggregate_accuracy.items():
-    #     average_accuracy[pattern] = {sig: np.mean(acc_list) for sig, acc_list in sig_dict.items()}
-    #
-    # print("\n各形态下各信号在所有资产上的平均预测准确率：")
-    # for pattern, signal_dict in average_accuracy.items():
-    #     print(f"\nPattern: {pattern}")
-    #     for sig, acc in signal_dict.items():
-    #         print(f"  Signal {sig}: Average Accuracy = {acc:.2%}")
+            all_preds.append(preds.cpu().numpy())
+            all_labels.append(y_batch.cpu().numpy())
+
+    all_preds = np.concatenate(all_preds)
+    all_labels = np.concatenate(all_labels)
+
+    df_factor = pd.DataFrame({
+        'pred_factor': all_preds,
+        'label': all_labels
+    })
+    return df_factor
+
+
+# ========== 3. 构建Dataset ==============
+class StocksDataset(Dataset):
+    def __init__(self, df, window_size=30):
+        self.df = df.copy()
+        self.window_size = window_size
+        # 排序
+        self.df = self.df.sort_index(level=['asset', 'time'])
+        self.samples = []
+        self._build_samples()
+
+    def _build_samples(self):
+        for asset, dfg in self.df.groupby('asset'):
+            dfg = dfg.dropna()  # 去除NaN
+            values = dfg.values
+            if len(values) < self.window_size + 1:
+                continue
+
+            for i in range(len(values) - self.window_size - 5):
+                x_window = values[i: i + self.window_size]
+                y_future = values[i + self.window_size]
+                y_next = values[i + self.window_size + 5]
+                # 取close列的索引
+                close_idx = dfg.columns.get_loc('close')
+
+                close_t = y_future[close_idx]
+                close_tp1 = y_next[close_idx]
+
+                # 收益率
+                label = (close_tp1 - close_t) / (close_t + 1e-9)
+
+                self.samples.append((x_window, label))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        x_window, label = self.samples[idx]
+        x_window = torch.tensor(x_window, dtype=torch.float)  # shape [window_size, num_features]
+        label = torch.tensor(label, dtype=torch.float)
+
+        # 转置: [num_features, window_size]
+        x_window = x_window.T
+
+        return x_window, label
+
+
+# ========== 4. 模型结构 ===============
+class AlphaNetSimple(nn.Module):
+    def __init__(self, num_features=7, window_size=30):
+        super().__init__()
+        self.conv1 = nn.Conv1d(num_features, 16, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm1d(16)
+        self.conv2 = nn.Conv1d(16, 32, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm1d(32)
+        self.gap = nn.AdaptiveAvgPool1d(1)
+        self.fc1 = nn.Linear(32, 16)
+        self.fc2 = nn.Linear(16, 1)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = F.relu(x)
+
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = F.relu(x)
+
+        x = self.gap(x)  # [batch, 32, 1]
+        x = x.squeeze(-1)  # [batch, 32]
+        x = self.fc1(x)  # [batch, 16]
+        x = F.relu(x)
+        out = self.fc2(x)  # [batch, 1]
+        return out
+
+
+# ========== 5. 训练示例 ==============
+def train_model(model, train_loader, lr=1e-3, epochs=5, device='cpu'):
+    model.to(device)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.MSELoss()
+
+    for epoch in range(epochs):
+        model.train()
+        total_loss = 0
+        for x_batch, y_batch in train_loader:
+            x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+            optimizer.zero_grad()
+            preds = model(x_batch).squeeze(-1)
+            loss = criterion(preds, y_batch)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item() * x_batch.size(0)
+
+        avg_loss = total_loss / len(train_loader.dataset)
+        print(f"Epoch [{epoch + 1}/{epochs}] Loss: {avg_loss:.6f}")
+
+
+start = "2020-1-1"
+end = "2021-1-30"
+#assets = ['BTC-USDT_spot']
+assets = select_assets(start_time=start,spot=50)
+data = map_and_load_pkl_files(asset_list=assets, start_time=start, end_time=end, level="15min")
+# data['future_return'] = data.groupby('asset')['close'].apply(lambda x: x.shift(-10) / x - 1).droplevel(0)
+
+
+df_feat = add_features(data, window=10)
+df_feat = df_feat.dropna()
+split_date = '2020-10-01'  # 自定义一个分割日期
+df_train = df_feat.loc[df_feat.index.get_level_values('time') < split_date].copy()
+df_test = df_feat.loc[df_feat.index.get_level_values('time') >= split_date].copy()
+
+train_dataset = StocksDataset(df_train, window_size=30)
+test_dataset = StocksDataset(df_test, window_size=30)
+
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+
+num_features = df_feat.shape[1]  # columns=[open, high, low, close, volume, mean_close, std_close]
+model = AlphaNetSimple(num_features=num_features, window_size=30)
+
+train_model(
+    model=model,
+    train_loader=train_loader,
+    epochs=20
+)
+torch.save(model.state_dict(), "my_model.pt")
+model = AlphaNetSimple(num_features, window_size=30)
+model.load_state_dict(torch.load("my_model.pt"))
+model.eval()
+
+
+
+def evaluate_on_test(model, test_loader, device='cpu'):
+    model.eval()
+    preds_list = []
+    labels_list = []
+
+    with torch.no_grad():
+        for x_batch, y_batch in test_loader:
+            x_batch = x_batch.to(device)
+            preds = model(x_batch).squeeze(-1)  # [batch,]
+            print(preds)
+            preds_list.append(preds.cpu().numpy())
+            labels_list.append(y_batch.cpu().numpy())
+
+    preds_array = np.concatenate(preds_list)
+    labels_array = np.concatenate(labels_list)
+
+    # 计算 MSE
+    mse = np.mean((preds_array - labels_array) ** 2)
+    # 计算 MAE
+    mae = np.mean(np.abs(preds_array - labels_array))
+    # 计算 Pearson 相关系数
+    corr_pearson = pd.Series(preds_array).corr(pd.Series(labels_array), method='pearson')
+    print(f"Test MSE = {mse:.6f}")
+    print(f"Test MAE = {mae:.6f}")
+    print(f"Test Pearson Corr = {corr_pearson:.4f}")
+
+    return preds_array, labels_array
+
+
+# 在训练集结束后:
+preds_test, labels_test = evaluate_on_test(model, test_loader, device='cpu')

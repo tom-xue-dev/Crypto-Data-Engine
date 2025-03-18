@@ -128,10 +128,8 @@ def corr(x, y, d):
     time-serial correlation of x and y for the past d days 
     """
     df = pd.concat([x, y], axis=1, keys=["df1", "df2"])
-    df = df.dropna()
-    rolling_corr_all = df.groupby(level="asset", group_keys=False).apply(
-        lambda x: x["df1"].rolling(window=d).corr(x["df2"])
-    )
+    # df = df.dropna()
+    rolling_corr_all = df["df1"].rolling(window=d).corr(df["df2"])
     return rolling_corr_all
 
 

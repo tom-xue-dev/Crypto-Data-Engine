@@ -1,173 +1,172 @@
 import pickle
+import sys
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from read_large_files import load_filtered_data_as_list, map_and_load_pkl_files, select_assets
-from feature_generation import alpha1, alpha6, alpha8, alpha10, alpha19, alpha20, alpha24, alpha25, alpha26, alpha32, \
-    alpha35, alpha44, alpha46, alpha49, alpha51, alpha68, alpha84, alpha94, alpha95, alpha2,alpha102
+from Factor import alpha104, alpha106, alpha1, alpha2, alpha9, alpha101, alpha102, alpha103, alpha107, alpha105
+from concurrent.futures import ProcessPoolExecutor
 import utils as u
+from IC_calculator import compute_zscore
+from feature_implementation import compute_alpha_parallel
 
 
-def triple_barrier_labeling(prices, upper_pct=0.03, lower_pct=0.03, max_time=30):
+def process_alpha_item(args):
+    col_name, func, data = args
+    # 这里对 data 调用 func 得到结果 Series
+    result = func(data)
+    return col_name, result
+
+
+def symmetric_cusum_filter(returns: pd.Series, n: float, window: int = 20) -> list:
     """
-    采用 NumPy 向量化方式计算 Triple Barrier Labeling，提高计算效率。
+    对输入的收益率序列应用对称 CUSUM 滤波器，仅返回事件的时间戳列表。
+    阈值动态设置为过去 window 个收益率的标准差的 n 倍。
 
-    参数:
-    prices: pd.Series, 价格数据
-    upper_pct: float, 上界百分比 (默认 3%)
-    lower_pct: float, 下界百分比 (默认 3%)
-    max_time: int, 最长持有期 (默认 10 天)
+    参数：
+        returns : pd.Series
+            收益率序列，索引为时间戳。
+        n : float
+            阈值倍数，即阈值 = n * (过去 window 个收益率的标准差)。
+        window : int, 默认 1200
+            用于计算标准差的滚动窗口大小（过去 window 个数据点）。
 
-    返回:
-    labels: pd.Series, -1 (下限触发), 0 (时间到期), 1 (上限触发)
-    """
-    price_idx = prices.index
-    prices = prices.to_numpy()  # 转换为 NumPy 数组，提高计算效率
-    n = len(prices)
-    labels = np.zeros(n, dtype=int)  # 预填充 0
-    upper_barrier = prices * (1 + upper_pct)
-    lower_barrier = prices * (1 - lower_pct)
-
-    for t in range(n - max_time):
-        future_prices = prices[t + 1: t + max_time + 1]
-
-        # 找到第一个触碰上/下界的位置
-        hit_upper = np.where(future_prices >= upper_barrier[t])[0]
-        hit_lower = np.where(future_prices <= lower_barrier[t])[0]
-
-        if hit_upper.size > 0 and (hit_lower.size == 0 or hit_upper[0] < hit_lower[0]):
-            labels[t] = 1  # 触碰上界
-        elif hit_lower.size > 0 and (hit_upper.size == 0 or hit_lower[0] < hit_upper[0]):
-            labels[t] = -1  # 触碰下界
-        else:
-            labels[t] = 0  # 仅时间屏障触发
-
-    return pd.Series(labels, index=price_idx)
-
-def symmetric_cusum_filter(returns, threshold):
-    """
-    对输入的收益率序列应用对称CUSUM滤波器，仅返回事件的时间戳列表。
+    返回：
+        list
+            触发事件的时间戳列表。
     """
     events = []
     s_pos, s_neg = 0, 0  # 初始化正负累计和
+
+    # 预先计算滚动标准差序列（阈值 = n * 标准差）
+    # 注意：由于rolling默认包含当前数据点，为避免使用当前值，
+    # 可以选择设置参数 closed='left'（pandas>=1.1.0），或者接受一定的滞后。
+    thresholds = returns.rolling(window=window, min_periods=window, closed='left').std() * n
+
     for t, r in returns.items():
         s_pos = max(0, s_pos + r)
         s_neg = min(0, s_neg + r)
 
-        if s_pos > threshold:
-            events.append(t)  # 仅添加时间戳
-            s_pos = 0  # 触发事件后重置
-        elif s_neg < -threshold:
-            events.append(t)  # 仅添加时间戳
-            s_neg = 0  # 触发事件后重置
+        current_threshold = thresholds.get(t, np.nan)
+        # 如果当前阈值无法计算，则跳过
+        if np.isnan(current_threshold):
+            continue
+
+        if s_pos > current_threshold:
+            events.append(t)  # 记录事件时间戳
+            s_pos = 0  # 重置正累计和
+        elif s_neg < -current_threshold:
+            events.append(t)  # 记录事件时间戳
+            s_neg = 0  # 重置负累计和
 
     return events
 
 
-def generate_filter_df(data, sample_column='close', threshold=5 * 0.007):
+def process_asset(args):
     """
-    对dataset进行cusum 采样
-    params:
-    data:要采样的dataset，必须包含 sample_column 列
-    sample_column:采样的列名，通常为开盘收盘最高最低
-    threshold:采样阈值
+    对单个资产组进行处理：
+      1. 对该资产组的 'returns' 列（去掉缺失值）调用 symmetric_cusum_filter，得到事件列表；
+      2. 筛选出事件中属于该资产的时间点；
+      3. 在该资产的原始数据中提取这些事件时间对应的整行数据，并添加资产标签；
+    参数:
+      args: 一个元组 (asset, group, n)
+        - asset: 资产名称；
+        - group: DataFrame 对象，为 data.groupby('asset') 得到的当前资产的数据；
+        - n: symmetric_cusum_filter 中的参数
+    返回:
+      对该资产采样后的 DataFrame
     """
+    asset, group, n = args
+    # 计算 'returns'（假设 data 中已经添加了 'log_close' 与 'returns' 列）
+    returns = group['returns'].dropna()
+    # 调用 cusum 过滤器得到事件列表（每个事件为 (timestamp, asset)）
+    events = symmetric_cusum_filter(returns, n=n)
+    # 筛选当前资产的事件时间点
+    events_for_asset = [t for (t, a) in events if a == asset]
+    # 从该资产的原始数据中提取对应行
+    sampled_asset = group.loc[group.index.get_level_values('time').isin(events_for_asset)].copy()
+
+    return sampled_asset
+
+
+def generate_filter_df(data, sample_column='close', n=3, max_workers=None):
+    """
+    对 dataset 进行 cusum 采样，采用多进程并行处理各资产
+    参数:
+        data: 待采样的 DataFrame，要求包含 sample_column 列以及多级索引，其中一个级别为 'asset'
+        sample_column: 要采样的列名（通常为 OHLC 中的某一列）
+        n: symmetric_cusum_filter 的参数
+        max_workers: 指定进程数（默认为 None，由系统决定）
+    返回:
+        filter_data: 经过采样并整理后，按资产为索引的 DataFrame
+    """
+    # 1. 计算 log 价格和收益率
     data['log_close'] = np.log(data[sample_column])
     data['returns'] = data.groupby('asset')['log_close'].diff()
-    asset_events = {}
-    for asset, group in data.groupby('asset'):
-        events = symmetric_cusum_filter(group['returns'].dropna(), threshold)
-        asset_events[asset] = events
 
-    # 4. 利用事件时间点从原始数据中采样（提取整行 OHLC 数据）
+    # 2. 构造任务列表，每个任务对应一个资产组
+    tasks = [(asset, group, n) for asset, group in data.groupby('asset')]
+
     sampled_list = []
-    for asset, events in asset_events.items():
-        events_for_asset = [t for (t, a) in events if a == asset]
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        for sampled_asset in executor.map(process_asset, tasks):
+            sampled_list.append(sampled_asset)
 
-        # 提取 asset 对应的数据：
-        asset_data = data.xs(asset, level='asset')
-        sampled_asset = asset_data.loc[asset_data.index.isin(events_for_asset)]
-
-        # 如果需要，可以给结果添加资产标签
-        sampled_asset = sampled_asset.copy()
-        sampled_asset['asset'] = asset
-        sampled_list.append(sampled_asset)
-
-    # 合并所有资产的采样数据
+    # 3. 合并所有资产的采样数据，并按索引排序
     sampled_data = pd.concat(sampled_list)
     sampled_data = sampled_data.sort_index()
-
-    filter_data = sampled_data.set_index('asset', append=True)
-    return filter_data
+    return sampled_data
 
 
 if __name__ == '__main__':
     start = "2020-1-1"
-    end = "2024-12-31"
-    assets = select_assets(start_time=start, spot=True, n=20)
-    # print(assets)
-    # assets = ['BTC-USDT_spot']
+    end = "2023-12-31"
+    assets = select_assets(start_time=start, spot=True, n=50)
     data = map_and_load_pkl_files(asset_list=assets, start_time=start, end_time=end, level="15min")
+    print(data)
     data['future_return'] = data.groupby('asset')['close'].apply(lambda x: x.shift(-10) / x - 1).droplevel(0)
-    #data['label'] = data.groupby(level='asset', group_keys=False)['close'].apply(triple_barrier_labeling)
+    data['returns'] = u.returns(data)
+    data['log_close'] = np.log(data['close'])
+    # data['label'] = data.groupby(level='asset', group_keys=False)['close'].apply(triple_barrier_labeling)
     data['vwap'] = u.vwap(data)
     # 计算每个资产的对数收益率（当前与前一时点比较）
-    #print(len(data))
-    data = generate_filter_df(data, sample_column='close', threshold=5 * 0.007)
+    # print(len(data))
+    # data['alpha'] = f.alpha7(data)
+
+    print(data)
     # 计算每个 asset 对应的列数（特征数量）
     # 计算每个 asset 在 MultiIndex DataFrame 中的行数
     # print(data['label'].value_counts())
 
     data = data.dropna()
 
-
-    # alpha_funcs = [
-    #     ('alpha1', alpha1),
-    #     ('alpha6', alpha6),
-    #     ('alpha8', alpha8),
-    #     ('alpha10', alpha10),
-    #     ('alpha19', alpha19),
-    #     ('alpha24', alpha24),
-    #     ('alpha26', alpha26),
-    #     ('alpha32', alpha32),
-    #     ('alpha35', alpha35),
-    #     ('alpha46', alpha46),
-    # ]
-    # #
-    # for col_name, func in alpha_funcs:
-    #     data[col_name] = func(data)
-
-    # data['alpha8'] = alpha8(data)
-    data['alpha'] = alpha102(data)
-
-    # print("max is",np.max(data['alpha']))
-    # print(data['alpha'])
+    alpha_funcs = [
+        # ('alpha1', alpha1),
+        # ('alpha2', alpha2),
+        # ('alpha9', alpha9),
+        # ('alpha25', alpha25),
+        # ('alpha32', alpha32),
+        # ('alpha46', alpha46),
+        # ('alpha95', alpha95),
+        # ('alpha101', alpha101),
+        ('alpha102', alpha102),
+        #('alpha103', alpha103),
+        #('alpha104', alpha104),
+        # ('alpha105', alpha105),
+        #('alpha106', alpha106),
+        #('alpha107', alpha107),
+        # ('alpha108', alpha108)
+    ]
+    train_dict = {}
+    for name, func in alpha_funcs:
+        print(f"=== Now computing {name} in parallel... ===")
+        data = compute_alpha_parallel(data, alpha_func=func, n_jobs=16)
 
     data = data.dropna()
-    # train_dict = {
-    #     'alpha1': data['alpha1'].values,
-    #     'alpha6': data['alpha6'].values,
-    #     'alpha8': data['alpha8'].values,
-    #     'alpha10': data['alpha10'].values,
-    #     'alpha19': data['alpha19'].values,
-    #     'alpha24': data['alpha24'].values,
-    #     'alpha26': data['alpha26'].values,
-    #     'alpha32': data['alpha32'].values,
-    #     'alpha35': data['alpha35'].values,
-    #     'alpha46': data['alpha46'].values,
-    #     'label': data['label'].values
-    # }
-    #
-    # #
-    # print(train_dict)
-    #
-    # with open('data.pkl', 'wb') as f:
-    #     pickle.dump(train_dict, f)
-    print(data)
-    pd.set_option('display.max_rows', 100)
-    pd.set_option('display.max_columns', 100)
-    print(len(data))
-    daily_ic = data.groupby('asset').apply(lambda x: x['alpha'].corr(x['future_return'], method='spearman'))
-    print("IC:", daily_ic.mean())
-    print("IR", daily_ic.mean() / daily_ic.std())
+
+    for col_name, func in alpha_funcs:
+        print(data[col_name])
+        daily_ic = data.groupby('asset').apply(lambda x: x[col_name].corr(x['future_return'], method='spearman'))
+        print(col_name, "IC:", daily_ic.mean())
+        print("IR", daily_ic.mean() / daily_ic.std())

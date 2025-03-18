@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from read_large_files import load_filtered_data_as_list, map_and_load_pkl_files, select_assets
 from technical_analysis import trend_analysis
-from CUSUM_filter import generate_filter_df,triple_barrier_labeling
+from CUSUM_filter import generate_filter_df
 from labeling import parallel_apply_triple_barrier
 from feature_generation import alpha102
 import utils as u
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     data['vwap'] = u.vwap(data)
     # 计算每个资产的对数收益率（当前与前一时点比较）
     #print(len(data))
-    data = generate_filter_df(data, sample_column='close', threshold=5 * 0.007)
+    data = generate_filter_df(data, sample_column='close')
     # 计算每个 asset 对应的列数（特征数量）
     # 计算每个 asset 在 MultiIndex DataFrame 中的行数
     # print(data['label'].value_counts())
@@ -66,3 +66,27 @@ if __name__ == '__main__':
     print("recall for class 0", recall)
 
     print(count_2,count_0)
+
+
+ def getBins(events,close):
+    '''
+    Compute event's outcome (including side information, if provided).
+    events is a DataFrame where:
+    —events.index is event's starttime
+    —events[’t1’] is event's endtime
+    —events[’trgt’] is event's target
+    —events[’side’] (optional) implies the algo's position side
+    Case 1: (’side’ not in events): bin in (-1,1) <—label by price action
+    Case 2: (’side’ in events): bin in (0,1) <—label by pnl (meta-labeling)
+    '''
+    #1) prices aligned with events
+    events_=events.dropna(subset=['t1'])
+    px=events_.index.union(events_['t1'].values).drop_duplicates()
+    px=close.reindex(px,method='bfill')
+    #2) create out object
+    out=pd.DataFrame(index=events_.index)
+    out['ret']=px.loc[events_['t1'].values].values/px.loc[events_.index]-1
+    if 'side' in events_:out['ret']*=events_['side'] # meta-labeling
+    out['bin']=np.sign(out['ret'])
+    if 'side' in events_:out.loc[out['ret']<=0,'bin']=0 # meta-labeling
+    return out

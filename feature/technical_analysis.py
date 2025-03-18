@@ -2,6 +2,9 @@ import numpy as np
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor
 import talib
+from read_large_files import load_filtered_data_as_list, map_and_load_pkl_files, select_assets
+from IC_calculator import compute_zscore, compute_ic
+from CUSUM_filter import generate_filter_df
 
 def func(group):
     """
@@ -19,13 +22,13 @@ def func(group):
             # 取当前行及之前 window-1 行构成窗口
             window_df = group.iloc[i - window: i]
             max_high = window_df['high'].max()  # 计算最高值
-
-            count = (abs(window_df['high'] - max_high) < max_high * 0.01).sum()  # 统计满足条件的个数
-            diff = np.diff(window_df['low'].values)
-            n_pos = np.sum(diff > 0)
-            n_neg = np.sum(diff < 0)
-            if abs(group.iloc[i]['high'] - max_high) < max_high * 0.02 and n_pos / n_neg > 1.5:
-                trend_values.append(-1)
+            near_mean = np.mean(window_df[len(window_df) // 2:])
+            far_mean = np.mean(window_df[:len(window_df) // 2])
+            if abs(group.iloc[i]['high'] - max_high) < max_high * 0.02:
+                if near_mean > far_mean:
+                    trend_values.append(1)
+                else:
+                    trend_values.append(-1)
             else:
                 trend_values.append(0)
 
@@ -64,5 +67,21 @@ def trend_analysis(df):
 
     return df['trend']
 
+
+if __name__ == '__main__':
+    start = "2022-1-1"
+    end = "2023-12-31"
+    assets = select_assets(start_time=start, spot=True, m=50)
+    data = map_and_load_pkl_files(asset_list=assets, start_time=start, end_time=end, level="15min")
+    data = generate_filter_df(data)
+    data['future_return'] = data.groupby('asset')['close'].apply(lambda x: x.shift(-10) / x - 1).droplevel(0)
+    data['factor'] = alpha102(data)
+    print(data['factor'])
+    # print(data)
+
+    ic = compute_ic(df=data, feature_column='factor', return_column='future_return')
+    # ic = compute_ic(df=data, feature_column='zscore_RSI', return_column='future_return')
+    print("IC_MEAN:", np.mean(ic), "IR", np.mean(ic) / np.std(ic))
+    # 示例 1：对整个数据集计算各形态下每个信号的预测准确率
 
 

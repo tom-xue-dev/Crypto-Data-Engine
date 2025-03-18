@@ -239,11 +239,12 @@ class Backtest:
                 position_type="spot",
                 quantity=quantity  # 可以根据策略或资金管理计算
             )
-        elif signal == -1:
+        elif signal == 2:
             if existing_short_key in holdings:
                 return
             if existing_long_key in holdings:
                 self.broker.close_position(asset, "long", price, current_time)
+            return
             if quantity <= 0.01:  # 余额不足
                 return
             self.broker.open_position(
@@ -255,24 +256,24 @@ class Backtest:
                 position_type="spot",
                 quantity=quantity
             )
-        elif signal == -2:
-            if existing_short_key in holdings:
-                return
-            if existing_long_key in holdings:
-                self.broker.close_position(asset, "long", price, current_time)
-
-            if quantity <= 0.01:  # 余额不足
-                return
-            self.broker.open_position(
-                asset=asset,
-                direction="short",
-                price=price,
-                leverage=leverage,
-                current_time=current_time,
-                position_type="spot",
-                quantity=quantity
-            )
-            pass  # signal=0, 不开仓
+        # elif signal == -2:
+        #     if existing_short_key in holdings:
+        #         return
+        #     if existing_long_key in holdings:
+        #         self.broker.close_position(asset, "long", price, current_time)
+        #
+        #     if quantity <= 0.01:  # 余额不足
+        #         return
+        #     self.broker.open_position(
+        #         asset=asset,
+        #         direction="short",
+        #         price=price,
+        #         leverage=leverage,
+        #         current_time=current_time,
+        #         position_type="spot",
+        #         quantity=quantity
+        #     )
+        #     pass  # signal=0, 不开仓
 
     def get_market_cap(self, current_df: pd.DataFrame):
         """

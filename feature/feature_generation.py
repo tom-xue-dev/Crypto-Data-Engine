@@ -29,7 +29,8 @@ def alpha2(df):
     Alpha#2
     (-1 * correlation(rank(delta(log(volume), 2)), rank(((close - open) / open)), 6))
     """
-    tmp_1 = u.delta(np.log(df.volume), 2)
+
+    tmp_1 = u.delta(np.log(df.volume + 1e-6), 2)
     tmp_2 = ((df.close - df.open) / df.open)
     return (-1 * u.corr(tmp_1, tmp_2, 10))
 
@@ -47,7 +48,7 @@ def alpha4(df):
     Alpha #4
     (-1 * Ts_Rank(rank(low), 9))
     """
-    return (-1 * u.ts_rank(u.rank(df.low), 9))
+    return (-1 * u.ts_rank(df.low, 9))
 
 
 def alpha5(df):
@@ -94,7 +95,7 @@ def alpha9(df):
     ((0 < ts_min(delta(close, 1), 5)) ? delta(close, 1) : 
     ((ts_max(delta(close, 1), 5) < 0) ? delta(close, 1) : (-1 * delta(close, 1)))) 
     """
-    tempd1 = u.delta(df.close, 1)
+    tempd1 = df.close.pct_change()
     tempmin = u.ts_min(tempd1, 5)
     tempmax = u.ts_max(tempd1, 5)
     return pd.Series(np.where(tempmin > 0, tempd1, np.where(tempmax < 0, tempd1, (-1 * tempd1))), df.index)
@@ -208,7 +209,7 @@ def alpha20(df):
     temp1 = (df.open - u.delay(df.high, 1))
     temp2 = (df.open - u.delay(df.close, 1))
     temp3 = (df.open - u.delay(df.low, 1))
-    return (temp1 * temp2 * temp3)
+    return (temp1 * temp2 * temp3) / df.close
 
 
 def alpha21(df):
@@ -462,7 +463,7 @@ def alpha46(df):
     """
     decision1 = (0.25 < (
             ((u.delay(df.log_close, 20) - u.delay(df.log_close, 10)) / 10) - (
-                (u.delay(df.log_close, 10) - df.log_close) / 10)))
+            (u.delay(df.log_close, 10) - df.log_close) / 10)))
     decision2 = ((((u.delay(df.log_close, 20) - u.delay(df.log_close, 10)) / 10) - (
             (u.delay(df.log_close, 10) - df.log_close) / 10)) < 0)
     iffalse = ((-1 * 1) * (df.log_close - u.delay(df.log_close, 1)))
@@ -1011,18 +1012,32 @@ def alpha94(df):
     return ((temp1 ** temp2) * -1)
 
 
+import numba
+
+
+@numba.jit(nopython=True, parallel=True)
+def rolling_min(arr, window):
+    n = len(arr)
+    result = np.full(n, np.nan)
+    for i in range(n):
+        start = max(0, i - window + 1)
+        result[i] = np.min(arr[start:i + 1])
+    return result
+
+
+def alpha95_numba(df):
+    # 提取 MultiIndex 分组
+    grouped = df.groupby(level=0)['open']
+
+    # 使用 numba 计算 rolling_min
+    min_open = grouped.transform(lambda x: rolling_min(x.values, 12))
+
+    # 计算 alpha95
+    return df['open'] - min_open
+
+
 def alpha95(df):
-    """
-    Alpha#95
-    (rank((open - ts_min(open, 12.4105))) < Ts_Rank((rank(correlation(sum(((high + low)
-    / 2), 19.1351), sum(adv40, 19.1351), 12.8742))^5), 11.7584)) 
-    """
     temp1 = (df.open - u.ts_min(df.open, 12))
-    temp2 = u.corr(u.ts_sum(((df.high + df.low) / 2), 19), u.ts_sum(u.adv(df, 40), 19), 13)
-    temp3 = u.ts_rank((temp2 ** 5), 12)
-    # common_index = temp1.index.intersection(temp3.index)
-    # temp1 = temp1.loc[common_index]
-    # temp3 = temp3.loc[common_index]
     return temp1
 
 
@@ -1096,61 +1111,12 @@ def alpha101(df):
     Alpha#101
     ((close - open) / ((high - low) + .001)) 
     """
-    return ((df.close - df.open) / ((df.high - df.low) + df.high * 1e-6))
+    return (df.high - df.close) / (df.high - df.low)
 
 
 def alpha102(df):
-    threshold = 0.5  # 举例阈值
+    return -1 * u.corr(u.rank(u.delta(np.log(df.volume + 1e-6), 1)), u.rank(((df.close - df.open) / df.open)), 6)
 
-    # 这里 raw=True 表示传入的 x 为 numpy 数组
 
-    threshold = 0.5  # 设定的阈值，可根据实际情况调整
-    window_size = 120  # 滚动窗口长度
-
-    def triangle_pattern(x):
-        """
-        x: 滚动窗口内的收盘价数组，长度为 window_size，
-           其中 x[-1] 为当前（窗口最后一天）的收盘价。
-
-        逻辑说明：
-        1. 首先判断窗口内所有的价格是否都不大于当前价格 + threshold，
-           如果存在超出，则直接返回 0，不符合要求。
-        2. 计算连续价格的差分 diff = np.diff(x)。
-        3. 统计 diff 中正值和负值的数量：
-             - 如果正值数量多于负值，说明大部分价格在上升，即低点不断抬升，
-               可归类为上升三角形，返回 1。
-             - 如果负值数量多于正值，则归类为下降三角形，返回 2。
-             - 如果正负相当，则返回 0，表示趋势不明显。
-        """
-        current_price = x[-1]
-
-        # 条件1：窗口内所有价格必须 <= 当前价格 + threshold
-        if not np.all(x <= current_price + current_price * 0.01):
-            return 0
-
-        # 计算连续差分
-        diff = np.diff(x)
-
-        # 统计正差分和负差分的数量
-        n_pos = np.sum(diff > 0)
-        n_neg = np.sum(diff < 0)
-        print(n_pos,n_neg)
-        if n_pos > n_neg*1.2:
-            return 1  # 上升三角形
-        elif n_neg > n_pos*1.2:
-            return -1  # 下降三角形
-        else:
-            return 0  # 无明显趋势
-
-    # 对每个资产使用 groupby 和 rolling.apply 来应用上述逻辑
-    df['triangle_pattern'] = (
-        df.groupby('asset')['close']
-        .rolling(window=window_size)
-        .apply(triangle_pattern, raw=True)
-        .reset_index(level=0, drop=True)
-    )
-
-    # 利用 groupby 与 rolling.apply 对每个资产进行滚动计算
-
-    print(df['triangle_pattern'])
-    return (df['triangle_pattern'])
+def alpha191(df):
+    return u.rank((-1 * ((1 - (df.open / df.close)) ** 2)))

@@ -25,7 +25,7 @@ def parallel_apply_triple_barrier(df):
     return pd.concat(results).sort_index()
 
 
-def triple_barrier_labeling(prices, upper_pct=0.03, lower_pct=0.03, max_time=30):
+def triple_barrier_labeling(prices, upper_pct=0.03, lower_pct=0.03, max_time=50):
     """
     采用 NumPy 向量化方式计算 Triple Barrier Labeling，提高计算效率。
 
