@@ -1,0 +1,106 @@
+import os
+import time
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+import mmap
+import gc
+from typing import List, Optional
+
+
+
+
+class DataLoader:
+    def __init__(self, folder: str = "./data_aggr/dollar_bar",
+                 start_date: Optional[str] = None, end_date: Optional[str] = None,
+                 asset_list: Optional[List[str]] = None,file_format = 'parquet',
+                 use_cache: bool = True, use_mmap: bool = True):
+        self.folder = folder
+        self.start_date = pd.to_datetime(start_date) if start_date else None
+        self.end_date = pd.to_datetime(end_date) if end_date else None
+        self.asset_list = asset_list if asset_list else self._get_all_symbol()
+        self.use_cache = use_cache
+        self.use_mmap = use_mmap
+        self.file_format = file_format
+        self.cache = {}
+        self._check_params_valid()
+
+    def _check_params_valid(self):
+        if not self.asset_list:
+            raise Exception("asset_list is empty")
+        if not os.path.exists(self.folder) or not os.path.isdir(self.folder) :
+            raise Exception("path doesn't exist or is not a directory")
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise Exception("start_date is later than end_date")
+
+    def _read_parquet_file(self, path: str) -> pd.DataFrame:
+        if self.use_mmap:
+            with open(path, "rb") as f:
+                mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+                try:
+                    buffer = pa.py_buffer(mm)
+                    reader = pa.BufferReader(buffer)
+                    table = pq.read_table(reader)
+                    df = table.to_pandas()
+                    if self.start_date and df.index.get_level_values(0)[0] >= self.start_date:
+                        print(f'notice:file:{path}\'s earliest date is later than the start_date, skip it.')
+                        return pd.DataFrame()
+                finally:
+                    del reader, buffer, table
+                    mm.close()
+        else:
+            df = pq.read_table(path).to_pandas()
+        return df
+
+    def load_all_data(self) -> pd.DataFrame:
+        all_data = []
+        for symbol in self.asset_list:
+            print(f"loading {symbol}.........")
+            path = os.path.join(self.folder,symbol+'.'+self.file_format)
+            if self.use_cache and symbol in self.cache:
+                df = self.cache[symbol]
+            else:
+                df = self._read_parquet_file(path)
+                df["symbol"] = symbol  # 添加 symbol 列标识
+                if self.use_cache:
+                    self.cache[symbol] = df
+
+            if self.start_date or self.end_date:
+                df['datetime'] = pd.to_datetime(df['datetime'])
+                if self.start_date:
+                    df = df[df['datetime'] >= self.start_date]
+                if self.end_date:
+                    df = df[df['datetime'] <= self.end_date]
+
+            all_data.append(df)
+
+        if all_data:
+            return pd.concat(all_data).sort_values(by='time')
+        else:
+            return pd.DataFrame()
+
+    def _get_all_symbol(self):
+        symbol_list = []
+        for file in os.listdir(self.folder):
+            symbol = os.path.splitext(file)[0]
+            symbol_list.append(symbol)
+        return symbol_list
+
+
+# path = r"./data/BTCUSDT/BTCUSDT-aggTrades-2023-08.parquet"
+# start = time.time()
+# table = pd.read_parquet(path)
+# end = time.time()
+# print(f"read_table: {end - start}")
+# 然后 slice 取前1行（非常快，底层懒加载）
+
+if __name__ == "__main__":
+    assets = ['XRPUSDC']
+    data_loader = DataLoader(asset_list=assets)
+    print(data_loader.load_all_data())
+
+    # for key,items in data_loader.cache.items():
+    #     print(key,items)
+    # print(data_loader.cache)
+
+
