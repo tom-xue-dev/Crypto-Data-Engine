@@ -4,3 +4,4 @@ app.log
 proxies.yml
 *test*.py
 data/
+/data_aggr
