@@ -53,7 +53,7 @@ def build_bar(segment,bar_type = 'tick_bar'):
             'tick_interval_mean': segment['timestamp'].diff().mean(),
             'best_match': segment['isBestMatch'].sum() / len(segment),
         }
-    elif bar_type == 'dollar_bar':
+    elif bar_type == 'dollar_bar' or bar_type == 'volume_bar':
         return {
             'start_time': convert_timestamp(segment['timestamp'].iloc[0]),
             'open': segment['price'].iloc[0],
@@ -151,9 +151,10 @@ class BarConstructor:
         data.columns = self.col_names
         if self.bar_type == 'dollar_bar':
             bars_df = self._construct_dollar_bar(data)
-
         elif self.bar_type == 'tick_bar':
             bars_df = self._construct_tick_bar(data)
+        elif self.bar_type == 'volume_bar':
+            bars_df = self._construct_volume_bar(data)
         else:
             bars_df = None
         return bars_df
@@ -183,8 +184,8 @@ if __name__ == "__main__":
             paths = get_asset_file_path(asset)
             if paths[0].split("-")[2] == '2025':
                 continue  # 过滤掉刚上线的资产
-            bar_threshold = 1000000
-            r = pool.apply_async(run_asset_data, args=(paths, asset,'dollar_bar',bar_threshold))
+            bar_threshold = 10000000
+            r = pool.apply_async(run_asset_data, args=(paths, asset,'volume_bar',bar_threshold))
             results.append(r)
 
         for r in results:
