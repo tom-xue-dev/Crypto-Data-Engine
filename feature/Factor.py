@@ -367,55 +367,30 @@ def alpha108(df, window=1200, vol_window=30):
 
     return df
 
+
 def alpha109(df):
-    df['alpha109'] = df['close'].diff(1)
+    df['alpha124'] = df['medium_price'].diff()
     return df
 
 def alpha110(df):
-    df['alpha110'] = df['close'].diff(2)
+    for i in range(1,21):
+        df[f'alpha110_{i}'] = df['close'].pct_change(i)
     return df
 def alpha111(df):
-    df['alpha111'] = df['close'].diff(3)
+    for i in range(1,21):
+        df[f'alpha111_{i}'] = df['high'].pct_change(i)
     return df
 def alpha112(df):
-    df['alpha112'] = df['close'].diff(4)
+    for i in range(1,21):
+        df[f'alpha112_{i}'] = df['low'].pct_change(i)
     return df
 def alpha113(df):
-    df['alpha113'] = df['close'].diff(5)
+    for i in range(1,21):
+        df[f'alpha113_{i}'] = df['open'].pct_change(i)
     return df
 def alpha114(df):
-    df['alpha114'] = df['high'].diff(1)
-    return df
-def alpha115(df):
-    df['alpha115'] = df['high'].diff(2)
-    return df
-def alpha116(df):
-    df['alpha116'] = df['high'].diff(3)
-    return df
-def alpha117(df):
-    df['alpha117'] = df['high'].diff(4)
-    return df
-def alpha118(df):
-    df['alpha118'] = df['high'].diff(5)
-    return df
-def alpha119(df):
-    df['alpha119'] = df['low'].diff(1)
-    return df
-def alpha120(df):
-    df['alpha120'] = df['alpha119'] = df['low'].diff(2)
-    return df
-def alpha121(df):
-    df['alpha121'] = df['alpha119'] = df['low'].diff(3)
-    return df
-def alpha122(df):
-    df['alpha122'] = df['alpha119'] = df['low'].diff(4)
-    return df
-def alpha123(df):
-    df['alpha123'] = df['alpha119'] = df['low'].diff(5)
-    return df
-
-def alpha124(df):
-    df['alpha124'] = df['medium_price'].diff()
+    for i in range(1,21):
+        df[f'alpha114_{i}'] = df['vwap'].pct_change(i)
     return df
 from scipy.stats import kurtosis, skew
 

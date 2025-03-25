@@ -114,12 +114,12 @@ def factor_return_analysis_plot(df, factor_col, return_col, n_bins=5, title=None
 
 
 if __name__ == '__main__':
-    data_loader = DataLoader(folder=".././data_aggr/tick_bar",file_end='USDT')
+    data_loader = DataLoader(folder=".././data_aggr/dollar_bar",file_end='USDT')
     data = data_loader.load_all_data()
     data['returns'] = u.returns(data)
     data['log_close'] = np.log(data['close'])
     # data['label'] = parallel_apply_triple_barrier(data)
-    data['future_return'] = data.groupby('asset')['close'].apply(lambda x: x.shift(-10) / x - 1).droplevel(0)
+    data['future_return'] = data.groupby('asset')['close'].transform(lambda x: x.shift(-10) / x - 1)
     pd.set_option('display.max_columns', None)
     #data['label'] = np.where(data['future_return'] > 0, 1, 0)
     alpha_funcs = [
@@ -138,24 +138,18 @@ if __name__ == '__main__':
         # ('alpha106', alpha106),
         # ('alpha107', alpha107),
         # ('alpha108', alpha108),
-        ('alpha109',alpha109),
-        ('alpha110',alpha110),
-        ('alpha111',alpha111),
-        ('alpha112',alpha112),
-        ('alpha113',alpha113),
-        # ('alpha114',alpha114),
+        # ('alpha109',alpha109),
+        # ('alpha112',alpha112),
+        # ('alpha111',alpha111),
+        # ('alpha112',alpha112),
+        # ('alpha113',alpha113),
+        ('alpha114',alpha114),
         # ('alpha115',alpha115),
         # ('alpha116',alpha116),
         # ('alpha117',alpha117),
-        # ('alpha118',alpha118),
-        # ('alpha119',alpha119),
-        # ('alpha120',alpha120),
-        # ('alpha121',alpha121),
-        # ('alpha122',alpha122),
-        # ('alpha123',alpha123),
-        # ('alpha124',alpha124)
+
      ]
-    features = [x[0] for x in alpha_funcs]
+    features = [f'alpha114_{i}' for i in range(1,21)]
 
     print(features)
     for name, func in alpha_funcs:
@@ -165,12 +159,14 @@ if __name__ == '__main__':
     data = data.dropna()
     data['pca_close'] = pca_transform(df=data, columns=features, n_components=1, prefix='pca')
     print(data)
-    for name, func in alpha_funcs:
+    for name in features:
         ic = compute_ic(df=data, feature_column=name, return_column='future_return')
         print(name, ic)
         factor_return_analysis_plot(df=data, factor_col=name, return_col='future_return', n_bins=5, title=f'{name} IC_MEAN: {np.mean(ic)}')
     ic = compute_ic(df=data, feature_column='pca_close', return_column='future_return')
     print(ic)
+    factor_return_analysis_plot(df=data, factor_col='pca_close', return_col='future_return', n_bins=5,
+                                title=f'pca_close IC_MEAN: {np.mean(ic)}')
     # 2. 分层
     # evaluator = FactorEvaluator(data)
     # evaluator.plot_factor_distribution(factor_column='returns', upper_bound=10, lower_bound=0)
