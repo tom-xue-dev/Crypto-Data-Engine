@@ -83,6 +83,33 @@ class BarConstructor:
         bars = pd.DataFrame(bars)
         return bars
 
+    def _construct_volume_bar(self,data):
+        crosses = get_volume_bar_indices(data['quantity'].values, self.threshold)
+        start_idx = 0
+        bars = []
+        for end_idx in crosses:
+            segment = data.iloc[start_idx:end_idx + 1]
+            bars.append(build_bar(segment))
+            start_idx = end_idx + 1
+
+        if start_idx < len(data):
+            segment = data.iloc[start_idx:]
+            bars.append(build_bar(segment))
+        bars = pd.DataFrame(bars)
+        return bars
+
+    def _construct_imblance_volume_bar(self,data):
+        crosses = get_volume_bar_indices(data['quantity'].values, self.threshold)
+        start_idx = 0
+        bars = []
+        for end_idx in crosses:
+            segment = data.iloc[start_idx:end_idx + 1]
+    def _construct_imblance_dollar_bar(self,data):
+        pass
+
+    def _construct_tick_run_bar(self,data):
+        pass
+
     def process_asset_data(self) -> Optional[pd.DataFrame]:
         """
         遍历文件夹内所有 CSV 文件（aggTrades数据），分块读取并构建 volume bar。
@@ -106,7 +133,7 @@ def run_asset_data(path, asset_name, threshold):
     print(f"start running asset:{asset_name}")
     constructor = BarConstructor(folder_path=path, threshold=threshold, bar_type='dollar_bar')
     df = constructor.process_asset_data()
-    df.index = pd.MultiIndex.from_arrays([df['start_time'], [asset] * len(df)], names=['time', 'asset'])
+    df.index = pd.MultiIndex.from_arrays([df['start_time'], [asset_name] * len(df)], names=['time', 'asset'])
     df = df.drop(columns=['start_time'])
     df.to_parquet(f'./data_aggr/dollar_bar/{asset_name}.parquet')
     return asset_name  # 可选：返回处理完成的 asset 名称
@@ -114,9 +141,9 @@ def run_asset_data(path, asset_name, threshold):
 
 if __name__ == "__main__":
 
-    assets = get_sorted_assets(root_dir=r'.\data')
+    assets = get_sorted_assets(root_dir=r'.\data',end="USDT")
     results = []
-    with multiprocessing.Pool(processes=8) as pool:
+    with multiprocessing.Pool(processes=4) as pool:
         for asset, size in assets:
             process_num = min(16, 16 / (size / 1024 / 1024 / 1024 * 6))
             if process_num < 16:

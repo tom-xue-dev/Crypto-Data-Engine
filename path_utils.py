@@ -19,18 +19,27 @@ def get_folder_size(path):
                 total_size += os.path.getsize(filepath)
     return total_size
 
-def get_sorted_assets(root_dir):
+def get_sorted_assets(root_dir,end = "None"):
     """从小到大获取文件的名称和大小"""
     folder_sizes = []
 
     # 遍历根目录下的每个子目录
     for folder in os.listdir(root_dir):
-        folder_path = os.path.join(root_dir, folder)
-        if os.path.isdir(folder_path):
-            size = get_folder_size(folder_path)
-            folder_sizes.append((folder, size))
-
+        if end is not None:
+            if folder[-4:] == end:
+                folder_path = os.path.join(root_dir, folder)
+                if os.path.isdir(folder_path):
+                    size = get_folder_size(folder_path)
+                    folder_sizes.append((folder, size))
+        else:
+            folder_path = os.path.join(root_dir, folder)
+            if os.path.isdir(folder_path):
+                size = get_folder_size(folder_path)
+                folder_sizes.append((folder, size))
     # 按大小排序，取前N个
     folder_sizes.sort(key=lambda x: x[1])
     return folder_sizes
+
+if __name__ == "__main__":
+    print(get_sorted_assets(r".\data",end = "USDT"))
 
