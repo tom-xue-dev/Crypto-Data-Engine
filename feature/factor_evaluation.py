@@ -109,9 +109,10 @@ class FactorEvaluator:
         plt.grid(True)
         plt.show()
 
-    def calculate_ic(self, factor_column, return_column, method='spearman'):
+    def calculate_cross_ic(self, factor_column, return_column, method='spearman'):
         """
         计算每个时间点上因子值与未来收益的相关性（IC）。
+        注意这里是截面IC， 需要保证不同的时间点有多个资产
 
         参数:
           factor_column: 因子列名称
@@ -149,7 +150,7 @@ class FactorEvaluator:
           kwargs: 可选的绘图参数，如 figsize, xlabel, ylabel, title 等。
         """
         # 计算IC时间序列
-        ic_series = self.calculate_ic(factor_column, return_column, method=method)[100:]
+        ic_series = self.calculate_cross_ic(factor_column, return_column, method=method)[100:]
         ic_series = ic_series.expanding(min_periods=1).mean()
 
         # 解析额外的绘图参数
@@ -167,7 +168,7 @@ class FactorEvaluator:
         plt.show()
 
     def plot_cumulative_ic(self, factor_column, return_column, method='spearman', **kwargs):
-        ic_series = self.calculate_ic(factor_column, return_column, method=method).cumsum()
+        ic_series = self.calculate_cross_ic(factor_column, return_column, method=method).cumsum()
         figsize = kwargs.get('figsize', (10, 6))
         xlabel = kwargs.get('xlabel', 'Time')
         ylabel = kwargs.get('ylabel', 'IC')

@@ -5,27 +5,15 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="43a80aa9-5ae9-44fa-896d-27c06c7df6fa" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/feature/CNN-LSTM.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/feature/IC_calculator.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/feature/candle_stick.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/feature/example" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/feature/labeling.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/feature/pattern.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/feature/technical_analysis.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/feature/technical_indicator.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/feature/read_data.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/BTC-trading.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/BTC-trading.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/100.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/101.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/53.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/54.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/98.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/99.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/CUSUM_filter.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/CUSUM_filter.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/factor_check.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/factor_check.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/feature_generation.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/feature_generation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/future_implementation.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/feature_implementation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/funding_fees.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/merge_fees.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/feature/factor_evaluation.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/factor_evaluation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/feature/feature_implementation.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/feature_implementation.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -106,6 +94,7 @@
     "Python.get_info.executor": "Run",
     "Python.labeling.executor": "Run",
     "Python.load.executor": "Run",
+    "Python.load_data.executor": "Run",
     "Python.main.executor": "Run",
     "Python.mann-kendall.executor": "Run",
     "Python.mann.executor": "Run",
@@ -116,6 +105,7 @@
     "Python.momentun_strategy.executor": "Run",
     "Python.pattern.executor": "Run",
     "Python.read_csv.executor": "Run",
+    "Python.read_data.executor": "Run",
     "Python.read_large_files.executor": "Run",
     "Python.strategy.executor": "Run",
     "Python.syntax_test.executor": "Run",
@@ -127,6 +117,7 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "git-widget-placeholder": "feature",
     "last_opened_file_path": "C:/ProgramData/anaconda3/Scripts/conda.exe",
+    "node.js.selected.package.tslint": "(autodetect)",
     "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
   }
 }]]></component>
@@ -140,11 +131,11 @@
         <env name="PYTHONUNBUFFERED" value="1" />
       </envs>
       <option name="SDK_HOME" value="" />
-      <option name="SDK_NAME" value="Python 3.11" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
       <option name="IS_MODULE_SDK" value="false" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/get_info.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
@@ -196,5 +187,26 @@
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/pre_process_py$feature_implementation.coverage" NAME="feature_implementation 覆盖结果" MODIFIED="1742874360534" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
+    <SUITE FILE_PATH="coverage/main_py$load_pickle.coverage" NAME="load_pickle 覆盖结果" MODIFIED="1742290494437" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/data" />
+    <SUITE FILE_PATH="coverage/pre_process_py$download.coverage" NAME="download 覆盖结果" MODIFIED="1742545023788" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/pre_process_py$read_data.coverage" NAME="read_data 覆盖结果" MODIFIED="1742874744234" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
+    <SUITE FILE_PATH="coverage/download_py$api_trading.coverage" NAME="api_trading 覆盖结果" MODIFIED="1742466300916" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/pre_process_py$multi_process_test.coverage" NAME="multi_process_test 覆盖结果" MODIFIED="1742714918357" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/main_py$download.coverage" NAME="download 覆盖结果" MODIFIED="1742448970506" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/pre_process_py$load_data.coverage" NAME="load_data 覆盖结果" MODIFIED="1742872503100" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/data_handle" />
+    <SUITE FILE_PATH="coverage/pre_process_py$path_utils.coverage" NAME="path_utils 覆盖结果" MODIFIED="1742871781092" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/pre_process_py$api_trading.coverage" NAME="api_trading 覆盖结果" MODIFIED="1742517452639" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/main_py$download_aggTrade.coverage" NAME="download-aggTrade 覆盖结果" MODIFIED="1742364279566" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/binance-public-data-master/python" />
+    <SUITE FILE_PATH="coverage/main_py$pre_process.coverage" NAME="pre_process 覆盖结果" MODIFIED="1742440032123" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/pre_process_py$pre_process.coverage" NAME="pre_process 覆盖结果" MODIFIED="1742871883759" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/main_py$main.coverage" NAME="main 覆盖结果" MODIFIED="1742438510903" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/pre_process_py$main.coverage" NAME="main 覆盖结果" MODIFIED="1742525358989" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/download_py$main.coverage" NAME="main 覆盖结果" MODIFIED="1742467968009" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/download_py$download.coverage" NAME="download 覆盖结果" MODIFIED="1742531264953" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/api_trading_py$api_trading.coverage" NAME="api_trading 覆盖结果" MODIFIED="1742857730431" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/download_py$pre_process.coverage" NAME="pre_process 覆盖结果" MODIFIED="1742457580990" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
