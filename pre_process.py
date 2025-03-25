@@ -45,7 +45,8 @@ def build_bar(segment):
         'close': segment['price'].iloc[-1],
         'volume': segment['quantity'].sum(),
         'sell_volume': segment[segment['isBuyerMaker']]['quantity'].sum(),
-        'buy_volume': segment[~segment['isBuyerMaker']]['quantity'].sum()
+        'buy_volume': segment[~segment['isBuyerMaker']]['quantity'].sum(),
+        'vwap': (segment['price']*segment['quantity']).sum() / segment['quantity'].sum(),
     }
 
 
@@ -97,7 +98,13 @@ class BarConstructor:
             bars.append(build_bar(segment))
         bars = pd.DataFrame(bars)
         return bars
-
+    def _construct_tick_bar(self,data):
+        segments = [data.iloc[i:i + self.threshold] for i in range(0, len(data), self.threshold)]
+        bars = []
+        for seg in segments:
+            bars.append(build_bar(seg))
+        bars = pd.DataFrame(bars)
+        return bars
     def _construct_imblance_volume_bar(self,data):
         crosses = get_volume_bar_indices(data['quantity'].values, self.threshold)
         start_idx = 0
@@ -126,15 +133,20 @@ class BarConstructor:
         data.columns = self.col_names
         if self.bar_type == 'dollar_bar':
             bars_df = self._construct_dollar_bar(data)
-            return bars_df
-        return None
+
+        elif self.bar_type == 'tick_bar':
+            bars_df = self._construct_tick_bar(data)
+        else:
+            bars_df = None
+        return bars_df
 
 def run_asset_data(path, asset_name, threshold):
     print(f"start running asset:{asset_name}")
-    constructor = BarConstructor(folder_path=path, threshold=threshold, bar_type='dollar_bar')
+    constructor = BarConstructor(folder_path=path, threshold=threshold, bar_type='tick_bar')
     df = constructor.process_asset_data()
     df.index = pd.MultiIndex.from_arrays([df['start_time'], [asset_name] * len(df)], names=['time', 'asset'])
     df = df.drop(columns=['start_time'])
+    print(df)
     df.to_parquet(f'./data_aggr/dollar_bar/{asset_name}.parquet')
     return asset_name  # 可选：返回处理完成的 asset 名称
 
@@ -154,7 +166,7 @@ if __name__ == "__main__":
             paths = get_asset_file_path(asset)
             if paths[0].split("-")[2] == '2025':
                 continue  # 过滤掉刚上线的资产
-            bar_size = 50000000
+            bar_size = 10000
             r = pool.apply_async(run_asset_data, args=(paths, asset, bar_size))
             results.append(r)
 
