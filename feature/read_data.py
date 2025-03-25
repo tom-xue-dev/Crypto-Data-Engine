@@ -11,7 +11,7 @@ import mplfinance as mpf
 
 
 class DataLoader:
-    def __init__(self, folder: str = ".././data_aggr/dollar_bar",
+    def __init__(self, folder: str = ".././data_aggr/tick_bar",
                  start_date: Optional[str] = None, end_date: Optional[str] = None,
                  asset_list: Optional[List[str]] = None,file_format = 'parquet',
                  use_cache: bool = True, use_mmap: bool = True,file_end = None):

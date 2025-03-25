@@ -6,12 +6,14 @@ import pandas as pd
 from IC_calculator import compute_zscore, compute_ic
 import alphalens as al
 import utils as u
-from Factor import alpha1, alpha2, alpha25, alpha32, alpha46, alpha51, alpha95, alpha9, alpha103, alpha35, alpha101, \
-    alpha104, alpha106, alpha105, alpha102, alpha107, alpha108
+from Factor import *
 from multiprocessing import Pool
 from labeling import parallel_apply_triple_barrier
 from read_data import DataLoader
 from factor_evaluation import FactorEvaluator
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+
 def downside_volatility_ratio(df, period):
     df['squared_returns'] = df['returns'] ** 2  # 计算收益平方
     df['downside_squared'] = df['squared_returns'] * (df['returns'] < 0)  # 仅保留下行波动的平方部分
@@ -41,6 +43,38 @@ def compute_alpha_parallel(data, alpha_func, n_jobs=4):
     df_out = pd.concat(results, axis=0)
     df_out.sort_index(inplace=True)
     return df_out
+
+
+def pca_transform(df, columns, n_components=2, prefix='pca'):
+    """
+    对指定列进行标准化 + PCA，并返回主成分 DataFrame。
+
+    参数:
+        df : pd.DataFrame
+            原始数据
+        columns : list
+            要进行PCA的列名列表
+        n_components : int
+            要保留的主成分个数
+        prefix : str
+            生成的主成分列名前缀
+
+    返回:
+        pca_df : pd.DataFrame
+            包含主成分的DataFrame，列名为 prefix_1, prefix_2, ...
+    """
+    # 取出要处理的列
+    X = df[columns].copy()
+    # 标准化
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    # PCA变换
+    pca = PCA(n_components=n_components)
+    components = pca.fit_transform(X_scaled)
+    # 构造结果DataFrame
+    col_names = [f'{prefix}_{i + 1}' for i in range(n_components)]
+    pca_values = pd.DataFrame(components, index=df.index, columns=col_names).to_numpy()
+    return pca_values
 import matplotlib.pyplot as plt
 
 
@@ -80,17 +114,17 @@ def factor_return_analysis_plot(df, factor_col, return_col, n_bins=5, title=None
 
 
 if __name__ == '__main__':
-    data_loader = DataLoader(file_end='USDT')
+    data_loader = DataLoader(folder=".././data_aggr/tick_bar",file_end='USDT')
     data = data_loader.load_all_data()
     data['returns'] = u.returns(data)
     data['log_close'] = np.log(data['close'])
-    print(data)
     # data['label'] = parallel_apply_triple_barrier(data)
     data['future_return'] = data.groupby('asset')['close'].apply(lambda x: x.shift(-10) / x - 1).droplevel(0)
+    pd.set_option('display.max_columns', None)
     #data['label'] = np.where(data['future_return'] > 0, 1, 0)
     alpha_funcs = [
         # ('alpha1', alpha1),
-        ('alpha2', alpha2),
+        # ('alpha2', alpha2),
         # ('alpha9', alpha9),
         # ('alpha25', alpha25),
         # ('alpha32', alpha32),
@@ -98,25 +132,45 @@ if __name__ == '__main__':
         # ('alpha95', alpha95),
         # ('alpha101', alpha101),
         # ('alpha102', alpha102),
-        ('alpha103', alpha103),
-        ('alpha104', alpha104),
+        # ('alpha103', alpha103),
+        # ('alpha104', alpha104),
         # ('alpha105', alpha105),
         # ('alpha106', alpha106),
         # ('alpha107', alpha107),
-        ('alpha108', alpha108)
-    ]
+        # ('alpha108', alpha108),
+        ('alpha109',alpha109),
+        ('alpha110',alpha110),
+        ('alpha111',alpha111),
+        ('alpha112',alpha112),
+        ('alpha113',alpha113),
+        # ('alpha114',alpha114),
+        # ('alpha115',alpha115),
+        # ('alpha116',alpha116),
+        # ('alpha117',alpha117),
+        # ('alpha118',alpha118),
+        # ('alpha119',alpha119),
+        # ('alpha120',alpha120),
+        # ('alpha121',alpha121),
+        # ('alpha122',alpha122),
+        # ('alpha123',alpha123),
+        # ('alpha124',alpha124)
+     ]
+    features = [x[0] for x in alpha_funcs]
 
+    print(features)
     for name, func in alpha_funcs:
         print(f"=== Now computing {name} in parallel... ===")
         data = compute_alpha_parallel(data, alpha_func=func, n_jobs=16)
-    pd.set_option('display.max_columns', None)
-    print(data)
-    df = data.dropna()
 
+    data = data.dropna()
+    data['pca_close'] = pca_transform(df=data, columns=features, n_components=1, prefix='pca')
+    print(data)
     for name, func in alpha_funcs:
-        ic = compute_ic(df=df, feature_column=name, return_column='future_return')
+        ic = compute_ic(df=data, feature_column=name, return_column='future_return')
         print(name, ic)
-        factor_return_analysis_plot(df=df, factor_col=name, return_col='future_return', n_bins=5, title=f'{name} IC_MEAN: {np.mean(ic)}')
+        factor_return_analysis_plot(df=data, factor_col=name, return_col='future_return', n_bins=5, title=f'{name} IC_MEAN: {np.mean(ic)}')
+    ic = compute_ic(df=data, feature_column='pca_close', return_column='future_return')
+    print(ic)
     # 2. 分层
     # evaluator = FactorEvaluator(data)
     # evaluator.plot_factor_distribution(factor_column='returns', upper_bound=10, lower_bound=0)
