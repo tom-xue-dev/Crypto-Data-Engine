@@ -36,18 +36,23 @@ def get_volume_bar_indices(volume_arr, threshold):
     return result
 
 
-def build_bar(segment):
-    return {
-        'start_time': convert_timestamp(segment['timestamp'].iloc[0]),
-        'open': segment['price'].iloc[0],
-        'high': segment['price'].max(),
-        'low': segment['price'].min(),
-        'close': segment['price'].iloc[-1],
-        'volume': segment['quantity'].sum(),
-        'sell_volume': segment[segment['isBuyerMaker']]['quantity'].sum(),
-        'buy_volume': segment[~segment['isBuyerMaker']]['quantity'].sum(),
-        'vwap': (segment['price']*segment['quantity']).sum() / segment['quantity'].sum(),
-    }
+def build_bar(segment,bar_type = 'tick_bar'):
+    if bar_type == 'tick_bar':
+        return {
+            'start_time': convert_timestamp(segment['timestamp'].iloc[0]),
+            'open': segment['price'].iloc[0],
+            'high': segment['price'].max(),
+            'low': segment['price'].min(),
+            'close': segment['price'].iloc[-1],
+            'volume': segment['quantity'].sum(),
+            'sell_volume': segment[segment['isBuyerMaker']]['quantity'].sum(),
+            'buy_volume': segment[~segment['isBuyerMaker']]['quantity'].sum(),
+            'vwap': (segment['price']*segment['quantity']).sum() / segment['quantity'].sum(),
+            'medium_price': segment['price'].median(),
+            'volume_std': segment['quantity'].std(),
+            'tick_interval_mean': segment['timestamp'].diff().mean(),
+            'best_match': segment['isBestMatch'].sum() / len(segment),
+        }
 
 
 
@@ -75,12 +80,12 @@ class BarConstructor:
         bars = []
         for end_idx in crosses:
             segment = data.iloc[start_idx:end_idx + 1]
-            bars.append(build_bar(segment))
+            bars.append(build_bar(segment,bar_type = 'dollar_bar'))
             start_idx = end_idx + 1
 
         if start_idx < len(data):
             segment = data.iloc[start_idx:]
-            bars.append(build_bar(segment))
+            bars.append(build_bar(segment,bar_type = 'dollar_bar'))
         bars = pd.DataFrame(bars)
         return bars
 
@@ -90,19 +95,19 @@ class BarConstructor:
         bars = []
         for end_idx in crosses:
             segment = data.iloc[start_idx:end_idx + 1]
-            bars.append(build_bar(segment))
+            bars.append(build_bar(segment,bar_type = 'volume_bar'))
             start_idx = end_idx + 1
 
         if start_idx < len(data):
             segment = data.iloc[start_idx:]
-            bars.append(build_bar(segment))
+            bars.append(build_bar(segment,bar_type = 'volume_bar'))
         bars = pd.DataFrame(bars)
         return bars
     def _construct_tick_bar(self,data):
         segments = [data.iloc[i:i + self.threshold] for i in range(0, len(data), self.threshold)]
         bars = []
         for seg in segments:
-            bars.append(build_bar(seg))
+            bars.append(build_bar(seg,bar_type = 'tick_bar'))
         bars = pd.DataFrame(bars)
         return bars
     def _construct_imblance_volume_bar(self,data):
@@ -147,20 +152,20 @@ def run_asset_data(path, asset_name, threshold):
     df.index = pd.MultiIndex.from_arrays([df['start_time'], [asset_name] * len(df)], names=['time', 'asset'])
     df = df.drop(columns=['start_time'])
     print(df)
-    df.to_parquet(f'./data_aggr/dollar_bar/{asset_name}.parquet')
+    df.to_parquet(f'./data_aggr/tick_bar/{asset_name}.parquet')
     return asset_name  # 可选：返回处理完成的 asset 名称
 
 
 if __name__ == "__main__":
 
     assets = get_sorted_assets(root_dir=r'.\data',end="USDT")
+    print(assets)
+    sys.exit(0)
     results = []
     with multiprocessing.Pool(processes=4) as pool:
         for asset, size in assets:
             process_num = min(16, 16 / (size / 1024 / 1024 / 1024 * 6))
-            if process_num < 16:
-                break
-            if process_num < 4:
+            if process_num < 8:
                 print('assets stop at', assets)
                 break
             paths = get_asset_file_path(asset)
