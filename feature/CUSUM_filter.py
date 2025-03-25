@@ -5,7 +5,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from read_large_files import load_filtered_data_as_list, map_and_load_pkl_files, select_assets
-from Factor import alpha104, alpha106, alpha1, alpha2, alpha9, alpha101, alpha102, alpha103, alpha107, alpha105
+from Factor import alpha104, alpha106, alpha1, alpha2, alpha9, alpha101, alpha102, alpha103, alpha107, alpha105, \
+    alpha25, alpha32, alpha46, alpha95, alpha108
 from concurrent.futures import ProcessPoolExecutor
 import utils as u
 from IC_calculator import compute_zscore
@@ -120,11 +121,21 @@ def generate_filter_df(data, sample_column='close', n=3, max_workers=None):
 
 
 if __name__ == '__main__':
-    start = "2020-1-1"
-    end = "2023-12-31"
-    assets = select_assets(start_time=start, spot=True, n=50)
-    data = map_and_load_pkl_files(asset_list=assets, start_time=start, end_time=end, level="15min")
-    print(data)
+    with open('15min_data.pkl', 'rb') as f:
+        data = pickle.load(f)
+    print(data.columns)
+    data = data.rename(columns=str.lower)
+    data = data.rename_axis(index=['time', 'asset'])
+    asset = ['ONEUSDT', 'TRXUSDT', 'BTCUSDT', 'ICXUSDT', 'HOTUSDT', 'BANDUSDT', 'FTMUSDT', 'CHZUSDT',
+             'VETUSDT', 'XTZUSDT', 'ONTUSDT', 'WAVESUSDT', 'BCHUSDT', 'DUSKUSDT', 'ZECUSDT', 'NEOUSDT',
+             'QTUMUSDT', 'DASHUSDT', 'BATUSDT', 'IOTXUSDT', 'ETHUSDT', 'ANKRUSDT', 'ZRXUSDT', 'RVNUSDT',
+             'DENTUSDT', 'OMGUSDT', 'IOSTUSDT', 'ENJUSDT', 'DOGEUSDT', 'COSUSDT', 'FETUSDT', 'IOTAUSDT',
+             'ADAUSDT', 'RENUSDT', 'ALGOUSDT', 'XMRUSDT', 'ETCUSDT', 'TROYUSDT', 'KAVAUSDT', 'LINKUSDT',
+             'NULSUSDT', 'NKNUSDT', 'XRPUSDT', 'RLCUSDT', 'XLMUSDT', 'HBARUSDT', 'BNBUSDT', 'MTLUSDT',
+             'ZILUSDT']
+    data = data[[a in asset for a in data.index.get_level_values('asset')]]
+    data = data[-len(data) // 2:-len(data) // 4]
+
     data['future_return'] = data.groupby('asset')['close'].apply(lambda x: x.shift(-10) / x - 1).droplevel(0)
     data['returns'] = u.returns(data)
     data['log_close'] = np.log(data['close'])
@@ -142,21 +153,21 @@ if __name__ == '__main__':
     data = data.dropna()
 
     alpha_funcs = [
-        # ('alpha1', alpha1),
-        # ('alpha2', alpha2),
-        # ('alpha9', alpha9),
-        # ('alpha25', alpha25),
-        # ('alpha32', alpha32),
-        # ('alpha46', alpha46),
-        # ('alpha95', alpha95),
-        # ('alpha101', alpha101),
+        ('alpha1', alpha1),
+        ('alpha2', alpha2),
+        ('alpha9', alpha9),
+        ('alpha25', alpha25),
+        ('alpha32', alpha32),
+        ('alpha46', alpha46),
+        ('alpha95', alpha95),
+        ('alpha101', alpha101),
         ('alpha102', alpha102),
-        #('alpha103', alpha103),
-        #('alpha104', alpha104),
-        # ('alpha105', alpha105),
-        #('alpha106', alpha106),
-        #('alpha107', alpha107),
-        # ('alpha108', alpha108)
+        ('alpha103', alpha103),
+        ('alpha104', alpha104),
+        ('alpha105', alpha105),
+        ('alpha106', alpha106),
+        ('alpha107', alpha107),
+        ('alpha108', alpha108)
     ]
     train_dict = {}
     for name, func in alpha_funcs:
@@ -168,5 +179,4 @@ if __name__ == '__main__':
     for col_name, func in alpha_funcs:
         print(data[col_name])
         daily_ic = data.groupby('asset').apply(lambda x: x[col_name].corr(x['future_return'], method='spearman'))
-        print(col_name, "IC:", daily_ic.mean())
-        print("IR", daily_ic.mean() / daily_ic.std())
+        print(daily_ic)

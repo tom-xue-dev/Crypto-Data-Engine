@@ -41,11 +41,46 @@ def compute_alpha_parallel(data, alpha_func, n_jobs=4):
     df_out = pd.concat(results, axis=0)
     df_out.sort_index(inplace=True)
     return df_out
+import matplotlib.pyplot as plt
+
+
+def factor_return_analysis_plot(df, factor_col, return_col, n_bins=5, title=None):
+    """
+    将因子列分为n组，输出并绘制每组的平均未来收益率
+
+    参数：
+        df         : 包含因子和收益率的 DataFrame
+        factor_col : 因子列名
+        return_col : 未来收益率列名
+        n_bins     : 分组数量（如5为五分位）
+        title      : 可选图标题
+
+    返回：
+        group_mean : 每组平均未来收益率（Pandas Series）
+    """
+    # 去掉缺失值
+    df = df[[factor_col, return_col]].dropna()
+
+    # 分组
+    df['group'] = pd.qcut(df[factor_col], q=n_bins, labels=False, duplicates='drop')
+
+    # 分组平均收益率
+    group_mean = df.groupby('group')[return_col].mean()
+
+    # 可视化
+    plt.figure(figsize=(8, 5))
+    group_mean.plot(kind='bar', color='skyblue', edgecolor='black')
+    plt.title(title or f'{factor_col} future group return')
+    plt.xticks(rotation=0)
+    plt.grid(axis='y', linestyle='--', alpha=0.6)
+    plt.tight_layout()
+    plt.show()
+
+    return group_mean
 
 
 if __name__ == '__main__':
-    asset_list = ['DCRUSDT']
-    data_loader = DataLoader(asset_list = asset_list,file_end='USDT')
+    data_loader = DataLoader(file_end='USDT')
     data = data_loader.load_all_data()
     data['returns'] = u.returns(data)
     data['log_close'] = np.log(data['close'])
@@ -54,21 +89,21 @@ if __name__ == '__main__':
     data['future_return'] = data.groupby('asset')['close'].apply(lambda x: x.shift(-10) / x - 1).droplevel(0)
     #data['label'] = np.where(data['future_return'] > 0, 1, 0)
     alpha_funcs = [
-        ('alpha1', alpha1),
+        # ('alpha1', alpha1),
         ('alpha2', alpha2),
-        #('alpha9', alpha9),
+        # ('alpha9', alpha9),
         # ('alpha25', alpha25),
         # ('alpha32', alpha32),
         # ('alpha46', alpha46),
         # ('alpha95', alpha95),
         # ('alpha101', alpha101),
         # ('alpha102', alpha102),
-        # ('alpha103', alpha103),
-        # ('alpha104', alpha104),
+        ('alpha103', alpha103),
+        ('alpha104', alpha104),
         # ('alpha105', alpha105),
         # ('alpha106', alpha106),
         # ('alpha107', alpha107),
-        # ('alpha108', alpha108)
+        ('alpha108', alpha108)
     ]
 
     for name, func in alpha_funcs:
@@ -77,8 +112,11 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
     print(data)
     df = data.dropna()
-    ic = df[['alpha1', 'future_return']].dropna().corr(method='pearson').iloc[0, 1]
-    print(ic)
+
+    for name, func in alpha_funcs:
+        ic = compute_ic(df=df, feature_column=name, return_column='future_return')
+        print(name, ic)
+        factor_return_analysis_plot(df=df, factor_col=name, return_col='future_return', n_bins=5, title=f'{name} IC_MEAN: {np.mean(ic)}')
     # 2. 分层
     # evaluator = FactorEvaluator(data)
     # evaluator.plot_factor_distribution(factor_column='returns', upper_bound=10, lower_bound=0)

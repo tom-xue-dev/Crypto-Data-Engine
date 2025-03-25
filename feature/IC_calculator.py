@@ -4,7 +4,8 @@ import numpy as np
 
 def compute_ic(df, feature_column, return_column, groupby_column='asset', method='spearman'):
     group_ic = df.groupby(groupby_column).apply(lambda x: x[feature_column].corr(x[return_column], method=method))
-    return group_ic
+    ic = df[feature_column].corr(df[return_column], method=method)
+    return ic
 
 def compute_prediction_metrics(df: pd.DataFrame, prediction_column: str, return_column: str) -> dict:
     """

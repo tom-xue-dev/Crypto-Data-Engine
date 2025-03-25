@@ -107,7 +107,7 @@ if __name__ == "__main__":
         })
         pd.set_option('display.max_columns', None)
         # print(group)
-        #mpf.plot(group, type='candle', volume=True, style='charles')
+        mpf.plot(group, type='candle', volume=True, style='charles')
         #print()
     # for key,items in data_loader.cache.items():
     #     print(key,items)
