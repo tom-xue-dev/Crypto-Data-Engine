@@ -53,6 +53,19 @@ def build_bar(segment,bar_type = 'tick_bar'):
             'tick_interval_mean': segment['timestamp'].diff().mean(),
             'best_match': segment['isBestMatch'].sum() / len(segment),
         }
+    elif bar_type == 'dollar_bar':
+        return {
+            'start_time': convert_timestamp(segment['timestamp'].iloc[0]),
+            'open': segment['price'].iloc[0],
+            'high': segment['price'].max(),
+            'low': segment['price'].min(),
+            'close': segment['price'].iloc[-1],
+            'volume': segment['quantity'].sum(),
+            'sell_volume': segment[segment['isBuyerMaker']]['quantity'].sum(),
+            'buy_volume': segment[~segment['isBuyerMaker']]['quantity'].sum(),
+            'vwap': (segment['price']*segment['quantity']).sum() / segment['quantity'].sum(),
+            'best_match_ratio': segment['isBestMatch'].sum() / len(segment),
+        }
 
 
 
@@ -145,14 +158,14 @@ class BarConstructor:
             bars_df = None
         return bars_df
 
-def run_asset_data(path, asset_name, threshold):
+def run_asset_data(path, asset_name, bar_type = 'dollar_bar',threshold = 1000000):
     print(f"start running asset:{asset_name}")
-    constructor = BarConstructor(folder_path=path, threshold=threshold, bar_type='tick_bar')
+    constructor = BarConstructor(folder_path=path, threshold=threshold, bar_type=bar_type)
     df = constructor.process_asset_data()
     df.index = pd.MultiIndex.from_arrays([df['start_time'], [asset_name] * len(df)], names=['time', 'asset'])
     df = df.drop(columns=['start_time'])
     print(df)
-    df.to_parquet(f'./data_aggr/tick_bar/{asset_name}.parquet')
+    df.to_parquet(f'./data_aggr/{bar_type}/{asset_name}.parquet')
     return asset_name  # 可选：返回处理完成的 asset 名称
 
 
@@ -160,7 +173,6 @@ if __name__ == "__main__":
 
     assets = get_sorted_assets(root_dir=r'.\data',end="USDT")
     print(assets)
-    sys.exit(0)
     results = []
     with multiprocessing.Pool(processes=4) as pool:
         for asset, size in assets:
@@ -171,8 +183,8 @@ if __name__ == "__main__":
             paths = get_asset_file_path(asset)
             if paths[0].split("-")[2] == '2025':
                 continue  # 过滤掉刚上线的资产
-            bar_size = 10000
-            r = pool.apply_async(run_asset_data, args=(paths, asset, bar_size))
+            bar_threshold = 1000000
+            r = pool.apply_async(run_asset_data, args=(paths, asset,'dollar_bar',bar_threshold))
             results.append(r)
 
         for r in results:
