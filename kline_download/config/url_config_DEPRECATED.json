@@ -1,0 +1,371 @@
+{
+    "binance": {
+        "spot": {
+            "base_url": "https://api.binance.com/api/v3/uiKlines",
+            "symbol": [
+                "BTCUSDT",
+                "DOGEUSDT",
+                "ETHUSDT"
+            ],
+            "interval": {
+                "1s": null,
+                "1m": null,
+                "2m": null,
+                "3m": null,
+                "5m": null,
+                "15m": null,
+                "30m": null,
+                "1h": null,
+                "2h": null,
+                "4h": null,
+                "6h": null,
+                "8h": null,
+                "12h": null,
+                "1d": null,
+                "3d": null,
+                "1w": null,
+                "1M": null
+            },
+            "params": {
+                "endTime": "!ET!",
+                "limit": 1000,
+                "symbol": "!S!",
+                "interval": "!I!"
+            },
+            "processing_rules": {
+                "field_mappings": {
+                    "time": 0,
+                    "open": 1,
+                    "high": 2,
+                    "low": 3,
+                    "close": 4,
+                    "volume": 5,
+                    "close_time": 6,
+                    "transaction_volume": 7,
+                    "transaction_number": 8,
+                    "active_buying_volume": 9,
+                    "active_buying_transaction_volume": 10,
+                    "ignore": 11
+                },
+                "response_code_field": null,
+                "success_code": null,
+                "result_field": null
+            }
+        },
+        "future": {
+            "base_url": "https://www.binance.com/fapi/v1/continuousKlines",
+            "symbol": [
+                "BTCUSDT",
+                "DOGEUSDT",
+                "ETHUSDT",
+                "ETHBTC"
+            ],
+            "interval": {
+                "1m": null,
+                "15m": null,
+                "1d": null
+            },
+            "params": {
+                "endTime": "!ET!",
+                "limit": 1000,
+                "pair": "!S!",
+                "interval": "!I!",
+                "contractType": "PERPETUAL"
+            },
+            "processing_rules": {
+                "field_mappings": {
+                    "time": 0,
+                    "open": 1,
+                    "high": 2,
+                    "low": 3,
+                    "close": 4,
+                    "volume": 5,
+                    "close_time": 6,
+                    "transaction_volume": 7,
+                    "transaction_number": 8,
+                    "active_buying_volume": 9,
+                    "active_buying_transaction_volume": 10,
+                    "ignore": 11
+                },
+                "response_code_field": null,
+                "success_code": null,
+                "result_field": null
+            }
+        }
+    },
+    "bybit": {
+        "spot": {
+            "base_url": "https://api2.bybit.com/spot/api/quote/v2/klines",
+            "symbol": [
+                "BTCUSDT",
+                "ETHUSDT",
+                "DOGEUSDT"
+            ],
+            "interval": {
+                "1m": null,
+                "15m": null,
+                "1d": null
+            },
+            "params": {
+                "to": "!ET!",
+                "limit": 500,
+                "symbol": "!S!",
+                "interval": "!I!"
+            },
+            "processing_rules": {
+                "field_mappings": {
+                    "time": "t",
+                    "open": "o",
+                    "high": "h",
+                    "low": "l",
+                    "close": "c",
+                    "volume": "v"
+                },
+                "response_code_field": "ret_code",
+                "success_code": 0,
+                "result_field": "result"
+            }
+        },
+        "future": {
+            "base_url": "https://api2-2.bybit.com/contract/v5/public/instrument/kline/market",
+            "timestamp_type": {
+                "params": "ms",
+                "data": "s"
+            },
+            "symbol": [
+                "BTCUSDT",
+                "ETHUSDT",
+                "DOGEUSDT"
+            ],
+            "interval": {
+                "1": "1m",
+                "15": "15m",
+                "D": "1d"
+            },
+            "params": {
+                "contract_type": "2",
+                "from": "0",
+                "to": "!ET!",
+                "symbol": "!S!",
+                "resolution": "!I!",
+                "_sp_category": "fbu",
+                "_sp_response_format": "portugal",
+                "showOrigin": "true"
+            },
+            "processing_rules": {
+                "field_mappings": {
+                    "time": 0,
+                    "open": 1,
+                    "high": 2,
+                    "low": 3,
+                    "close": 4,
+                    "volume": 5
+                },
+                "response_code_field": "ret_code",
+                "success_code": 0,
+                "result_field": "result",
+                "result_field_2": "list"
+            }
+        }
+    },
+    "okx": {
+        "spot": {
+            "base_url": "https://www.okx.com/priapi/v5/market/history-candles",
+            "symbol": [
+                "BTC-USDT",
+                "ETH-USDT",
+                "DOGE-USDT"
+            ],
+            "interval": {
+                "1m": null,
+                "15m": null,
+                "1Dutc": "1d"
+            },
+            "params": {
+                "after": "!ET!",
+                "limit": 1000,
+                "instId": "!S!",
+                "bar": "!I!"
+            },
+            "processing_rules": {
+                "field_mappings": {
+                    "time": 0,
+                    "open": 1,
+                    "high": 2,
+                    "low": 3,
+                    "close": 4,
+                    "unknown1": 5,
+                    "unknown2": 6,
+                    "unknown3": 7,
+                    "unknown4": 8
+                },
+                "response_code_field": "code",
+                "success_code": "0",
+                "result_field": "data"
+            }
+        }
+    },
+    "kucoin": {
+        "spot": {
+            "base_url": "https://www.kucoin.com/_api/order-book/candles",
+            "timestamp_type": {
+                "params": "s",
+                "data": "s"
+            },
+            "symbol": [
+                "BTC-USDT",
+                "ETH-USDT",
+                "DOGE-USDT"
+            ],
+            "interval": {
+                "1min": "1m",
+                "15min": "15m",
+                "1day": "1d"
+            },
+            "params": {
+                "end": "!ET!",
+                "symbol": "!S!",
+                "type": "!I!"
+            },
+            "processing_rules": {
+                "field_mappings": {
+                    "time": 0,
+                    "open": 1,
+                    "close": 2,
+                    "high": 3,
+                    "low": 4,
+                    "transaction_volume": 5,
+                    "transaction_amount": 6
+                },
+                "response_code_field": "success",
+                "success_code": true,
+                "result_field": "data"
+            }
+        }
+    },
+    "temp": {
+        "temp": {
+            "base_url": "https://www.binance.com/fapi/v1/markPriceKlines",
+            "symbol": [
+                "BTCUSDT_200327",
+                "BTCUSDT_200626",
+                "BTCUSDT_200925",
+                "BTCUSDT_201225",
+                "BTCUSDT_210326",
+                "BTCUSDT_210625",
+                "BTCUSDT_210924",
+                "BTCUSDT_211231",
+                "BTCUSDT_220325",
+                "BTCUSDT_220624",
+                "BTCUSDT_220930",
+                "BTCUSDT_221230",
+                "BTCUSDT_230331",
+                "BTCUSDT_230630",
+                "BTCUSDT_230929",
+                "BTCUSDT_231229",
+                "BTCUSDT_240329",
+                "BTCUSDT_240628",
+                "BTCUSDT_240927",
+                "BTCUSDT_241227",
+                "BTCUSDT_250328",
+                "ETHUSDT_200327",
+                "ETHUSDT_200626",
+                "ETHUSDT_200925",
+                "ETHUSDT_201225",
+                "ETHUSDT_210326",
+                "ETHUSDT_210625",
+                "ETHUSDT_210924",
+                "ETHUSDT_211231",
+                "ETHUSDT_220325",
+                "ETHUSDT_220624",
+                "ETHUSDT_220930",
+                "ETHUSDT_221230",
+                "ETHUSDT_230331",
+                "ETHUSDT_230630",
+                "ETHUSDT_230929",
+                "ETHUSDT_231229",
+                "ETHUSDT_240329",
+                "ETHUSDT_240628",
+                "ETHUSDT_240927",
+                "ETHUSDT_241227",
+                "ETHUSDT_250328"
+            ],
+            "timestamp_type":{
+                "params":"ms",
+                "data":"ms"
+            },
+            "interval": {
+                "1m": null,
+                "15m": null,
+                "1d": null
+            },
+            "params": {
+                "endTime": "!ET!",
+                "limit": 1000,
+                "symbol": "!S!",
+                "interval": "!I!"
+            },
+            "processing_rules": {
+                "field_mappings": {
+                    "time": 0,
+                    "open": 1,
+                    "high": 2,
+                    "low": 3,
+                    "close": 4,
+                    "volume": 5,
+                    "close_time": 6,
+                    "transaction_volume": 7,
+                    "transaction_number": 8,
+                    "active_buying_volume": 9,
+                    "active_buying_transaction_volume": 10,
+                    "ignore": 11
+                },
+                "response_code_field": null,
+                "success_code": null,
+                "result_field": null
+            }
+        },
+        "temp3": {
+            "base_url": "https://www.binance.com/fapi/v1/continuousKlines",
+            "symbol": [
+                "BTCUSDT",
+                "ETHUSDT"
+            ],
+            "timestamp_type":{
+                "params":"ms",
+                "data":"ms"
+            },
+            "interval": {
+                "1m": null,
+                "15m": null,
+                "1d": null
+            },
+            "params": {
+                "endTime": "!ET!",
+                "limit": 1000,
+                "pair": "!S!",
+                "interval": "!I!",
+                "contractType": "CURRENT_QUARTER"
+            },
+            "processing_rules": {
+                "field_mappings": {
+                    "time": 0,
+                    "open": 1,
+                    "high": 2,
+                    "low": 3,
+                    "close": 4,
+                    "volume": 5,
+                    "close_time": 6,
+                    "transaction_volume": 7,
+                    "transaction_number": 8,
+                    "active_buying_volume": 9,
+                    "active_buying_transaction_volume": 10,
+                    "ignore": 11
+                },
+                "response_code_field": null,
+                "success_code": null,
+                "result_field": null
+            }
+        }
+    }
+}

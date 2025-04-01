@@ -1,0 +1,5 @@
+data_dir: "./data"
+aggregated_data_dir: "./data_aggr"
+bar_type: "volume_bar"
+threshold: 10000000
+process_num_limit: 1
