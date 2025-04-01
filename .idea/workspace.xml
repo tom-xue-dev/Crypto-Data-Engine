@@ -5,9 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="43a80aa9-5ae9-44fa-896d-27c06c7df6fa" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.name" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.name" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/Factor.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/Factor.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/feature/feature_implementation.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/feature_implementation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/feature/1.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/feature/read_data.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/read_data.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -44,77 +46,83 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
-    &quot;Python.1.executor&quot;: &quot;Run&quot;,
-    &quot;Python.101.executor&quot;: &quot;Run&quot;,
-    &quot;Python.2.executor&quot;: &quot;Run&quot;,
-    &quot;Python.3.executor&quot;: &quot;Run&quot;,
-    &quot;Python.53.executor&quot;: &quot;Run&quot;,
-    &quot;Python.54.executor&quot;: &quot;Run&quot;,
-    &quot;Python.99.executor&quot;: &quot;Run&quot;,
-    &quot;Python.Account.executor&quot;: &quot;Run&quot;,
-    &quot;Python.BTC_project.executor&quot;: &quot;Run&quot;,
-    &quot;Python.CNN-LSTM.executor&quot;: &quot;Run&quot;,
-    &quot;Python.CUSUM_filter.executor&quot;: &quot;Run&quot;,
-    &quot;Python.Kalman.executor&quot;: &quot;Run&quot;,
-    &quot;Python.LLT.executor&quot;: &quot;Run&quot;,
-    &quot;Python.MA_slope.executor&quot;: &quot;Run&quot;,
-    &quot;Python.RSRI.executor&quot;: &quot;Run&quot;,
-    &quot;Python.Trading_pair.executor&quot;: &quot;Run&quot;,
-    &quot;Python.analysis.executor&quot;: &quot;Run&quot;,
-    &quot;Python.api_trading.executor&quot;: &quot;Run&quot;,
-    &quot;Python.arbitrage_analysis.executor&quot;: &quot;Run&quot;,
-    &quot;Python.auto_corr.executor&quot;: &quot;Run&quot;,
-    &quot;Python.backtest_simulation.executor&quot;: &quot;Run&quot;,
-    &quot;Python.binance_btc_csv_maker.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bybit_btc_csv_maker_multithreading.executor&quot;: &quot;Run&quot;,
-    &quot;Python.candle_stick.executor&quot;: &quot;Run&quot;,
-    &quot;Python.create_list_directly.executor&quot;: &quot;Run&quot;,
-    &quot;Python.create_thread.executor&quot;: &quot;Run&quot;,
-    &quot;Python.cross-sectional_mom.executor&quot;: &quot;Run&quot;,
-    &quot;Python.cumsum_filter.executor&quot;: &quot;Run&quot;,
-    &quot;Python.diff_implementation.executor&quot;: &quot;Run&quot;,
-    &quot;Python.factor_check.executor&quot;: &quot;Run&quot;,
-    &quot;Python.feature_generation.executor&quot;: &quot;Run&quot;,
-    &quot;Python.feature_implementation.executor&quot;: &quot;Run&quot;,
-    &quot;Python.filter_data.executor&quot;: &quot;Run&quot;,
-    &quot;Python.fractional_diff.executor&quot;: &quot;Run&quot;,
-    &quot;Python.funding_fees.executor&quot;: &quot;Run&quot;,
-    &quot;Python.future_implementation.executor&quot;: &quot;Run&quot;,
-    &quot;Python.generate_pickles.executor&quot;: &quot;Run&quot;,
-    &quot;Python.get_btc_info.executor&quot;: &quot;Run&quot;,
-    &quot;Python.get_info.executor&quot;: &quot;Run&quot;,
-    &quot;Python.labeling.executor&quot;: &quot;Run&quot;,
-    &quot;Python.load.executor&quot;: &quot;Run&quot;,
-    &quot;Python.load_data.executor&quot;: &quot;Run&quot;,
-    &quot;Python.main.executor&quot;: &quot;Run&quot;,
-    &quot;Python.mann-kendall.executor&quot;: &quot;Run&quot;,
-    &quot;Python.mann.executor&quot;: &quot;Run&quot;,
-    &quot;Python.mann_backup.executor&quot;: &quot;Run&quot;,
-    &quot;Python.market_depth_data.executor&quot;: &quot;Run&quot;,
-    &quot;Python.merge.executor&quot;: &quot;Run&quot;,
-    &quot;Python.merge_fees.executor&quot;: &quot;Run&quot;,
-    &quot;Python.momentun_strategy.executor&quot;: &quot;Run&quot;,
-    &quot;Python.pattern.executor&quot;: &quot;Run&quot;,
-    &quot;Python.read_csv.executor&quot;: &quot;Run&quot;,
-    &quot;Python.read_data.executor&quot;: &quot;Run&quot;,
-    &quot;Python.read_large_files.executor&quot;: &quot;Run&quot;,
-    &quot;Python.strategy.executor&quot;: &quot;Run&quot;,
-    &quot;Python.syntax_test.executor&quot;: &quot;Run&quot;,
-    &quot;Python.technical_analysis.executor&quot;: &quot;Run&quot;,
-    &quot;Python.technical_indicator.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test.executor&quot;: &quot;Run&quot;,
-    &quot;Python.utils.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;feature&quot;,
-    &quot;last_opened_file_path&quot;: &quot;D:/github/BTC-trading&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_ADD_EXTERNAL_FILES": "true",
+    "Python.1.executor": "Run",
+    "Python.101.executor": "Run",
+    "Python.2.executor": "Run",
+    "Python.3.executor": "Run",
+    "Python.53.executor": "Run",
+    "Python.54.executor": "Run",
+    "Python.99.executor": "Run",
+    "Python.Account.executor": "Run",
+    "Python.BTC_project.executor": "Run",
+    "Python.CNN-LSTM.executor": "Run",
+    "Python.CUSUM_filter.executor": "Run",
+    "Python.Kalman.executor": "Run",
+    "Python.LLT.executor": "Run",
+    "Python.MA_slope.executor": "Run",
+    "Python.RSRI.executor": "Run",
+    "Python.Trading_pair.executor": "Run",
+    "Python.analysis.executor": "Run",
+    "Python.api_trading.executor": "Run",
+    "Python.arbitrage_analysis.executor": "Run",
+    "Python.auto_corr.executor": "Run",
+    "Python.backtest_simulation.executor": "Run",
+    "Python.bar_evaluation.executor": "Run",
+    "Python.binance_btc_csv_maker.executor": "Run",
+    "Python.bybit_btc_csv_maker_multithreading.executor": "Run",
+    "Python.candle_stick.executor": "Run",
+    "Python.create_list_directly.executor": "Run",
+    "Python.create_thread.executor": "Run",
+    "Python.cross-sectional_mom.executor": "Run",
+    "Python.cumsum_filter.executor": "Run",
+    "Python.diff_implementation.executor": "Run",
+    "Python.factor_check.executor": "Run",
+    "Python.feature_generation.executor": "Run",
+    "Python.feature_implementation.executor": "Run",
+    "Python.filter_data.executor": "Run",
+    "Python.fractional_diff.executor": "Run",
+    "Python.funding_fees.executor": "Run",
+    "Python.future_implementation.executor": "Run",
+    "Python.generate_pickles.executor": "Run",
+    "Python.get_btc_info.executor": "Run",
+    "Python.get_info.executor": "Run",
+    "Python.labeling.executor": "Run",
+    "Python.load.executor": "Run",
+    "Python.load_data.executor": "Run",
+    "Python.main.executor": "Run",
+    "Python.mann-kendall.executor": "Run",
+    "Python.mann.executor": "Run",
+    "Python.mann_backup.executor": "Run",
+    "Python.market_depth_data.executor": "Run",
+    "Python.merge.executor": "Run",
+    "Python.merge_fees.executor": "Run",
+    "Python.momentun_strategy.executor": "Run",
+    "Python.pattern.executor": "Run",
+    "Python.read_csv.executor": "Run",
+    "Python.read_data.executor": "Run",
+    "Python.read_large_files.executor": "Run",
+    "Python.strategy.executor": "Run",
+    "Python.syntax_test.executor": "Run",
+    "Python.technical_analysis.executor": "Run",
+    "Python.technical_indicator.executor": "Run",
+    "Python.test.executor": "Run",
+    "Python.utils.executor": "Run",
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "feature",
+    "last_opened_file_path": "D:/github/BTC-trading",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RunManager">
     <configuration name="BTC_project" type="PythonConfigurationType" factoryName="Python">
       <module name="BTC-trading" />
@@ -143,7 +151,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-09665e90c3a7-d3b881c8e49f-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-233.15026.15" />
+        <option value="bundled-js-predefined-d6986cc7102b-1632447f56bf-JavaScript-PY-243.25659.43" />
+        <option value="bundled-python-sdk-181015f7ab06-4df51de95216-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-243.25659.43" />
       </set>
     </attachedChunks>
   </component>
@@ -155,8 +164,12 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1731723839980</updated>
+      <workItem from="1743483707448" duration="1305000" />
     </task>
     <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
     <option name="TAB_STATES">
@@ -185,26 +198,27 @@
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/pre_process_py$feature_implementation.coverage" NAME="feature_implementation 覆盖结果" MODIFIED="1742944703709" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
     <SUITE FILE_PATH="coverage/main_py$load_pickle.coverage" NAME="load_pickle 覆盖结果" MODIFIED="1742290494437" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/data" />
-    <SUITE FILE_PATH="coverage/pre_process_py$download.coverage" NAME="download 覆盖结果" MODIFIED="1742545023788" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/pre_process_py$read_data.coverage" NAME="read_data 覆盖结果" MODIFIED="1742879833662" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
-    <SUITE FILE_PATH="coverage/download_py$api_trading.coverage" NAME="api_trading 覆盖结果" MODIFIED="1742466300916" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/pre_process_py$multi_process_test.coverage" NAME="multi_process_test 覆盖结果" MODIFIED="1742714918357" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/main_py$download.coverage" NAME="download 覆盖结果" MODIFIED="1742448970506" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/pre_process_py$load_data.coverage" NAME="load_data 覆盖结果" MODIFIED="1742872503100" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/data_handle" />
     <SUITE FILE_PATH="coverage/pre_process_py$GP.coverage" NAME="GP 覆盖结果" MODIFIED="1742942312933" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
     <SUITE FILE_PATH="coverage/pre_process_py$path_utils.coverage" NAME="path_utils 覆盖结果" MODIFIED="1742871781092" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/pre_process_py$api_trading.coverage" NAME="api_trading 覆盖结果" MODIFIED="1742517452639" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/main_py$download_aggTrade.coverage" NAME="download-aggTrade 覆盖结果" MODIFIED="1742364279566" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/binance-public-data-master/python" />
     <SUITE FILE_PATH="coverage/main_py$pre_process.coverage" NAME="pre_process 覆盖结果" MODIFIED="1742440032123" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/pre_process_py$factor_evaluation.coverage" NAME="factor_evaluation 覆盖结果" MODIFIED="1742877372802" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
     <SUITE FILE_PATH="coverage/pre_process_py$pre_process.coverage" NAME="pre_process 覆盖结果" MODIFIED="1742942664179" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/main_py$main.coverage" NAME="main 覆盖结果" MODIFIED="1742438510903" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/pre_process_py$main.coverage" NAME="main 覆盖结果" MODIFIED="1742525358989" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/pre_process_py$CUSUM_filter.coverage" NAME="CUSUM_filter 覆盖结果" MODIFIED="1742887738807" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
-    <SUITE FILE_PATH="coverage/download_py$main.coverage" NAME="main 覆盖结果" MODIFIED="1742467968009" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/download_py$download.coverage" NAME="download 覆盖结果" MODIFIED="1742531264953" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/api_trading_py$api_trading.coverage" NAME="api_trading 覆盖结果" MODIFIED="1742857730431" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/download_py$pre_process.coverage" NAME="pre_process 覆盖结果" MODIFIED="1742457580990" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/pre_process_py$download.coverage" NAME="download 覆盖结果" MODIFIED="1742545023788" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/download_py$api_trading.coverage" NAME="api_trading 覆盖结果" MODIFIED="1742466300916" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/main_py$download.coverage" NAME="download 覆盖结果" MODIFIED="1742448970506" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/pre_process_py$load_data.coverage" NAME="load_data 覆盖结果" MODIFIED="1742872503100" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/data_handle" />
+    <SUITE FILE_PATH="coverage/feature_implementation_py$bar_evaluation.coverage" NAME="bar_evaluation 覆盖结果" MODIFIED="1743484889861" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
+    <SUITE FILE_PATH="coverage/main_py$download_aggTrade.coverage" NAME="download-aggTrade 覆盖结果" MODIFIED="1742364279566" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/binance-public-data-master/python" />
+    <SUITE FILE_PATH="coverage/pre_process_py$factor_evaluation.coverage" NAME="factor_evaluation 覆盖结果" MODIFIED="1742877372802" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
+    <SUITE FILE_PATH="coverage/pre_process_py$main.coverage" NAME="main 覆盖结果" MODIFIED="1742525358989" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/download_py$main.coverage" NAME="main 覆盖结果" MODIFIED="1742467968009" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/api_trading_py$api_trading.coverage" NAME="api_trading 覆盖结果" MODIFIED="1742857730431" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/pre_process_py$factor_check.coverage" NAME="factor_check 覆盖结果" MODIFIED="1742882455683" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
   </component>
 </project>

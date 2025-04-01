@@ -16,3 +16,4 @@ back_test/transactions.txt
 *.csv
 /feature/.idea
 /data_aggr
+/tick_data
