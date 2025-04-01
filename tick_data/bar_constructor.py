@@ -1,75 +1,22 @@
-import multiprocessing
-import sys
-from datetime import datetime,timezone
-from pandas.compat.numpy.function import validate_take
-from path_utils import *
+import os
 import pandas as pd
 import numpy as np
-import os
 from numba import njit
-from typing import Optional
-
-def convert_timestamp(ts):
-    """将13位或16位时间戳转换为UTC时间"""
-    ts_str = str(ts)
-    if len(ts_str) == 13:  # 13位毫秒级时间戳
-        seconds = ts / 1000.0
-    elif len(ts_str) == 16:  # 16位微秒级时间戳
-        seconds = ts / 1000000.0
-    else:
-        raise ValueError("不支持的时间戳位数（需13或16位）")
-
-    return datetime.fromtimestamp(seconds, tz=timezone.utc)
-
-
+from datetime import datetime, timezone
 
 @njit
 def get_volume_bar_indices(volume_arr, threshold):
-    result = []
-    cusum = 0
+    indices = []
+    cum_volume = 0
     for i in range(len(volume_arr)):
-        cusum += volume_arr[i]
-        if cusum >= threshold:
-            cusum = 0  # 达到阈值，重置累加器
-            result.append(i)
-    return result
-
-
-def build_bar(segment,bar_type = 'tick_bar'):
-    if bar_type == 'tick_bar':
-        return {
-            'start_time': convert_timestamp(segment['timestamp'].iloc[0]),
-            'open': segment['price'].iloc[0],
-            'high': segment['price'].max(),
-            'low': segment['price'].min(),
-            'close': segment['price'].iloc[-1],
-            'volume': segment['quantity'].sum(),
-            'sell_volume': segment[segment['isBuyerMaker']]['quantity'].sum(),
-            'buy_volume': segment[~segment['isBuyerMaker']]['quantity'].sum(),
-            'vwap': (segment['price']*segment['quantity']).sum() / segment['quantity'].sum(),
-            'medium_price': segment['price'].median(),
-            'volume_std': segment['quantity'].std(),
-            'tick_interval_mean': segment['timestamp'].diff().mean(),
-            'best_match': segment['isBestMatch'].sum() / len(segment),
-        }
-    elif bar_type == 'dollar_bar' or bar_type == 'volume_bar':
-        return {
-            'start_time': convert_timestamp(segment['timestamp'].iloc[0]),
-            'open': segment['price'].iloc[0],
-            'high': segment['price'].max(),
-            'low': segment['price'].min(),
-            'close': segment['price'].iloc[-1],
-            'volume': segment['quantity'].sum(),
-            'sell_volume': segment[segment['isBuyerMaker']]['quantity'].sum(),
-            'buy_volume': segment[~segment['isBuyerMaker']]['quantity'].sum(),
-            'vwap': (segment['price']*segment['quantity']).sum() / segment['quantity'].sum(),
-            'best_match_ratio': segment['isBestMatch'].sum() / len(segment),
-        }
-
-
+        cum_volume += volume_arr[i]
+        if cum_volume >= threshold:
+            indices.append(i)
+            cum_volume = 0
+    return indices
 
 class BarConstructor:
-    def __init__(self,folder_path:str, threshold = 100000,bar_type = 'dollar_bar'):
+    def __init__(self, folder_path, threshold=100000, bar_type="dollar_bar"):
         self.bar_type = bar_type
         self.folder_path = folder_path
         self.threshold = threshold
@@ -84,70 +31,97 @@ class BarConstructor:
             "isBestMatch"
         ]
 
-    def _construct_dollar_bar(self,data):
-        # 找到block_index出现跃迁的位置
+    def _construct_dollar_bar(self, data):
         dollar_volume = data['price'] * data['quantity']
-        crosses = get_volume_bar_indices(dollar_volume.values,self.threshold)
+        crosses = get_volume_bar_indices(dollar_volume.values, self.threshold)
         start_idx = 0
         bars = []
         for end_idx in crosses:
             segment = data.iloc[start_idx:end_idx + 1]
-            bars.append(build_bar(segment,bar_type = 'dollar_bar'))
+            bars.append(self.build_bar(segment, bar_type='dollar_bar'))
             start_idx = end_idx + 1
 
         if start_idx < len(data):
             segment = data.iloc[start_idx:]
-            bars.append(build_bar(segment,bar_type = 'dollar_bar'))
+            bars.append(self.build_bar(segment, bar_type='dollar_bar'))
         bars = pd.DataFrame(bars)
+        bars.columns = [str(col) for col in bars.columns]
         return bars
 
-    def _construct_volume_bar(self,data):
+    def _construct_volume_bar(self, data):
         crosses = get_volume_bar_indices(data['quantity'].values, self.threshold)
         start_idx = 0
         bars = []
         for end_idx in crosses:
             segment = data.iloc[start_idx:end_idx + 1]
-            bars.append(build_bar(segment,bar_type = 'volume_bar'))
+            bars.append(self.build_bar(segment, bar_type='volume_bar'))
             start_idx = end_idx + 1
 
         if start_idx < len(data):
             segment = data.iloc[start_idx:]
-            bars.append(build_bar(segment,bar_type = 'volume_bar'))
+            bars.append(self.build_bar(segment, bar_type='volume_bar'))
         bars = pd.DataFrame(bars)
+        bars.columns = [str(col) for col in bars.columns]
         return bars
-    def _construct_tick_bar(self,data):
+
+    def _construct_tick_bar(self, data):
         segments = [data.iloc[i:i + self.threshold] for i in range(0, len(data), self.threshold)]
         bars = []
         for seg in segments:
-            bars.append(build_bar(seg,bar_type = 'tick_bar'))
+            bars.append(self.build_bar(seg, bar_type='tick_bar'))
         bars = pd.DataFrame(bars)
+        bars.columns = [str(col) for col in bars.columns]
         return bars
-    def _construct_imblance_volume_bar(self,data):
-        crosses = get_volume_bar_indices(data['quantity'].values, self.threshold)
-        start_idx = 0
-        bars = []
-        for end_idx in crosses:
-            segment = data.iloc[start_idx:end_idx + 1]
-    def _construct_imblance_dollar_bar(self,data):
-        pass
 
-    def _construct_tick_run_bar(self,data):
-        pass
+    def build_bar(self, segment, bar_type='tick_bar'):
+        if bar_type == 'tick_bar':
+            return {
+                'start_time': self.convert_timestamp(segment['timestamp'].iloc[0]),
+                'open': segment['price'].iloc[0],
+                'high': segment['price'].max(),
+                'low': segment['price'].min(),
+                'close': segment['price'].iloc[-1],
+                'volume': segment['quantity'].sum(),
+                'sell_volume': segment[segment['isBuyerMaker']]['quantity'].sum(),
+                'buy_volume': segment[~segment['isBuyerMaker']]['quantity'].sum(),
+                'vwap': (segment['price'] * segment['quantity']).sum() / segment['quantity'].sum(),
+                'medium_price': segment['price'].median(),
+                'volume_std': segment['quantity'].std(),
+                'tick_interval_mean': segment['timestamp'].diff().mean(),
+                'best_match': segment['isBestMatch'].sum() / len(segment),
+            }
+        elif bar_type in ['dollar_bar', 'volume_bar']:
+            return {
+                'start_time': self.convert_timestamp(segment['timestamp'].iloc[0]),
+                'open': segment['price'].iloc[0],
+                'high': segment['price'].max(),
+                'low': segment['price'].min(),
+                'close': segment['price'].iloc[-1],
+                'volume': segment['quantity'].sum(),
+                'sell_volume': segment[segment['isBuyerMaker']]['quantity'].sum(),
+                'buy_volume': segment[~segment['isBuyerMaker']]['quantity'].sum(),
+                'vwap': (segment['price'] * segment['quantity']).sum() / segment['quantity'].sum(),
+                'best_match_ratio': segment['isBestMatch'].sum() / len(segment),
+            }
 
-    def process_asset_data(self) -> Optional[pd.DataFrame]:
-        """
-        遍历文件夹内所有 CSV 文件（aggTrades数据），分块读取并构建 volume bar。
-        """
-        # 找到所有 CSV 文件
-        # cnt = 0
+    def convert_timestamp(self, ts):
+        length = len(str(ts))
+        if length == 13:  # 毫秒
+            ts = ts / 1000
+        elif length >= 16:  # 微秒
+            ts = ts / 1000000
+        else:
+            raise ValueError(f"Unsupported timestamp length: {length}")
+        return datetime.fromtimestamp(ts, tz=timezone.utc)
+
+    def process_asset_data(self):
         dataframes = []
         for file in self.folder_path:
-            print(f"Processing file: {file}")
             df = pd.read_parquet(file)
             dataframes.append(df)
-        # 最后将所有的 DataFrame 合并成一个
         data = pd.concat(dataframes, ignore_index=True)
         data.columns = self.col_names
+
         if self.bar_type == 'dollar_bar':
             bars_df = self._construct_dollar_bar(data)
         elif self.bar_type == 'tick_bar':
@@ -156,17 +130,5 @@ class BarConstructor:
             bars_df = self._construct_volume_bar(data)
         else:
             bars_df = None
+
         return bars_df
-
-def run_asset_data(path, asset_name, bar_type = 'dollar_bar',threshold = 1000000):
-    print(f"start running asset:{asset_name}")
-    constructor = BarConstructor(folder_path=path, threshold=threshold, bar_type=bar_type)
-    df = constructor.process_asset_data()
-    df.index = pd.MultiIndex.from_arrays([df['start_time'], [asset_name] * len(df)], names=['time', 'asset'])
-    df = df.drop(columns=['start_time'])
-    print(df)
-    df.to_parquet(f'./data_aggr/{bar_type}/{asset_name}.parquet')
-    return asset_name  # 可选：返回处理完成的 asset 名称
-
-
-
