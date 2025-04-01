@@ -6,3 +6,4 @@ proxies.yml
 /tick_data/data
 ./idea
 /.idea
+/tick_data/data_aggrate
