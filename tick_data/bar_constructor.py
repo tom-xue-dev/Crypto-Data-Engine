@@ -6,7 +6,6 @@ from path_utils import *
 import pandas as pd
 import numpy as np
 import os
-import psutil
 from numba import njit
 from typing import Optional
 
@@ -168,28 +167,6 @@ def run_asset_data(path, asset_name, bar_type = 'dollar_bar',threshold = 1000000
     print(df)
     df.to_parquet(f'./data_aggr/{bar_type}/{asset_name}.parquet')
     return asset_name  # 可选：返回处理完成的 asset 名称
-
-
-if __name__ == "__main__":
-
-    assets = get_sorted_assets(root_dir=r'.\data',end="USDT")
-    print(assets)
-    results = []
-    with multiprocessing.Pool(processes=4) as pool:
-        for asset, size in assets:
-            process_num = min(16, 16 / (size / 1024 / 1024 / 1024 * 6))
-            if process_num < 8:
-                print('assets stop at', assets)
-                break
-            paths = get_asset_file_path(asset)
-            if paths[0].split("-")[2] == '2025':
-                continue  # 过滤掉刚上线的资产
-            bar_threshold = 10000000
-            r = pool.apply_async(run_asset_data, args=(paths, asset,'volume_bar',bar_threshold))
-            results.append(r)
-
-        for r in results:
-            print(f'{r.get()} done!')
 
 
 

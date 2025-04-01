@@ -5,3 +5,4 @@ proxies.yml
 *test*.py
 data/
 /data_aggr
+/tick_data/data_aggr

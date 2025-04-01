@@ -1,0 +1,10 @@
+base_url: "https://data.binance.vision/data/spot/monthly/aggTrades"
+completed_tasks_file: "./completed_tasks.txt"
+data_dir: "./data"
+start_date: "2022-01"
+end_date: "2025-03"
+max_threads: 8
+convert_processes: 8
+queue_size: 20
+symbols: ['NEOUSDT','LTCUSDT','QTUMUSDT','XRPUSDT','EOSUSDT']   # or something like ['BTCUSDT', 'ETHUSDT']
+filter_suffix: null                      # or you can choose something like USDT or USDC
