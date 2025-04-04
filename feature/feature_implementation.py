@@ -1,7 +1,6 @@
 import pickle
 import sys
 import numpy as np
-from read_large_files import map_and_load_pkl_files, select_assets
 import pandas as pd
 from IC_calculator import compute_zscore, compute_ic
 import alphalens as al
@@ -9,7 +8,7 @@ import utils as u
 from Factor import *
 from multiprocessing import Pool
 from labeling import parallel_apply_triple_barrier
-from read_data import DataLoader
+from Dataloader import DataLoader, DataLoaderConfig
 from factor_evaluation import FactorEvaluator
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
@@ -114,7 +113,8 @@ def factor_return_analysis_plot(df, factor_col, return_col, n_bins=5, title=None
 
 
 if __name__ == '__main__':
-    data_loader = DataLoader(folder=".././data_aggr/dollar_bar",file_end='USDT')
+    config = DataLoaderConfig.load("load_config.yaml")
+    data_loader = DataLoader(config)
     data = data_loader.load_all_data()
     data['returns'] = u.returns(data)
     data['log_close'] = np.log(data['close'])
@@ -123,14 +123,14 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
     #data['label'] = np.where(data['future_return'] > 0, 1, 0)
     alpha_funcs = [
-        # ('alpha1', alpha1),
-        # ('alpha2', alpha2),
-        # ('alpha9', alpha9),
-        # ('alpha25', alpha25),
-        # ('alpha32', alpha32),
-        # ('alpha46', alpha46),
-        # ('alpha95', alpha95),
-        # ('alpha101', alpha101),
+        ('alpha1', alpha1),
+        ('alpha2', alpha2),
+        ('alpha9', alpha9),
+        ('alpha25', alpha25),
+        ('alpha32', alpha32),
+        ('alpha46', alpha46),
+        ('alpha95', alpha95),
+        ('alpha101', alpha101),
         # ('alpha102', alpha102),
         # ('alpha103', alpha103),
         # ('alpha104', alpha104),
@@ -143,32 +143,19 @@ if __name__ == '__main__':
         # ('alpha111',alpha111),
         # ('alpha112',alpha112),
         # ('alpha113',alpha113),
-        ('alpha114',alpha114),
+        # ('alpha114',alpha114),
         # ('alpha115',alpha115),
         # ('alpha116',alpha116),
         # ('alpha117',alpha117),
 
      ]
-    features = [f'alpha114_{i}' for i in range(1,21)]
-
-    print(features)
     for name, func in alpha_funcs:
         print(f"=== Now computing {name} in parallel... ===")
         data = compute_alpha_parallel(data, alpha_func=func, n_jobs=16)
 
     data = data.dropna()
-    data['pca_close'] = pca_transform(df=data, columns=features, n_components=1, prefix='pca')
     print(data)
-    for name in features:
-        ic = compute_ic(df=data, feature_column=name, return_column='future_return')
-        print(name, ic)
-        factor_return_analysis_plot(df=data, factor_col=name, return_col='future_return', n_bins=5, title=f'{name} IC_MEAN: {np.mean(ic)}')
-    ic = compute_ic(df=data, feature_column='pca_close', return_column='future_return')
-    print(ic)
-    factor_return_analysis_plot(df=data, factor_col='pca_close', return_col='future_return', n_bins=5,
-                                title=f'pca_close IC_MEAN: {np.mean(ic)}')
-    # 2. 分层
-    # evaluator = FactorEvaluator(data)
-    # evaluator.plot_factor_distribution(factor_column='returns', upper_bound=10, lower_bound=0)
-    # evaluator.plot_cumulative_ic(factor_column='alpha1', return_column='future_return',method='pearson')
-    # evaluator.plot_cumulative_ic(factor_column='alpha2', return_column='future_return', method='pearson')
+    for col,_ in alpha_funcs:
+        ic = compute_ic(data, feature_column=col,return_column='future_return')
+        print(ic)
+        factor_return_analysis_plot(data,col, 'future_return', n_bins=5, title=f'{col} future group return')

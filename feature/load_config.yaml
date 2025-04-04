@@ -1,0 +1,8 @@
+folder: "../tick_data/data_aggrate/volume_bar"
+start_date: "2023-01-01"
+end_date: "2023-06-01"
+file_format: "parquet"
+use_cache: true
+use_mmap: true
+file_end: "USDT"
+parallel: true

@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 
-def compute_ic(df, feature_column, return_column, groupby_column='asset', method='spearman'):
+def compute_ic(df, feature_column, return_column, groupby_column='asset', method='pearson'):
     group_ic = df.groupby(groupby_column).apply(lambda x: x[feature_column].corr(x[return_column], method=method))
     ic = df[feature_column].corr(df[return_column], method=method)
     return ic

@@ -4,7 +4,6 @@ from numba import njit
 import numpy as np
 import plotly.graph_objects as go
 from IC_calculator import compute_zscore, compute_ic
-from feature.read_large_files import select_assets, map_and_load_pkl_files
 
 
 def rolling_autocorr_factor(df, window=20):
@@ -166,77 +165,3 @@ def cusum_filter(df, threshold=0.03, drift=0):
 
     df['signal'] = signals
     return df
-
-
-if __name__ == "__main__":
-    start = "2020-1-1"
-    end = "2023-12-31"
-    assets = select_assets(start_time=start, spot=True, n=50)
-    print(assets)
-
-    data = map_and_load_pkl_files(asset_list=assets, start_time=start, end_time=end, level="15min")
-    data['future_return'] = data.groupby('asset')['close'].apply(
-        lambda x: x.shift(-10) / x - 1).droplevel(0)
-    # data['future_return'] = data.groupby(level='time')['future_return'].rank(
-    #     method='dense',  # 或者 'first','average','min','max' 等
-    #     ascending=False  # 如果你想把收益率高的排在前面，就用 False
-    # )
-    print(data)
-    data = process_wrapper(data, func=rolling_autocorr_factor)
-    # data = process_wrapper(data, func=cusum_filter)
-    print(data)
-    # columns = ['momentum']
-    # for column in data.columns:
-    #     if column not in ['open', 'close', 'high', 'low', 'APO', 'RSI', 'returns', 'volume', 'return', 'log_close',
-    #                       'future_return', 'vwap', 'amount', 'beta', 'downsidevolatility', 'upsidevolatility',
-    #                       'volumestd']:
-    #         ic = compute_ic(df=data, feature_column=column, return_column='future_return',method='pearson')
-    #         # ic = compute_ic(df=data, feature_column='zscore_RSI', return_column='future_return')
-    #         print(column, "IC_MEAN:", np.mean(ic), "IR", np.mean(ic) / np.std(ic))
-    # # for asset, df in data.groupby('asset'):
-    #     import plotly.graph_objects as go
-    #
-    #     # 绘制K线图
-    #     fig = go.Figure(data=[
-    #         go.Candlestick(
-    #             x=df.index.get_level_values('time'),
-    #             open=df['open'],
-    #             high=df['high'],
-    #             low=df['low'],
-    #             close=df['close'],
-    #             name='Price'
-    #         )
-    #     ])
-    #
-    #     # 标记买入信号 (signal == 1)
-    #     buy_signals = df[df['signal'] == 1]
-    #     fig.add_trace(
-    #         go.Scatter(
-    #             x=buy_signals.index.get_level_values('time'),
-    #             y=buy_signals['low'] * 0.995,  # 在最低点稍下方标记
-    #             mode='markers',
-    #             marker=dict(color='green', size=10, symbol='triangle-up'),
-    #             name='Buy Signal'
-    #         )
-    #     )
-    #
-    #     # 标记卖出信号 (signal == -1)
-    #     sell_signals = df[df['signal'] == -1]
-    #     fig.add_trace(
-    #         go.Scatter(
-    #             x=sell_signals.index.get_level_values('time'),
-    #             y=sell_signals['high'] * 1.005,  # 在最高点稍上方标记
-    #             mode='markers',
-    #             marker=dict(color='red', size=10, symbol='triangle-down'),
-    #             name='Sell Signal'
-    #         )
-    #     )
-    #
-    #     fig.update_layout(
-    #         xaxis_rangeslider_visible=False,
-    #         title='Candlestick Chart with Signals'
-    #     )
-    #
-    #     fig.show()
-    #
-    #     break

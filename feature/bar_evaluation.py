@@ -1,10 +1,10 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from read_data import DataLoader
+from Dataloader import DataLoader,DataLoaderConfig
 
 class BarEvaluator:
-    def __init__(self, df):
+    def __init__(self, df:pd.DataFrame):
         """
         :param df: DataFrame, Bar 数据, 必须包含 'close' 列
         """
@@ -24,7 +24,7 @@ class BarEvaluator:
         print(f"Kurtosis: {returns.kurtosis()}")
         plt.figure(figsize=(10, 4))
         plt.hist(returns, bins=100, alpha=0.7)
-        plt.title("Return Distribution")
+        plt.title(f"{self.df.index.get_level_values('asset')[0]}Return Distribution")
         plt.xlabel("Returns")
         plt.ylabel("Frequency")
         plt.show()
@@ -90,11 +90,10 @@ class BarQualityScanner:
         return result_df
 
 if __name__ == "__main__":
-    data_loader = DataLoader(file_end='USDT')
+    config = DataLoaderConfig.load("load_config.yaml")
+    data_loader = DataLoader(config)
     data = data_loader.load_all_data()
-    cnt = 0
-    scanner = BarQualityScanner(data)
-    result = scanner.scan()
-    print(result)
-    bad_assets = result[result['recommendation'] != '✅ 正常']['asset'].tolist()
-    print(bad_assets)
+    for asset,group in data.groupby('asset'):
+        evaluator = BarEvaluator(group)
+        evaluator.plot_return_distribution()
+
