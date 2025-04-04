@@ -5,7 +5,7 @@ from datetime import datetime
 from Config import Config
 from bar_constructor import BarConstructor
 from path_utils import get_sorted_assets, get_asset_file_path
-
+import numpy as np
 class PreprocessContext:
     def __init__(self, config):
         self.data_dir = config['data_dir']
@@ -19,7 +19,7 @@ class PreprocessContext:
         self.target_bars = config.get('target_bars', 300)
 
 
-def suggest_threshold_by_sample(asset_files, target_bars=300, sample_days=1):
+def suggest_threshold_by_sample(bar_type,asset_files, target_bars=300, sample_days=1):
     col_names = [
         "aggTradeId",
         "price",
@@ -60,8 +60,17 @@ def suggest_threshold_by_sample(asset_files, target_bars=300, sample_days=1):
         return 10000000
 
     sample_df = pd.concat(all_samples, ignore_index=True)
-    tick_count = len(sample_df)
-    threshold = max(tick_count // target_bars, 300)
+    if bar_type == 'tick_bar':
+        tick_count = len(sample_df)
+        threshold = max(tick_count // target_bars, 300)
+    elif bar_type == 'dollar_bar':
+        dollar_count = np.sum(sample_df['price'] * sample_df['quantity'].abs())
+        threshold = max(dollar_count.sum() // target_bars, 1000)
+    elif bar_type == 'volume_bar':
+        volume_count = np.sum(sample_df['quantity'])
+        threshold = max(volume_count // target_bars, 1000)
+    else:
+        raise ValueError(f"Unsupported bar type: {bar_type}")
     return threshold
 
 
@@ -78,7 +87,7 @@ def run_asset_data(path, asset, context, threshold):
     output_dir = os.path.join(context.aggr_dir, context.bar_type)
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, f"{asset}.parquet")
-    df.to_parquet(output_path, compression="brotli")
+    df.to_parquet(output_path)
 
     print(f"✅ {asset} 已完成 (threshold={threshold})")
     return asset
@@ -94,8 +103,8 @@ def process_asset(args):
         return None
 
     if context.adaptive:
-        threshold = suggest_threshold_by_sample(
-            paths, target_bars=context.target_bars, sample_days=context.sample_days
+        threshold = suggest_threshold_by_sample(bar_type=context.bar_type, asset_files=paths,
+        target_bars=context.target_bars, sample_days=context.sample_days
         )
         print(f"[INFO] {asset} → Adaptive Threshold = {threshold}")
     else:
