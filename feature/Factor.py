@@ -1,9 +1,10 @@
 import talib
-
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 import utils as u
 import pandas as pd
 import numpy as np
-
+from scipy.stats import skew, kurtosis
 
 def compute_zscore(group: pd.DataFrame, column: str, window: int) -> pd.DataFrame:
     """
@@ -55,6 +56,33 @@ def alpha2(df):
 
     return df
 
+def alpha3(df,window = 20):
+    """
+    乖离率，检验距离均线偏离程度
+    """
+    df_copy = df.copy()
+    df_copy['MA'] = df['close'].rolling(window=window).mean()
+    df['alpha3'] = (df_copy['close'] - df_copy['MA']) / df_copy['MA']
+    return df
+
+def alpha4(df, window=20):
+    """
+    过去 window 个 bar 中上涨 bar 的占比
+    """
+    df_copy = df.copy()
+    df_copy['return'] = df_copy['close'].pct_change()
+    df_copy['up'] = (df_copy['return'] > 0).astype(int)
+    df['alpha4'] = df_copy['up'].rolling(window).sum() / window
+    return df
+
+def alpha5(df,window = 20):
+    df['alpha5'] = (df['medium_price'] - df['low']) / (df['high'] - df['low'])
+    df['alpha5'] = df['alpha5'].rolling(window).mean()
+    return df
+
+def alpha6(df,window = 20):
+    df['alpha6'] = (df['medium_price'] - df['vwap']) / df['vwap']
+    return df
 
 def alpha9(df, window=1200):
     """
@@ -158,7 +186,7 @@ def alpha101(group, fast_period=12, slow_period=26, window=1200):
     return group
 
 
-def alpha102(group: pd.DataFrame, time_period: int = 12) -> pd.DataFrame:
+def alpha102(group: pd.DataFrame, window: int = 20) -> pd.DataFrame:
     """
     RSRI指标，对过去n天的最高价最低价去作线性回归
     针对单个资产的数据，使用过去 time_period 天（或 K 线）的最低价和最高价
@@ -177,36 +205,33 @@ def alpha102(group: pd.DataFrame, time_period: int = 12) -> pd.DataFrame:
     """
     group = group.copy()
     # 计算滚动窗口内 'low' 与 'high' 的协方差和 'low' 的方差
-    rolling_cov = group['low'].rolling(window=time_period, min_periods=time_period).cov(group['high'])
-    rolling_var = group['low'].rolling(window=time_period, min_periods=time_period).var()
+    rolling_cov = group['low'].rolling(window=window, min_periods=window).cov(group['high'])
+    rolling_var = group['low'].rolling(window=window, min_periods=window).var()
     # 计算 beta
     beta_raw = np.where(rolling_var == 0, np.nan, rolling_cov / rolling_var)
-    group['beta'] = pd.Series(beta_raw, index=group.index).ffill()
-    beta_mean = group['beta'].rolling(window=1200, min_periods=time_period).mean()
-    beta_std = group['beta'].rolling(window=1200, min_periods=time_period).std()
-    group['alpha102'] = (group['beta'] - beta_mean) / beta_std
-    #group['alpha102'] = group['beta']
+    beta = pd.Series(beta_raw, index=group.index).ffill()
+    group['alpha102'] = beta
+    # beta_mean = group['beta'].rolling(window=1200, min_periods=time_period).mean()
+    # beta_std = group['beta'].rolling(window=1200, min_periods=time_period).std()
+    # group['alpha102'] = (group['beta'] - beta_mean) / beta_std
     return group
 
 
-def alpha103(group: pd.DataFrame, time_period: int = 12) -> pd.DataFrame:
+def alpha103(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
     """
     计算收益率的偏度和峰度.目前来看只有偏度有用
+    换成tick bar后 不知道为什么似乎峰度效果好
     """
-    group = group.copy()
-    # 计算收益率（百分比变化率）
-    group['return'] = group['close'].pct_change()
-    # 利用滚动窗口计算收益率的偏度和峰度，只有当窗口内数据足够时才计算（否则返回 NaN）
-    group['alpha103'] = group['return'].rolling(window=time_period, min_periods=time_period).skew()
-    # group['kurt'] = group['return'].rolling(window=time_period, min_periods=time_period).kurt()
-    # group['skew_kurt_ratio'] = group['skew']/group['kurt']
-    # group['skew_kurt_ratio_std'] = group['skew_kurt_ratio'].rolling(time_period).mean()
-    return group
+    df['log_ret'] = np.log(df['close'] / df['close'].shift(1))
+    #df['alpha103'] = df['log_ret'].rolling(window).apply(lambda x: skew(x, bias=False), raw=True)
+    df['alpha103'] = df['log_ret'].rolling(window).apply(lambda x: kurtosis(x, fisher=True, bias=False), raw=True)
+    return df
 
 
 def alpha104(group):
     """
     计算流动性指标amihud
+    本质为过去一根k线单位dollar推动的涨幅
     """
     group = group.copy()
     group['return'] = group['close'].pct_change()
@@ -231,12 +256,12 @@ def alpha105(group, time_period=300):
         - 'leading_volume': 下一分钟的成交量（即 volume 向上平移一位）
         - 'corr': 'close' 与 'leading_volume' 在滚动窗口内计算得到的相关系数
     """
+    #目前来看在tick数据上表现不太好
     # 复制数据，防止对原数据修改
     group = group.copy()
-    group['returns'] = group['close'].pct_change()  # (Close[t] - Close[t-1]) / Close[t-1]
-    group['volume_change'] = group['volume'].pct_change()
-    group['alpha105'] = group['returns'].rolling(window=time_period).corr(group['volume_change'])
-    group = group.drop(columns='volume_change')
+    group['returns'] = group['close'].pct_change()
+    group['dollar_volume'] = group['volume'].pct_change()
+    group['alpha105'] = group['returns'].rolling(window=time_period).corr(group['dollar_volume'])
     return group
 
 
@@ -368,138 +393,96 @@ def alpha108(df, window=1200, vol_window=30):
     return df
 
 
-def alpha109(df):
-    df['alpha124'] = df['medium_price'].diff()
+def alpha109(df, window=20):
+    total_volume = df['buy_volume'] + df['sell_volume']
+    imbalance = (df['buy_volume'] - df['sell_volume']) / total_volume.replace(0, np.nan)
+    df['alpha109'] = imbalance.rolling(window).mean()
     return df
 
-def alpha110(df):
-    for i in range(1,21):
-        df[f'alpha110_{i}'] = df['close'].pct_change(i)
+
+def alpha110(df,window = 20):
+    df['alpha110'] = df['tick_interval_mean'].rolling(window).ewm(span=20).mean()
     return df
-def alpha111(df):
-    for i in range(1,21):
-        df[f'alpha111_{i}'] = df['high'].pct_change(i)
+
+
+def alpha111(df,window = 20):
+    df_copy = df.copy()
+    cols = []
+    for i in range(1, window+1):
+        colname = f'alpha111_{i}'
+        cols.append(colname)
+        df_copy[colname] = df['close'].pct_change(i)
+    df['alpha111'] = apply_pca(df_copy, cols)
     return df
-def alpha112(df):
-    for i in range(1,21):
-        df[f'alpha112_{i}'] = df['low'].pct_change(i)
+
+def alpha112(df,window = 20):
+    df_copy = df.copy()
+    cols = []
+    for i in range(1,window+1):
+        colname = f'alpha112_{i}'
+        cols.append(colname)
+        df_copy[colname] = df['high'].pct_change(i)
+    df['alpha112'] = apply_pca(df_copy, cols)
     return df
-def alpha113(df):
-    for i in range(1,21):
-        df[f'alpha113_{i}'] = df['open'].pct_change(i)
+
+def alpha113(df,window = 20):
+    df_copy = df.copy()
+    cols = []
+    for i in range(1, window+1):
+        colname = f'alpha113_{i}'
+        cols.append(colname)
+        df_copy[colname] = df['open'].pct_change(i)
+    df['alpha113'] = apply_pca(df_copy, cols)
     return df
-def alpha114(df):
-    for i in range(1,21):
-        df[f'alpha114_{i}'] = df['vwap'].pct_change(i)
+
+def alpha114(df,window = 20):
+    df_copy = df.copy()
+    cols = []
+    for i in range(1,window+1):
+        colname = f'alpha114_{i}'
+        cols.append(colname)
+        df_copy[colname] = df['low'].pct_change(i)
+    df['alpha114'] = apply_pca(df_copy, cols)
     return df
-from scipy.stats import kurtosis, skew
 
+def alpha115(df,window = 20):
+    df_copy = df.copy()
+    cols = []
+    for i in range(1, window+1):
+        colname = f'alpha115_{i}'
+        cols.append(colname)
+        df_copy[colname] = df['vwap'].pct_change(i)
+    df['alpha115'] = apply_pca(df_copy, cols)
+    return df
 
-def compute_minute_distribution_metrics(df, period=30, bins=20):
-    """
-    在 'df' 中对每个长度为 'period' 的滚动窗口计算分钟收益率分布指标。
+def alpha116(df,window = 20):
+    df_copy = df.copy()
+    cols = []
+    for i in range(1, window + 1):
+        colname = f'alpha116_{i}'
+        cols.append(colname)
+        df_copy[colname] = df['volume'].pct_change(i)
+    df['alpha116'] = apply_pca(df_copy, cols)
+    return df
 
-    :param df: 必须包含 ['close', 'volume'] 列的 DataFrame (分钟级)
-               index 建议为时间戳 (DatetimeIndex)，或至少可以切片
-    :param period: 滚动窗口大小 (int)，单位：条/根 (例如 30 表示 30 条分钟数据)
-    :param bins: 收益率分箱数量，用于计算分布形状(峰度/偏度/标准差)
-    :return: 一个 DataFrame，每行对应一个窗口结束时刻(索引)，
-             各列包括:
-                ['doc_kurt', 'doc_skew', 'doc_std',
-                 'doc_vol_pdf60', 'doc_vol_pdf70', 'doc_vol_pdf80',
-                 'doc_vol_pdf90', 'doc_vol_pdf95',
-                 'doc_vol10_ratio', 'doc_vol5_ratio', 'doc_vol50_ratio']
-    """
+def apply_pca(group, cols, n_components=3):
+    X = group[cols].dropna()
+    if len(X) < 10:
+        return np.full(len(group), np.nan)
 
-    # 为安全起见复制一份，避免对原数据修改
-    df = df.copy()
+    split = len(X) // 2
+    X_train = X.iloc[:split]
+    X_test = X.iloc[split:]
 
-    # 内部小函数：对一个子 DataFrame 计算分布指标
-    def _calc_distribution_metrics(subdf):
-        # 计算分钟收益率
-        subdf['returns'] = subdf['close'].pct_change()
-        subdf.dropna(subset=['returns'], inplace=True)
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
 
-        # 如果子集太小，直接返回一堆 NaN
-        if len(subdf) < 2:
-            return {
-                'doc_kurt': np.nan,
-                'doc_skew': np.nan,
-                'doc_std': np.nan,
-                'doc_vol_pdf60': np.nan,
-                'doc_vol_pdf70': np.nan,
-                'doc_vol_pdf80': np.nan,
-                'doc_vol_pdf90': np.nan,
-                'doc_vol_pdf95': np.nan,
-                'doc_vol10_ratio': np.nan,
-                'doc_vol5_ratio': np.nan,
-                'doc_vol50_ratio': np.nan,
-            }
+    pca = PCA(n_components=n_components)
+    X_train_pca = pca.fit_transform(X_train_scaled)
+    X_test_pca = pca.transform(X_test_scaled)
 
-        # ========== (1) 根据收益率分箱，得到“分布” ==========
-        r_min, r_max = subdf['returns'].min(), subdf['returns'].max()
-        # 建立分箱区间
-        bin_edges = np.linspace(r_min, r_max, bins + 1)
-
-        # 分箱
-        subdf['r_bin'] = pd.cut(subdf['returns'], bins=bin_edges, include_lowest=True)
-        vol_per_bin = subdf.groupby('r_bin', observed=False)['volume'].sum()
-
-        dist_array = vol_per_bin.values
-        # 计算峰度、偏度、标准差
-        doc_kurt = kurtosis(dist_array, fisher=True, bias=False)
-        doc_skew = skew(dist_array, bias=False)
-        doc_std = np.std(dist_array, ddof=1)
-
-        # ========== (2) 收益率分位数 ==========
-        doc_vol_pdf60 = subdf['returns'].quantile(0.60)
-        doc_vol_pdf70 = subdf['returns'].quantile(0.70)
-        doc_vol_pdf80 = subdf['returns'].quantile(0.80)
-        doc_vol_pdf90 = subdf['returns'].quantile(0.90)
-        doc_vol_pdf95 = subdf['returns'].quantile(0.95)
-
-        # ========== (3) 高收益区间成交量占比 ==========
-        # 排序后取最高收益的 N 个 Bar
-        subdf_sorted = subdf.sort_values('returns', ascending=False)
-        top10_vol = subdf_sorted.head(10)['volume'].sum()
-        top5_vol = subdf_sorted.head(5)['volume'].sum()
-        top50_vol = subdf_sorted.head(50)['volume'].sum()
-        total_vol = subdf['volume'].sum() if subdf['volume'].sum() != 0 else np.nan
-
-        doc_vol10_ratio = top10_vol / total_vol if total_vol > 0 else np.nan
-        doc_vol5_ratio = top5_vol / total_vol if total_vol > 0 else np.nan
-        doc_vol50_ratio = top50_vol / total_vol if total_vol > 0 else np.nan
-
-        return {
-            'doc_kurt': doc_kurt,
-            'doc_skew': doc_skew,
-            'doc_std': doc_std,
-            'doc_vol_pdf60': doc_vol_pdf60,
-            'doc_vol_pdf70': doc_vol_pdf70,
-            'doc_vol_pdf80': doc_vol_pdf80,
-            'doc_vol_pdf90': doc_vol_pdf90,
-            'doc_vol_pdf95': doc_vol_pdf95,
-            'doc_vol10_ratio': doc_vol10_ratio,
-            'doc_vol5_ratio': doc_vol5_ratio,
-            'doc_vol50_ratio': doc_vol50_ratio,
-        }
-
-    # ========== (4) 在每个 period 滚动窗口上计算 ==========
-    results = []
-    # 我们在 i 从 [period, len(df)] 范围滚动
-    for i in range(period, len(df) + 1):
-        subdf = df.iloc[i - period: i]  # 取当前窗口的数据
-        metrics_dict = _calc_distribution_metrics(subdf)
-        # 用当前窗口的“末行时间”作为这条统计的索引
-        end_time = df.index[i - 1]
-        print(end_time)
-        metrics_dict['end_time'] = end_time
-        results.append(metrics_dict)
-
-    # 合并为 DataFrame
-    df_rolling = pd.DataFrame(results).set_index('end_time')
-
-    return df_rolling
-
-
-import statsmodels.api as sm  # 用于线性回归 (可选)
+    X_pca_full = np.vstack([X_train_pca, X_test_pca])
+    result = np.full(len(group), np.nan)
+    result[-len(X_pca_full):] = X_pca_full[:, 0]  # 提取第一主成分
+    return result
