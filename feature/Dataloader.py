@@ -98,6 +98,7 @@ class DataLoader:
                     df = df[time_index <= self.end_date]
             all_data.append(df)
         if all_data:
+            print("start merging......")
             return pd.concat(all_data, axis=0, sort=False).sort_values(by='time')
 
         else:

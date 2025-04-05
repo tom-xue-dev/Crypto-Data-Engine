@@ -7,6 +7,8 @@ import alphalens as al
 import utils as u
 from Factor import *
 from multiprocessing import Pool
+
+from feature.fractional_diff import fracdiff
 from labeling import parallel_apply_triple_barrier
 from Dataloader import DataLoader, DataLoaderConfig
 from factor_evaluation import FactorEvaluator
@@ -44,36 +46,6 @@ def compute_alpha_parallel(data, alpha_func, n_jobs=4):
     return df_out
 
 
-def pca_transform(df, columns, n_components=2, prefix='pca'):
-    """
-    对指定列进行标准化 + PCA，并返回主成分 DataFrame。
-
-    参数:
-        df : pd.DataFrame
-            原始数据
-        columns : list
-            要进行PCA的列名列表
-        n_components : int
-            要保留的主成分个数
-        prefix : str
-            生成的主成分列名前缀
-
-    返回:
-        pca_df : pd.DataFrame
-            包含主成分的DataFrame，列名为 prefix_1, prefix_2, ...
-    """
-    # 取出要处理的列
-    X = df[columns].copy()
-    # 标准化
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    # PCA变换
-    pca = PCA(n_components=n_components)
-    components = pca.fit_transform(X_scaled)
-    # 构造结果DataFrame
-    col_names = [f'{prefix}_{i + 1}' for i in range(n_components)]
-    pca_values = pd.DataFrame(components, index=df.index, columns=col_names).to_numpy()
-    return pca_values
 import matplotlib.pyplot as plt
 
 
@@ -116,38 +88,38 @@ if __name__ == '__main__':
     config = DataLoaderConfig.load("load_config.yaml")
     data_loader = DataLoader(config)
     data = data_loader.load_all_data()
-    data['returns'] = u.returns(data)
-    data['log_close'] = np.log(data['close'])
+    print(data.columns)
     # data['label'] = parallel_apply_triple_barrier(data)
+    data['returns'] = u.returns(data)
     data['future_return'] = data.groupby('asset')['close'].transform(lambda x: x.shift(-10) / x - 1)
-    pd.set_option('display.max_columns', None)
-    #data['label'] = np.where(data['future_return'] > 0, 1, 0)
     alpha_funcs = [
-        ('alpha1', alpha1),
-        ('alpha2', alpha2),
-        ('alpha9', alpha9),
-        ('alpha25', alpha25),
-        ('alpha32', alpha32),
-        ('alpha46', alpha46),
-        ('alpha95', alpha95),
-        ('alpha101', alpha101),
+        # ('alpha1', alpha1),
+        # ('alpha2', alpha2),
+        # ('alpha3', alpha3),
+        # ('alpha4', alpha4),
+        ('alpha5', alpha5),
+        ('alpha6', alpha6),
+        # ('alpha9', alpha9),
+        # ('alpha25', alpha25),
+        # ('alpha32', alpha32),
+        # ('alpha46', alpha46),
+        # ('alpha95', alpha95),
+        # ('alpha101', alpha101),
         # ('alpha102', alpha102),
         # ('alpha103', alpha103),
         # ('alpha104', alpha104),
         # ('alpha105', alpha105),
         # ('alpha106', alpha106),
         # ('alpha107', alpha107),
-        # ('alpha108', alpha108),
+        # ('alpha108', alpha108)
         # ('alpha109',alpha109),
-        # ('alpha112',alpha112),
-        # ('alpha111',alpha111),
-        # ('alpha112',alpha112),
-        # ('alpha113',alpha113),
-        # ('alpha114',alpha114),
-        # ('alpha115',alpha115),
-        # ('alpha116',alpha116),
-        # ('alpha117',alpha117),
-
+        # ('alpha110',alpha110),
+        # ('alpha111', alpha111),
+        # ('alpha112', alpha112),
+        # ('alpha113', alpha113),
+        # ('alpha114', alpha114),
+        # ('alpha115', alpha115),
+        # ('alpha116', alpha116),
      ]
     for name, func in alpha_funcs:
         print(f"=== Now computing {name} in parallel... ===")
@@ -157,5 +129,5 @@ if __name__ == '__main__':
     print(data)
     for col,_ in alpha_funcs:
         ic = compute_ic(data, feature_column=col,return_column='future_return')
-        print(ic)
+        print(col,ic)
         factor_return_analysis_plot(data,col, 'future_return', n_bins=5, title=f'{col} future group return')
