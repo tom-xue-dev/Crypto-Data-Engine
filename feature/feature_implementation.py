@@ -123,14 +123,14 @@ if __name__ == '__main__':
     pd.set_option('display.max_columns', None)
     #data['label'] = np.where(data['future_return'] > 0, 1, 0)
     alpha_funcs = [
-        ('alpha1', alpha1),
-        ('alpha2', alpha2),
-        ('alpha9', alpha9),
-        ('alpha25', alpha25),
+        # ('alpha1', alpha1),
+        # ('alpha2', alpha2),
+        # ('alpha9', alpha9),
+        # ('alpha25', alpha25),
         ('alpha32', alpha32),
-        ('alpha46', alpha46),
-        ('alpha95', alpha95),
-        ('alpha101', alpha101),
+        # ('alpha46', alpha46),
+        # ('alpha95', alpha95),
+        # ('alpha101', alpha101),
         # ('alpha102', alpha102),
         # ('alpha103', alpha103),
         # ('alpha104', alpha104),

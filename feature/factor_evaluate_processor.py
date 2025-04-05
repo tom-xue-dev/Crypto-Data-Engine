@@ -9,19 +9,57 @@ from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from pykalman import KalmanFilter
+import Dataloader as dl
+from feature_implementation import compute_alpha_parallel
+from Factor import alpha32
 
 
 class FactorEvaluator:
-    def __init__(self, df: pd.DataFrame):
+    def __init__(
+            self,
+            df: pd.DataFrame,
+            factor_col: str = 'factor',
+            future_return_col: str = 'future_return',
+            n_future_days: int = 0
+    ):
         """
         参数:
-            df: 带有 MultiIndex (date, stock) 且包含 'factor' 和 'future_return' 两列的 DataFrame
+            df: MultiIndex (date, stock) 的 DataFrame
+            factor_col: 因子列名称，默认 'factor'
+            future_return_col: 未来收益列名称，默认 'future_return'
+            n_future_days: 若 > 0，并且 future_return_col 不在 df 中，
+                           则自动根据 'close' 列计算未来 n 天收益
         """
-        self.df = df.sort_index()
+        # 1) 先对 df 排序、复制，防止原数据被改动
+        self.df = df.sort_index().copy()
+        self.factor_col = factor_col
+        self.future_return_col = future_return_col
+
+        # 2) 如果用户指定了 n_future_days > 0，但没提供 future_return_col，
+        #    并且 df 中含有 'close' 列，则自动生成
+        if n_future_days > 0 and self.future_return_col not in self.df.columns:
+            if 'close' not in self.df.columns:
+                raise ValueError(
+                    "No 'close' column found. Cannot auto-generate future n-day returns."
+                )
+            print(f"[INFO] Auto-generating {n_future_days}-day future returns as '{self.future_return_col}'.")
+            print(self.df)
+            print(self.df.index.names)
+            print(self.df.index.is_unique)
+            dupe_mask = self.df.index.duplicated(keep=False)
+            df_duplicates = self.df[dupe_mask]
+            print(df_duplicates)
+            df_unique = df[~df.index.duplicated(keep='first')]
+            print(df_unique.index.names)
+            self.df[self.future_return_col] = df_unique.groupby(level='asset')['close'].apply(
+                lambda x: x.shift(-n_future_days) / x - 1
+            ).droplevel(0)
+
+        # 3) 核对是否包含必要列
         self.check_columns()
 
     def check_columns(self):
-        required = ['factor', 'future_return']
+        required = [self.factor_col, self.future_return_col]
         for col in required:
             if col not in self.df.columns:
                 raise ValueError(f"Missing required column: {col}")
@@ -35,6 +73,15 @@ class FactorEvaluator:
             return spearmanr(group['factor'], group['future_return'])[0]
 
         return self.df.groupby(level=0).apply(ic_per_day).rename("RankIC")
+
+    def time_series_ic(df_single_asset):
+        """
+        df_single_asset：index=date, columns=['factor','future_return']
+        返回：一个标量——整个时间序列上的相关系数
+        """
+        # 注意先对齐/shift, factor(t) 对应 future_return(t+1)?
+        # 具体你可以视需求改
+        return spearmanr(df_single_asset['factor'], df_single_asset['future_return'])[0]
 
     def calc_layer_returns(self, n_layers=5) -> pd.DataFrame:
         """
@@ -61,7 +108,7 @@ class FactorEvaluator:
         """
         可视化因子值分布（所有日期拼一起）
         """
-        self.df['factor'].hist(bins=100)
+        self.df[self.factor_col].hist(bins=100)
         plt.title("Factor Value Distribution")
         plt.xlabel("Factor")
         plt.ylabel("Frequency")
@@ -90,7 +137,7 @@ class FactorEvaluator:
         """
         results = []
         for stock in self.df.index.get_level_values(1).unique():
-            series = self.df.xs(stock, level=1)['factor'].dropna()
+            series = self.df.xs(stock, level=1)[self.factor_col].dropna()
             if len(series) < min_length:
                 continue
             stat, pval, _, _, crit, _ = adfuller(series)
@@ -116,7 +163,7 @@ class FactorEvaluator:
         对每对资产的因子时间序列进行 Engle-Granger 协整检验
         返回协整资产对及其 p 值
         """
-        df_pivot = self.df['factor'].unstack()  # 变为 date x asset 表
+        df_pivot = self.df[self.factor_col].unstack()  # 变为 date x asset 表
         assets = df_pivot.columns
         results = []
         for a1, a2 in combinations(assets, 2):
@@ -143,7 +190,7 @@ class FactorEvaluator:
             - trace statistics
             - 置信临界值
         """
-        df_pivot = self.df['factor'].unstack().dropna()
+        df_pivot = self.df[self.factor_col].unstack().dropna()
         result = coint_johansen(df_pivot, det_order=det_order, k_ar_diff=k_ar_diff)
         trace_stats = result.lr1
         crit_vals = result.cvt
@@ -158,7 +205,7 @@ class FactorEvaluator:
             pca_model: sklearn PCA 对象（可用来查看解释方差等）
             factor_scores: DataFrame，index 为日期，columns 为 PC1, PC2...
         """
-        df_pivot = self.df['factor'].unstack().dropna()  # date x asset
+        df_pivot = self.df[self.factor_col].unstack().dropna()  # date x asset
         scaler = StandardScaler()
         scaled = scaler.fit_transform(df_pivot)
 
@@ -223,62 +270,131 @@ class FactorEvaluator:
         plt.grid(True)
         plt.show()
 
-    def run_simple_backtest(self, n_layers=5, rf=0.0, plot=True, direction='top-bottom') -> pd.Series:
+    def backtest_each_asset_quantile(
+            self,
+            high_q=0.7,
+            low_q=0.3,
+            window=60,
+            plot=True,
+            plot_nav=True,
+            nav_limit=6  # 最多画多少条净值线
+    ) -> pd.DataFrame:
         """
-        简易回测：构造多空组合，计算累计收益、夏普比率、最大回撤、卡玛比率
+        基于时间序列因子分位数阈值来决定多空头寸。
+        对每支资产进行独立回测，汇总各资产表现，并可选画出净值曲线。
+
         参数:
-            n_layers: 分层数
-            rf: 年化无风险利率
-            plot: 是否绘制累计收益图
-            direction: 'top-bottom' 或 'bottom-top'
+            high_q: 做多分位数阈值
+            low_q: 做空分位数阈值
+            window: 滚动窗口
+            plot: 是否绘制年化收益分布
+            plot_nav: 是否绘制每只资产的净值曲线
+            nav_limit: 最多绘制多少个资产净值（避免图太乱）
+
         返回:
-            pd.Series: 每日多空组合收益
+            pd.DataFrame: 每个资产的回测指标
         """
-        layered = self.calc_layer_returns(n_layers)
+        results = []
+        nav_dict = {}  # 存每只资产的净值曲线
+        all_assets = self.df.index.get_level_values(1).unique()
 
-        if direction == 'top-bottom':
-            ret_series = self.calc_top_bottom_return_series(n_layers, direction)
-        elif direction == 'bottom-top':
-            ret_series = self.calc_top_bottom_return_series(n_layers, direction)
-        else:
-            raise ValueError("direction 参数必须为 'top-bottom' 或 'bottom-top'")
+        for asset in all_assets:
+            df_asset = self.df.xs(asset, level=1).copy()
+            if len(df_asset) < window:
+                continue
 
-        ret_series = ret_series.rename("LongShort Return")
-        cum_ret = ret_series.cumsum()
+            factor_series = df_asset[self.factor_col]
+            ret_series = df_asset[self.future_return_col]
 
-        # 年化收益 & 波动率
-        mean_ret = ret_series.mean()
-        std_ret = ret_series.std()
-        ann_return = mean_ret * 252
-        ann_vol = std_ret * np.sqrt(252)
-        sharpe = (mean_ret - rf / 252) / std_ret * np.sqrt(252)
+            df_asset['q_high'] = factor_series.rolling(window).quantile(high_q)
+            df_asset['q_low'] = factor_series.rolling(window).quantile(low_q)
 
-        # 最大回撤
-        cum_nav = (1 + ret_series).cumprod()
-        peak = cum_nav.cummax()
-        drawdown = 1 - cum_nav / peak
-        max_drawdown = drawdown.max()
+            df_asset['position'] = 0
+            mask_long = factor_series.shift(1) > df_asset['q_high'].shift(1)
+            mask_short = factor_series.shift(1) < df_asset['q_low'].shift(1)
+            df_asset.loc[mask_long, 'position'] = 1
+            df_asset.loc[mask_short, 'position'] = -1
 
-        # 卡玛比率
-        calmar = ann_return / max_drawdown if max_drawdown > 0 else np.nan
+            df_asset['strategy_ret'] = df_asset['position'] * ret_series
+            strategy_ret = df_asset['strategy_ret'].fillna(0)
 
-        # 输出指标
-        print(f"Strategy: {direction}")
-        print(f"Annualized Return: {ann_return:.2%}")
-        print(f"Annualized Volatility: {ann_vol:.2%}")
-        print(f"Sharpe Ratio: {sharpe:.2f}")
-        print(f"Max Drawdown: {max_drawdown:.2%}")
-        print(f"Calmar Ratio: {calmar:.2f}")
+            ann_return = strategy_ret.mean() * 365
+            ann_vol = strategy_ret.std() * (365 ** 0.5)
+            sharpe = ann_return / ann_vol if ann_vol != 0 else None
 
-        # 画图
-        if plot:
-            cum_nav.plot(title=f"Backtest NAV: {direction}", figsize=(10, 4))
-            plt.xlabel("Date")
-            plt.ylabel("Cumulative Return (NAV)")
+            # 改为正向计算最大回撤
+            cum_nav = (1 + strategy_ret).cumprod()
+            max_dd = calc_max_drawdown_area(strategy_ret)
+
+            results.append({
+                "asset": asset,
+                "annual_return": ann_return,
+                "annual_vol": ann_vol,
+                "sharpe": sharpe,
+                "max_drawdown": max_dd
+            })
+
+            # 保存净值
+            if plot_nav:
+                nav_dict[asset] = cum_nav
+
+        result_df = pd.DataFrame(results).set_index('asset')
+
+        # 年化收益分布图
+        if plot and len(result_df) > 0:
+            result_df['annual_return'].hist(bins=30)
+            plt.title("Annual Return Distribution (TS Factor with Rolling Quantile)")
+            plt.xlabel("Annual Return")
+            plt.ylabel("Number of Assets")
             plt.grid(True)
             plt.show()
 
-        return ret_series
+            mean_ret = result_df['annual_return'].mean()
+            med_ret = result_df['annual_return'].median()
+            win_ratio = (result_df['annual_return'] > 0).mean()
+            print(f"Overall Mean Annual Return: {mean_ret:.2%}")
+            print(f"Median Annual Return: {med_ret:.2%}")
+            print(f"Win Ratio (assets>0): {win_ratio:.2%}")
+
+        # 绘制净值曲线
+        if plot_nav and len(nav_dict) > 0:
+            plt.figure(figsize=(10, 5))
+            for i, (asset, nav) in enumerate(nav_dict.items()):
+                if i >= nav_limit:
+                    break
+                plt.plot(nav.index, nav.values, label=asset)
+            plt.title(f"Cumulative Return (Top {nav_limit} Assets)")
+            plt.xlabel("Date")
+            plt.ylabel("Cumulative NAV")
+            plt.grid(True)
+            plt.legend()
+            plt.show()
+
+        return result_df
+
+def calc_max_drawdown_area(strategy_ret: pd.Series) -> float:
+    """
+    计算最大回撤面积（最大回撤区段内的累计回撤和）
+    """
+    cum_nav = (1 + strategy_ret).cumprod()
+    peak = cum_nav.cummax()
+    drawdown = 1 - cum_nav / peak  # 正值越大表示回撤越深
+
+    max_area = area = 0.0
+
+    for dd in drawdown:
+        if dd > 0:
+            area += dd
+            max_area = max(max_area, area)
+        else:
+            area = 0.0  # 遇到回撤为0说明新高，回撤段终止
+
+    return max_area
+
+
+
+
+
 
 class FactorProcessor:
     def __init__(self, df: pd.DataFrame):
@@ -327,6 +443,83 @@ class FactorProcessor:
             self.df['factor'] = df['factor']
         else:
             return df
+
+
+    def rolling_winsorize(self, window=60, lower=0.01, upper=0.99, inplace=False):
+        """
+        针对每支资产的时间序列做滚动分位去极值，避免未来泄露
+        """
+        df = self.df.copy()
+        def _rolling_clip(x):
+            return x.rolling(window).apply(
+                lambda s: np.clip(s.iloc[-1], s.quantile(lower), s.quantile(upper)), raw=False
+            )
+        df['factor'] = df.groupby(level=1)['factor'].transform(_rolling_clip)
+        if inplace:
+            self.df['factor'] = df['factor']
+        else:
+            return df
+
+    def rolling_standardize(self, window=60, method='zscore', inplace=False):
+        """
+        针对每支资产的时间序列做滚动标准化（z-score）
+        """
+        df = self.df.copy()
+        if method == 'zscore':
+            def _z(x):
+                mean = x.rolling(window).mean()
+                std = x.rolling(window).std()
+                return (x - mean) / std
+            df['factor'] = df.groupby(level=1)['factor'].transform(_z)
+        elif method == 'rank':
+            df['factor'] = df.groupby(level=1)['factor'].transform(
+                lambda x: x.rolling(window).apply(lambda s: s.rank(pct=True).iloc[-1])
+            )
+        else:
+            raise ValueError("method must be 'zscore' or 'rank'")
+        if inplace:
+            self.df['factor'] = df['factor']
+        else:
+            return df
+
+
+if __name__ == '__main__':
+    alpha_funcs = [
+        # ('alpha1', alpha1),
+        # ('alpha2', alpha2),
+        # ('alpha9', alpha9),
+        # ('alpha25', alpha25),
+        ('alpha32', alpha32),
+        # ('alpha46', alpha46),
+        # ('alpha95', alpha95),
+        # ('alpha101', alpha101),
+        # ('alpha102', alpha102),
+        # ('alpha103', alpha103),
+        # ('alpha104', alpha104),
+        # ('alpha105', alpha105),
+        # ('alpha106', alpha106),
+        # ('alpha107', alpha107),
+        # ('alpha108', alpha108),
+        # ('alpha109',alpha109),
+        # ('alpha112',alpha112),
+        # ('alpha111',alpha111),
+        # ('alpha112',alpha112),
+        # ('alpha113',alpha113),
+        # ('alpha114',alpha114),
+        # ('alpha115',alpha115),
+        # ('alpha116',alpha116),
+        # ('alpha117',alpha117),
+
+     ]
+    config = dl.DataLoaderConfig.load("load_config.yaml")
+    data_loader = dl.DataLoader(config)
+    df = data_loader.load_all_data()
+    df = compute_alpha_parallel(df,alpha_funcs[0][1])
+    FE = FactorEvaluator(df,"alpha32",n_future_days=1)
+    adf_df = FE.adf_test_each_stock()
+    print(adf_df.head())
+    returnr = FE.backtest_each_asset_quantile()
+
 
 
 
