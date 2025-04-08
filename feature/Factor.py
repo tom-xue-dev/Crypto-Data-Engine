@@ -1,3 +1,4 @@
+from multiprocessing import Pool
 import talib
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
@@ -5,6 +6,287 @@ import utils as u
 import pandas as pd
 import numpy as np
 from scipy.stats import skew, kurtosis
+import inspect
+from functools import partial
+class FactorConstructor:
+    def __init__(self, df):
+        self.df = df
+
+    def _compute_alpha_parallel(self, alpha_func, n_jobs=4, **kwargs)->pd.DataFrame:
+        grouped = [group for _, group in self.df.groupby('asset')]
+        # 包装 alpha_func（固定 kwargs）
+        func_with_kwargs = partial(alpha_func, **kwargs)
+        with Pool(n_jobs) as pool:
+            results = pool.map(func_with_kwargs, grouped)
+        final_df = pd.concat(results).sort_index()
+        final_df.index = self.df.index
+        return final_df
+
+    def run_alphas(self, alpha_names: list, n_jobs=16, **kwargs):
+        alpha_funcs = {
+            name: getattr(self.__class__, name)
+            for name in alpha_names
+        }
+
+        for name, func in alpha_funcs.items():
+            print(f"Computing {name}...")
+            self.df[name] = self._compute_alpha_parallel(func, n_jobs=n_jobs, **kwargs)[name]
+
+    def run_all_alphas(self, n_jobs=16, **kwargs):
+        """
+        自动运行所有以 alpha 开头的静态方法
+        """
+        alpha_funcs = [
+            (name, method)
+            for name, method in inspect.getmembers(self.__class__, predicate=inspect.isfunction)
+            if name.startswith("alpha")
+        ]
+
+        df_out = self.df.copy()
+        for name, func in alpha_funcs:
+            print(f"Computing {name}...")
+            df_out = self._compute_alpha_parallel(func, n_jobs=n_jobs, **kwargs)
+        return df_out
+
+    def get_data(self):
+        return self.df
+
+    @staticmethod
+    def alpha3(df,window=20):
+        """
+        乖离率，检验距离均线偏离程度
+        """
+        df = df.copy()
+        df['MA'] = df['close'].rolling(window=window).mean()
+        df['alpha3'] = (df['close'] - df['MA']) / df['MA']
+        df.drop(columns=['MA'], inplace=True)
+        return df  # 如果只需要返回这个因子
+    @staticmethod
+    def alpha4(df, window=20):
+        """
+        过去 window 个 bar 中上涨 bar 的占比
+        """
+        df = df.copy()
+        df['return'] = df['close'].pct_change()
+        df['up'] = (df['return'] > 0).astype(int)
+        df['alpha4'] = df['up'].rolling(window).sum() / window
+        df.drop(columns=['return', 'up'], inplace=True)
+        return df
+
+    @staticmethod
+    def alpha5(df, window=20):
+        df = df.copy()
+        df['alpha5'] = (df['medium_price'] - df['low']) / (df['high'] - df['low'])
+        df['alpha5'] = df['alpha5'].rolling(window).mean()
+        return df
+
+    @staticmethod
+    def alpha6(df, window=20):
+        df = df.copy()
+        df['alpha6'] = (df['medium_price'] - df['vwap']) / df['vwap']
+        df['alpha6'] = df['alpha6'].rolling(window).mean()
+        return df
+
+    @staticmethod
+    def alpha7(df, fast_period=12, slow_period=26, window=1200):
+        """
+        计算APO的滚动标准分
+        """
+        group = df.copy()
+        group['APO'] = talib.APO(group['close'], fast_period, slow_period,
+                                 matype=0)
+        group = compute_zscore(group, column='APO', window=window)
+        group = group.drop(columns='APO')
+        group = group.rename(columns={'zscore_APO': 'alpha7'})
+        return group
+
+    @staticmethod
+    def alpha8(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """
+        RSRI指标，对过去n天的最高价最低价去作线性回归
+        针对单个资产的数据，使用过去 time_period 天（或 K 线）的最低价和最高价
+        进行最小二乘回归，计算回归斜率 beta，
+        beta 定义为：beta = Cov(low, high) / Var(low)
+        """
+        group = df.copy()
+        # 计算滚动窗口内 'low' 与 'high' 的协方差和 'low' 的方差
+        rolling_cov = group['low'].rolling(window=window, min_periods=window).cov(group['high'])
+        rolling_var = group['low'].rolling(window=window, min_periods=window).var()
+        # 计算 beta
+        beta_raw = np.where(rolling_var == 0, np.nan, rolling_cov / rolling_var)
+        beta = pd.Series(beta_raw, index=group.index).ffill()
+        group['alpha8'] = beta
+        # beta_mean = group['beta'].rolling(window=1200, min_periods=time_period).mean()
+        # beta_std = group['beta'].rolling(window=1200, min_periods=time_period).std()
+        # group['alpha102'] = (group['beta'] - beta_mean) / beta_std
+        return group
+
+    @staticmethod
+    def alpha9(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """
+        计算收益率的偏度和峰度.目前来看只有偏度有用
+        换成tick bar后 不知道为什么似乎峰度效果好
+        """
+        df = df.copy()
+        df['log_ret'] = np.log(df['close'] / df['close'].shift(1))
+        # df['alpha9'] = df['log_ret'].rolling(window).apply(lambda x: skew(x, bias=False), raw=True)
+        df['alpha9'] = df['log_ret'].rolling(window).apply(lambda x: kurtosis(x, fisher=True, bias=False), raw=True)
+        df.drop(columns=['log_ret'], inplace=True)
+        return df
+
+    @staticmethod
+    def alpha10(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        计算流动性指标amihud
+        本质为过去一根k线单位dollar推动的涨幅
+        """
+        df = df.copy()
+        df['return'] = df['close'].pct_change()
+        df['amount'] = df['close'] * df['volume']
+        df['ILLIQ'] = np.abs(df['return']) / (df['amount'])
+        df['alpha10'] = np.where(df['amount'] == 0, np.nan,
+                                     np.abs(df['return']) / df['amount'])
+        df = df.drop(columns=['ILLIQ', 'amount'])
+        return df
+
+    @staticmethod
+    def alpha11(df: pd.DataFrame, time_period=300):
+        """
+        计算 DataFrame 中 'close' 列与领先成交量之间的滚动相关系数。
+
+        参数:
+          group: DataFrame，必须包含 'close' 和 'volume' 两列
+          time_period: 整数，滚动窗口的周期
+
+        返回:
+          增加了两列的新 DataFrame：
+            - 'leading_volume': 下一分钟的成交量（即 volume 向上平移一位）
+            - 'corr': 'close' 与 'leading_volume' 在滚动窗口内计算得到的相关系数
+        """
+        # 目前来看在tick数据上表现不太好
+        # 复制数据，防止对原数据修改
+        group = df.copy()
+        group['returns'] = group['close'].pct_change()
+        group['dollar_volume'] = group['volume'].pct_change()
+        group['alpha11'] = group['returns'].rolling(window=time_period).corr(group['dollar_volume'])
+        group.drop(columns=['returns', 'dollar_volume'], inplace=True)
+        return group
+
+    @staticmethod
+    def alpha12(df, window=30):
+        """
+        计算vwap的滚动
+        """
+        df['alpha12'] = (df['vwap'] - df['medium_price']) / df['vwap']
+        df['alpha12'] = df['alpha12'].rolling(window=window).mean()
+        return df
+    @staticmethod
+    def alpha13(df, window=1200, vol_window=30):
+        """
+        计算高斯波动率（基于滚动标准差）并标准化
+
+        参数：
+            df: DataFrame，包含价格数据
+            window: 用于计算 Z-score 的标准化窗口
+            vol_window: 计算波动率的滚动窗口大小（例如 60 表示用过去 60 期计算波动率）
+
+        返回:
+            df: 添加了 'gaussian_volatility' 列的 DataFrame
+        """
+        df = df.copy()
+        df['gk_volatility'] = np.sqrt(
+            (0.5 * (np.log(df['high']) - np.log(df['low'])) ** 2) -
+            ((2 * np.log(2) - 1) * (np.log(df['close']) - np.log(df['open'])) ** 2)
+        )
+
+        # 计算滚动窗口高斯波动率
+        df['gaussian_volatility'] = df['gk_volatility'].rolling(vol_window).mean()
+        # 计算 Z-score 标准化
+        df = compute_zscore(df, 'gaussian_volatility', window)
+        # 清理临时列
+        df = df.drop(columns=['gaussian_volatility'])
+        df = df.rename(columns={'zscore_gaussian_volatility': 'alpha13'})
+
+        return df
+
+    @staticmethod
+    def alpha14(df, window=20):
+        df = df.copy()
+        total_volume = df['buy_volume'] + df['sell_volume']
+        imbalance = (df['buy_volume'] - df['sell_volume']) / total_volume.replace(0, np.nan)
+        df['alpha14'] = imbalance.rolling(window).mean()
+        return df
+    @staticmethod
+    def alpha15(df, window=20):
+        df = df.copy()
+        df['alpha15'] = df['tick_interval_mean'].ewm(span=window).mean()
+        return df
+    @staticmethod
+    def alpha16(df, window=20):
+        df_copy = df.copy()
+        cols = []
+        for i in range(1, window + 1):
+            colname = f'alpha111_{i}'
+            cols.append(colname)
+            df_copy[colname] = df['close'].pct_change(i)
+        df['alpha16'] = apply_pca(df_copy, cols)
+        return df
+
+    @staticmethod
+    def alpha17(df, window=20):
+        df_copy = df.copy()
+        cols = []
+        for i in range(1, window + 1):
+            colname = f'alpha112_{i}'
+            cols.append(colname)
+            df_copy[colname] = df['high'].pct_change(i)
+        df['alpha17'] = apply_pca(df_copy, cols)
+        return df
+
+    @staticmethod
+    def alpha18(df, window=20):
+        df_copy = df.copy()
+        cols = []
+        for i in range(1, window + 1):
+            colname = f'alpha113_{i}'
+            cols.append(colname)
+            df_copy[colname] = df['open'].pct_change(i)
+        df['alpha18'] = apply_pca(df_copy, cols)
+        return df
+
+    @staticmethod
+    def alpha19(df, window=20):
+        df_copy = df.copy()
+        cols = []
+        for i in range(1, window + 1):
+            colname = f'alpha114_{i}'
+            cols.append(colname)
+            df_copy[colname] = df['low'].pct_change(i)
+        df['alpha19'] = apply_pca(df_copy, cols)
+        return df
+
+    @staticmethod
+    def alpha20(df, window=20):
+        df_copy = df.copy()
+        cols = []
+        for i in range(1, window + 1):
+            colname = f'alpha115_{i}'
+            cols.append(colname)
+            df_copy[colname] = df['vwap'].pct_change(i)
+        df['alpha20'] = apply_pca(df_copy, cols)
+        return df
+
+    @staticmethod
+    def alpha21(df, window=20):
+        df_copy = df.copy()
+        cols = []
+        for i in range(1, window + 1):
+            colname = f'alpha116_{i}'
+            cols.append(colname)
+            df_copy[colname] = df['volume'].pct_change(i)
+        df['alpha21'] = apply_pca(df_copy, cols)
+        return df
+
 
 def compute_zscore(group: pd.DataFrame, column: str, window: int) -> pd.DataFrame:
     """
@@ -56,33 +338,9 @@ def alpha2(df):
 
     return df
 
-def alpha3(df,window = 20):
-    """
-    乖离率，检验距离均线偏离程度
-    """
-    df_copy = df.copy()
-    df_copy['MA'] = df['close'].rolling(window=window).mean()
-    df['alpha3'] = (df_copy['close'] - df_copy['MA']) / df_copy['MA']
-    return df
 
-def alpha4(df, window=20):
-    """
-    过去 window 个 bar 中上涨 bar 的占比
-    """
-    df_copy = df.copy()
-    df_copy['return'] = df_copy['close'].pct_change()
-    df_copy['up'] = (df_copy['return'] > 0).astype(int)
-    df['alpha4'] = df_copy['up'].rolling(window).sum() / window
-    return df
 
-def alpha5(df,window = 20):
-    df['alpha5'] = (df['medium_price'] - df['low']) / (df['high'] - df['low'])
-    df['alpha5'] = df['alpha5'].rolling(window).mean()
-    return df
 
-def alpha6(df,window = 20):
-    df['alpha6'] = (df['medium_price'] - df['vwap']) / df['vwap']
-    return df
 
 def alpha9(df, window=1200):
     """
@@ -173,122 +431,14 @@ def alpha95(df, window=1200):
     return df
 
 
-def alpha101(group, fast_period=12, slow_period=26, window=1200):
-    """
-    计算APO的滚动标准分
-    """
-    group = group.copy()
-    group['APO'] = talib.APO(group['close'], fast_period, slow_period,
-                             matype=0)
-    group = compute_zscore(group, column='APO', window=window)
-    group = group.drop(columns='APO')
-    group = group.rename(columns={'zscore_APO': 'alpha101'})
-    return group
 
 
-def alpha102(group: pd.DataFrame, window: int = 20) -> pd.DataFrame:
-    """
-    RSRI指标，对过去n天的最高价最低价去作线性回归
-    针对单个资产的数据，使用过去 time_period 天（或 K 线）的最低价和最高价
-    进行最小二乘回归，计算回归斜率 beta，
-    beta 定义为：beta = Cov(low, high) / Var(low)
-
-    参数：
-        group : pd.DataFrame
-            单个资产的数据，要求至少包含 'low' 和 'high' 列。
-        time_period : int
-            用于回归计算的滚动窗口大小，即使用最近 time_period 天（或 K 线）的数据。
-
-    返回：
-        pd.DataFrame:
-            增加了 'beta' 列后的 DataFrame，索引与原 group 保持一致。
-    """
-    group = group.copy()
-    # 计算滚动窗口内 'low' 与 'high' 的协方差和 'low' 的方差
-    rolling_cov = group['low'].rolling(window=window, min_periods=window).cov(group['high'])
-    rolling_var = group['low'].rolling(window=window, min_periods=window).var()
-    # 计算 beta
-    beta_raw = np.where(rolling_var == 0, np.nan, rolling_cov / rolling_var)
-    beta = pd.Series(beta_raw, index=group.index).ffill()
-    group['alpha102'] = beta
-    # beta_mean = group['beta'].rolling(window=1200, min_periods=time_period).mean()
-    # beta_std = group['beta'].rolling(window=1200, min_periods=time_period).std()
-    # group['alpha102'] = (group['beta'] - beta_mean) / beta_std
-    return group
 
 
-def alpha103(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
-    """
-    计算收益率的偏度和峰度.目前来看只有偏度有用
-    换成tick bar后 不知道为什么似乎峰度效果好
-    """
-    df['log_ret'] = np.log(df['close'] / df['close'].shift(1))
-    #df['alpha103'] = df['log_ret'].rolling(window).apply(lambda x: skew(x, bias=False), raw=True)
-    df['alpha103'] = df['log_ret'].rolling(window).apply(lambda x: kurtosis(x, fisher=True, bias=False), raw=True)
-    return df
 
 
-def alpha104(group):
-    """
-    计算流动性指标amihud
-    本质为过去一根k线单位dollar推动的涨幅
-    """
-    group = group.copy()
-    group['return'] = group['close'].pct_change()
-    group['amount'] = group['close'] * group['volume']
-    group['ILLIQ'] = np.abs(group['return']) / (group['amount'])
-    group['alpha104'] = np.where(group['amount'] == 0, np.nan,
-                                 np.abs(group['return']) / group['amount'])
-    group = group.drop(columns=['ILLIQ', 'amount'])
-    return group
 
 
-def alpha105(group, time_period=300):
-    """
-    计算 DataFrame 中 'close' 列与领先成交量之间的滚动相关系数。
-
-    参数:
-      group: DataFrame，必须包含 'close' 和 'volume' 两列
-      time_period: 整数，滚动窗口的周期
-
-    返回:
-      增加了两列的新 DataFrame：
-        - 'leading_volume': 下一分钟的成交量（即 volume 向上平移一位）
-        - 'corr': 'close' 与 'leading_volume' 在滚动窗口内计算得到的相关系数
-    """
-    #目前来看在tick数据上表现不太好
-    # 复制数据，防止对原数据修改
-    group = group.copy()
-    group['returns'] = group['close'].pct_change()
-    group['dollar_volume'] = group['volume'].pct_change()
-    group['alpha105'] = group['returns'].rolling(window=time_period).corr(group['dollar_volume'])
-    return group
-
-
-def alpha106(df, window=30):
-    """
-    在 df 中计算以下 VWAP 因子:
-      1) vwap_roll: 滚动VWAP
-      2) vwap_deviation: (close - vwap) / vwap
-      3) vwap_slope_diff: 简单差分法计算斜率
-      4) vwap_slope_reg: 线性回归法计算斜率
-
-    参数:
-    - df: 必须包含 ['close', 'volume'] 列, 索引建议为时间戳
-    - window: int, 滚动窗口大小 (单位: 条/分钟/周期数)
-
-    返回: 新的 DataFrame, 多列因子值
-    """
-    df = df.copy()
-
-    # 1) 计算滚动VWAP
-    #   对 (close*volume) 做 rolling(window).sum()，除以 volume的 rolling(window).sum()
-    rolling_pv = (df['close'] * df['volume']).rolling(window).sum()
-    rolling_v = df['volume'].rolling(window).sum()
-    df['vwap_roll'] = rolling_pv / rolling_v  # 滚动VWAP
-    df['alpha106'] = (df['close'] - df['vwap_roll']) / df['vwap_roll']
-    df = df.drop(columns=['vwap_roll'])
-    return df
 
 
 def calc_ma_factors(df, price_col='close', ma_window=20):
@@ -364,106 +514,6 @@ def alpha107(df):
     df_result = df_result.rename(columns={'Factor_multi':'alpha107'})
     return df_result
 
-
-def alpha108(df, window=1200, vol_window=30):
-    """
-    计算高斯波动率（基于滚动标准差）并标准化
-
-    参数：
-        df: DataFrame，包含价格数据
-        window: 用于计算 Z-score 的标准化窗口
-        vol_window: 计算波动率的滚动窗口大小（例如 60 表示用过去 60 期计算波动率）
-
-    返回:
-        df: 添加了 'gaussian_volatility' 列的 DataFrame
-    """
-    df['gk_volatility'] = np.sqrt(
-        (0.5 * (np.log(df['high']) - np.log(df['low'])) ** 2) -
-        ((2 * np.log(2) - 1) * (np.log(df['close']) - np.log(df['open'])) ** 2)
-    )
-
-    # 计算滚动窗口高斯波动率
-    df['gaussian_volatility'] = df['gk_volatility'].rolling(vol_window).mean()
-    # 计算 Z-score 标准化
-    df = compute_zscore(df, 'gaussian_volatility', window)
-    # 清理临时列
-    df = df.drop(columns=['gaussian_volatility'])
-    df = df.rename(columns={'zscore_gaussian_volatility': 'alpha108'})
-
-    return df
-
-
-def alpha109(df, window=20):
-    total_volume = df['buy_volume'] + df['sell_volume']
-    imbalance = (df['buy_volume'] - df['sell_volume']) / total_volume.replace(0, np.nan)
-    df['alpha109'] = imbalance.rolling(window).mean()
-    return df
-
-
-def alpha110(df,window = 20):
-    df['alpha110'] = df['tick_interval_mean'].rolling(window).ewm(span=20).mean()
-    return df
-
-
-def alpha111(df,window = 20):
-    df_copy = df.copy()
-    cols = []
-    for i in range(1, window+1):
-        colname = f'alpha111_{i}'
-        cols.append(colname)
-        df_copy[colname] = df['close'].pct_change(i)
-    df['alpha111'] = apply_pca(df_copy, cols)
-    return df
-
-def alpha112(df,window = 20):
-    df_copy = df.copy()
-    cols = []
-    for i in range(1,window+1):
-        colname = f'alpha112_{i}'
-        cols.append(colname)
-        df_copy[colname] = df['high'].pct_change(i)
-    df['alpha112'] = apply_pca(df_copy, cols)
-    return df
-
-def alpha113(df,window = 20):
-    df_copy = df.copy()
-    cols = []
-    for i in range(1, window+1):
-        colname = f'alpha113_{i}'
-        cols.append(colname)
-        df_copy[colname] = df['open'].pct_change(i)
-    df['alpha113'] = apply_pca(df_copy, cols)
-    return df
-
-def alpha114(df,window = 20):
-    df_copy = df.copy()
-    cols = []
-    for i in range(1,window+1):
-        colname = f'alpha114_{i}'
-        cols.append(colname)
-        df_copy[colname] = df['low'].pct_change(i)
-    df['alpha114'] = apply_pca(df_copy, cols)
-    return df
-
-def alpha115(df,window = 20):
-    df_copy = df.copy()
-    cols = []
-    for i in range(1, window+1):
-        colname = f'alpha115_{i}'
-        cols.append(colname)
-        df_copy[colname] = df['vwap'].pct_change(i)
-    df['alpha115'] = apply_pca(df_copy, cols)
-    return df
-
-def alpha116(df,window = 20):
-    df_copy = df.copy()
-    cols = []
-    for i in range(1, window + 1):
-        colname = f'alpha116_{i}'
-        cols.append(colname)
-        df_copy[colname] = df['volume'].pct_change(i)
-    df['alpha116'] = apply_pca(df_copy, cols)
-    return df
 
 def apply_pca(group, cols, n_components=3):
     X = group[cols].dropna()
