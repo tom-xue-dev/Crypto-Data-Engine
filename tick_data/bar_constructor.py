@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from numba import njit
 from datetime import datetime, timezone
+from scipy.stats import skew,kurtosis
 
 @njit
 def get_volume_bar_indices(volume_arr, threshold):
@@ -75,6 +76,11 @@ class BarConstructor:
 
     def build_bar(self, segment, bar_type='tick_bar'):
         if bar_type == 'tick_bar':
+            path_length = (segment['price'].diff().abs().sum())
+            direction = segment['isBuyerMaker'].astype(int)
+            streaks = (direction != direction.shift()).cumsum() #连续买入
+            price = segment['price']
+            ret = np.log(price / price.shift(1)).dropna()
             return {
                 'start_time': self.convert_timestamp(segment['timestamp'].iloc[0]),
                 'open': segment['price'].iloc[0],
@@ -84,11 +90,20 @@ class BarConstructor:
                 'volume': segment['quantity'].sum(),
                 'sell_volume': segment[segment['isBuyerMaker']]['quantity'].sum(),
                 'buy_volume': segment[~segment['isBuyerMaker']]['quantity'].sum(),
+                'buy_ticks':segment['isBuyerMaker'].sum(),
+                'cumulative_buyer':streaks.value_counts().max(), #最大连续买入
                 'vwap': (segment['price'] * segment['quantity']).sum() / segment['quantity'].sum(),
                 'medium_price': segment['price'].median(),
+                'price_std': segment['price'].std(),#价格分布方差
                 'volume_std': segment['quantity'].std(),
                 'tick_interval_mean': segment['timestamp'].diff().mean(),
-                'best_match': segment['isBestMatch'].sum() / len(segment),
+                # 'best_match': segment['isBestMatch'].sum() / len(segment),
+                'reversals': np.count_nonzero(direction != direction.shift()), #反转次数
+                'skewness': skew(ret),
+                'kurtosis' : kurtosis(ret),
+                # 'drawdown' :(segment['price'].cummax() - segment['price']).max(),#最大回撤面积
+                'up_move_ratio': (segment['price'].diff() > 0).mean(),#上行占比
+                'tick_nums':len(segment)#tick数量
             }
         elif bar_type in ['dollar_bar', 'volume_bar']:
             return {
