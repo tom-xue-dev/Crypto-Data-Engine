@@ -287,6 +287,23 @@ class FactorConstructor:
         df['alpha21'] = apply_pca(df_copy, cols)
         return df
 
+    @staticmethod
+    def alpha22(df, window=20):
+        df['alpha22'] = df['reversals']
+        return df
+    @staticmethod
+    def alpha23(df, window=20):
+        df['alpha23'] = df['skewness']
+        return df
+    @staticmethod
+    def alpha24(df, window=20):
+        df['alpha24'] = df['kurtosis']
+        return df
+    @staticmethod
+    def alpha25(df, window=20):
+        df['alpha25'] = df['up_move_ratio']
+        return df
+
 
 def compute_zscore(group: pd.DataFrame, column: str, window: int) -> pd.DataFrame:
     """
@@ -515,7 +532,8 @@ def alpha107(df):
     return df_result
 
 
-def apply_pca(group, cols, n_components=3):
+def apply_pca(df, cols, n_components=3):
+    group = df.copy()
     X = group[cols].dropna()
     if len(X) < 10:
         return np.full(len(group), np.nan)
