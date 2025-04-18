@@ -76,13 +76,14 @@ class DataLoader:
         else:
             df = pq.read_table(path).to_pandas()
         if self.start_date and df.index.get_level_values(0)[0] >= self.start_date:
-            # print(f'notice:file:{path}\'s earliest date is later than the start_date, skip it.')
+            print(f'notice:file:{path}\'s earliest date is later than the start_date, skip it.the earliest date is {df.index.get_level_values(0)[0] }')
             return pd.DataFrame()
         else:
             return df
 
     def load_all_data(self) -> pd.DataFrame:
         all_data = []
+        results = None
         with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
             results = pool.map(self._read_parquet_file, [os.path.join(self.folder, symbol + '.' + self.file_format)
                                                          for symbol in self.asset_list])

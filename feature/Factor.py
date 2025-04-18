@@ -238,7 +238,7 @@ def alpha104(group):
     group['amount'] = group['close'] * group['volume']
     group['ILLIQ'] = np.abs(group['return']) / (group['amount'])
     group['alpha104'] = np.where(group['amount'] == 0, np.nan,
-                                 np.abs(group['return']) / group['amount'])
+                                 group['return']/ group['amount'] * 1e6)
     group = group.drop(columns=['ILLIQ', 'amount'])
     return group
 
@@ -286,7 +286,7 @@ def alpha106(df, window=30):
     rolling_pv = (df['close'] * df['volume']).rolling(window).sum()
     rolling_v = df['volume'].rolling(window).sum()
     df['vwap_roll'] = rolling_pv / rolling_v  # 滚动VWAP
-    df['alpha106'] = (df['close'] - df['vwap_roll']) / df['vwap_roll']
+    df['alpha106'] = (df['vwap_roll'] - df['close']) / df['vwap_roll']
     df = df.drop(columns=['vwap_roll'])
     return df
 
