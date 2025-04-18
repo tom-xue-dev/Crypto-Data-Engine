@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 from pykalman import KalmanFilter
 import Dataloader as dl
 from feature_implementation import compute_alpha_parallel
-from Factor import alpha32
+from Factor import *
 
 
 class FactorEvaluator:
@@ -272,13 +272,14 @@ class FactorEvaluator:
 
     def backtest_each_asset_quantile(
             self,
-            high_q=0.7,
-            low_q=0.3,
+            high=0.7,
+            low=0.3,
+            medium=0.5,
             window=60,
-            plot=True,
             plot_nav=True,
-            nav_limit=6  # 最多画多少条净值线
-    ) -> pd.DataFrame:
+            is_long=True,
+            is_short=True
+    ):
         """
         基于时间序列因子分位数阈值来决定多空头寸。
         对每支资产进行独立回测，汇总各资产表现，并可选画出净值曲线。
@@ -306,32 +307,37 @@ class FactorEvaluator:
             factor_series = df_asset[self.factor_col]
             ret_series = df_asset[self.future_return_col]
 
-            df_asset['q_high'] = factor_series.rolling(window).quantile(high_q)
-            df_asset['q_low'] = factor_series.rolling(window).quantile(low_q)
-
             df_asset['position'] = 0
-            mask_long = factor_series.shift(1) > df_asset['q_high'].shift(1)
-            mask_short = factor_series.shift(1) < df_asset['q_low'].shift(1)
-            df_asset.loc[mask_long, 'position'] = 1
-            df_asset.loc[mask_short, 'position'] = -1
+            mask_long = (medium < factor_series.shift(1)) & (factor_series.shift(1)< high)
+            mask_short = factor_series.shift(1) < low
+            if is_long:
+                df_asset.loc[mask_long, 'position'] = 1
+            if is_short:
+                df_asset.loc[mask_short, 'position'] = -1
 
             df_asset['strategy_ret'] = df_asset['position'] * ret_series
             strategy_ret = df_asset['strategy_ret'].fillna(0)
 
-            ann_return = strategy_ret.mean() * 365
+            years = df_asset.index[-1] - df_asset.index[0]
+            year = years.days / 365
+
+            cum_nav = (1 + strategy_ret).cumprod()
+            ann_return = np.e ** (np.log(cum_nav.iloc[-1]) / year) - 1
             ann_vol = strategy_ret.std() * (365 ** 0.5)
             sharpe = ann_return / ann_vol if ann_vol != 0 else None
 
             # 改为正向计算最大回撤
-            cum_nav = (1 + strategy_ret).cumprod()
-            max_dd = calc_max_drawdown_area(strategy_ret)
+            max_dd = self.calc_max_drawdown_area(strategy_ret)
+            kalma = ann_return / max_dd
+            print(ann_return, max_dd)
 
             results.append({
                 "asset": asset,
                 "annual_return": ann_return,
                 "annual_vol": ann_vol,
                 "sharpe": sharpe,
-                "max_drawdown": max_dd
+                "max_drawdown": max_dd,
+                "kalma": kalma
             })
 
             # 保存净值
@@ -340,60 +346,55 @@ class FactorEvaluator:
 
         result_df = pd.DataFrame(results).set_index('asset')
 
-        # 年化收益分布图
-        if plot and len(result_df) > 0:
-            result_df['annual_return'].hist(bins=30)
-            plt.title("Annual Return Distribution (TS Factor with Rolling Quantile)")
-            plt.xlabel("Annual Return")
-            plt.ylabel("Number of Assets")
-            plt.grid(True)
-            plt.show()
+        return result_df, nav_dict
 
-            mean_ret = result_df['annual_return'].mean()
-            med_ret = result_df['annual_return'].median()
-            win_ratio = (result_df['annual_return'] > 0).mean()
-            print(f"Overall Mean Annual Return: {mean_ret:.2%}")
-            print(f"Median Annual Return: {med_ret:.2%}")
-            print(f"Win Ratio (assets>0): {win_ratio:.2%}")
+    def plot_nvalue(
+            self,
+            high=0.7,
+            low=0.3,
+            medium=0.5,
+            window=60,
+            nav_limit=100,  # 最多画多少条净值线
+            is_long=True,
+            is_short=True):
+        strategy_value, nav_dict = self.backtest_each_asset_quantile(
+            high=high,
+            low=low,
+            medium=medium,
+            window=window,
+            is_long=is_long,
+            is_short=is_short)
+        bench_mark, bench_mark_dict = self.backtest_each_asset_quantile(
+            high=np.inf,
+            medium=-np.inf,
+            low=0.3,
+            window=60,
+            is_long=True,
+            is_short=False)
 
-        # 绘制净值曲线
-        if plot_nav and len(nav_dict) > 0:
-            plt.figure(figsize=(10, 5))
-            for i, (asset, nav) in enumerate(nav_dict.items()):
-                if i >= nav_limit:
-                    break
-                plt.plot(nav.index, nav.values, label=asset)
-            plt.title(f"Cumulative Return (Top {nav_limit} Assets)")
-            plt.xlabel("Date")
-            plt.ylabel("Cumulative NAV")
-            plt.grid(True)
+        print("strategy:", strategy_value)
+        print("benchmark:", bench_mark)
+        for asset, value in nav_dict.items():
+            bench_mark_value = bench_mark_dict[asset]
+            plt.plot(value.index, value, color="red", label="strategy_value")
+            plt.plot(value.index, bench_mark_value, color="blue", label="bench_mark value")
+            plt.xlabel('time')
+            plt.ylabel('net value')
+            plt.title(f'{asset} strategy value and bench mark value')
             plt.legend()
             plt.show()
 
-        return result_df
+        # return result_df
 
-def calc_max_drawdown_area(strategy_ret: pd.Series) -> float:
-    """
-    计算最大回撤面积（最大回撤区段内的累计回撤和）
-    """
-    cum_nav = (1 + strategy_ret).cumprod()
-    peak = cum_nav.cummax()
-    drawdown = 1 - cum_nav / peak  # 正值越大表示回撤越深
+    def calc_max_drawdown_area(self, strategy_ret: pd.Series) -> float:
+        """
+        计算最大回撤面积（最大回撤区段内的累计回撤和）
+        """
+        cum_nav = (1 + strategy_ret).cumprod()
+        peak = cum_nav.cummax()
+        drawdown = 1 - cum_nav / peak  # 正值越大表示回撤越深
 
-    max_area = area = 0.0
-
-    for dd in drawdown:
-        if dd > 0:
-            area += dd
-            max_area = max(max_area, area)
-        else:
-            area = 0.0  # 遇到回撤为0说明新高，回撤段终止
-
-    return max_area
-
-
-
-
+        return np.max(drawdown)
 
 
 class FactorProcessor:
@@ -444,16 +445,17 @@ class FactorProcessor:
         else:
             return df
 
-
     def rolling_winsorize(self, window=60, lower=0.01, upper=0.99, inplace=False):
         """
         针对每支资产的时间序列做滚动分位去极值，避免未来泄露
         """
         df = self.df.copy()
+
         def _rolling_clip(x):
             return x.rolling(window).apply(
                 lambda s: np.clip(s.iloc[-1], s.quantile(lower), s.quantile(upper)), raw=False
             )
+
         df['factor'] = df.groupby(level=1)['factor'].transform(_rolling_clip)
         if inplace:
             self.df['factor'] = df['factor']
@@ -470,6 +472,7 @@ class FactorProcessor:
                 mean = x.rolling(window).mean()
                 std = x.rolling(window).std()
                 return (x - mean) / std
+
             df['factor'] = df.groupby(level=1)['factor'].transform(_z)
         elif method == 'rank':
             df['factor'] = df.groupby(level=1)['factor'].transform(
@@ -489,13 +492,13 @@ if __name__ == '__main__':
         # ('alpha2', alpha2),
         # ('alpha9', alpha9),
         # ('alpha25', alpha25),
-        ('alpha32', alpha32),
+        # ('alpha32', alpha32),
         # ('alpha46', alpha46),
         # ('alpha95', alpha95),
         # ('alpha101', alpha101),
         # ('alpha102', alpha102),
         # ('alpha103', alpha103),
-        # ('alpha104', alpha104),
+        ('alpha104', alpha104),
         # ('alpha105', alpha105),
         # ('alpha106', alpha106),
         # ('alpha107', alpha107),
@@ -510,16 +513,12 @@ if __name__ == '__main__':
         # ('alpha116',alpha116),
         # ('alpha117',alpha117),
 
-     ]
+    ]
     config = dl.DataLoaderConfig.load("load_config.yaml")
     data_loader = dl.DataLoader(config)
     df = data_loader.load_all_data()
-    df = compute_alpha_parallel(df,alpha_funcs[0][1])
-    FE = FactorEvaluator(df,"alpha32",n_future_days=1)
-    adf_df = FE.adf_test_each_stock()
-    print(adf_df.head())
-    returnr = FE.backtest_each_asset_quantile()
-
-
-
-
+    print(df)
+    df = compute_alpha_parallel(df, alpha_funcs[0][1])
+    FE = FactorEvaluator(df, "alpha104", n_future_days=1)
+    FE.plot_factor_distribution()
+    FE.plot_nvalue(high=2, medium=0,is_short=False)
