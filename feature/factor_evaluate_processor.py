@@ -10,7 +10,6 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from pykalman import KalmanFilter
 import Dataloader as dl
-from feature_implementation import compute_alpha_parallel
 from Factor import *
 
 
@@ -272,9 +271,8 @@ class FactorEvaluator:
 
     def backtest_each_asset_quantile(
             self,
-            high=0.7,
-            low=0.3,
-            medium=0.5,
+            long_range=(0.1, 0.5),
+            short_range = (0.1, 0.5),
             window=60,
             plot_nav=True,
             is_long=True,
@@ -283,10 +281,11 @@ class FactorEvaluator:
         """
         基于时间序列因子分位数阈值来决定多空头寸。
         对每支资产进行独立回测，汇总各资产表现，并可选画出净值曲线。
-
+        做多:medium到high的因子
+        做空:low到medium的因子
         参数:
-            high_q: 做多分位数阈值
-            low_q: 做空分位数阈值
+            high_q: 做多因子阈值
+            low_q: 做空因子阈值
             window: 滚动窗口
             plot: 是否绘制年化收益分布
             plot_nav: 是否绘制每只资产的净值曲线
@@ -308,8 +307,8 @@ class FactorEvaluator:
             ret_series = df_asset[self.future_return_col]
 
             df_asset['position'] = 0
-            mask_long = (medium < factor_series.shift(1)) & (factor_series.shift(1)< high)
-            mask_short = factor_series.shift(1) < low
+            mask_long = (factor_series > long_range[0]) & (factor_series < long_range[1])
+            mask_short = (factor_series > short_range[0]) & (factor_series < short_range[1])
             if is_long:
                 df_asset.loc[mask_long, 'position'] = 1
             if is_short:
@@ -350,30 +349,30 @@ class FactorEvaluator:
 
     def plot_nvalue(
             self,
-            high=0.7,
-            low=0.3,
-            medium=0.5,
+            long_range = (0.1, 0.5),
+            short_range = (0.1, 0.5),
             window=60,
             nav_limit=100,  # 最多画多少条净值线
             is_long=True,
             is_short=True):
         strategy_value, nav_dict = self.backtest_each_asset_quantile(
-            high=high,
-            low=low,
-            medium=medium,
+            long_range=long_range,
+            short_range= short_range,
             window=window,
             is_long=is_long,
             is_short=is_short)
         bench_mark, bench_mark_dict = self.backtest_each_asset_quantile(
-            high=np.inf,
-            medium=-np.inf,
-            low=0.3,
+            long_range=(-np.inf, np.inf),
             window=60,
             is_long=True,
             is_short=False)
 
         print("strategy:", strategy_value)
         print("benchmark:", bench_mark)
+        comparison = strategy_value['annual_return'] > bench_mark['annual_return']
+        proportion = comparison.mean()
+        print(f"跑赢基准的资产的比例为: {proportion:.2%}")
+
         for asset, value in nav_dict.items():
             bench_mark_value = bench_mark_dict[asset]
             plt.plot(value.index, value, color="red", label="strategy_value")
@@ -484,41 +483,21 @@ class FactorProcessor:
             self.df['factor'] = df['factor']
         else:
             return df
+        for i in range(10):
 
 
 if __name__ == '__main__':
     alpha_funcs = [
-        # ('alpha1', alpha1),
-        # ('alpha2', alpha2),
-        # ('alpha9', alpha9),
-        # ('alpha25', alpha25),
-        # ('alpha32', alpha32),
-        # ('alpha46', alpha46),
-        # ('alpha95', alpha95),
-        # ('alpha101', alpha101),
-        # ('alpha102', alpha102),
-        # ('alpha103', alpha103),
-        ('alpha104', alpha104),
-        # ('alpha105', alpha105),
-        # ('alpha106', alpha106),
-        # ('alpha107', alpha107),
-        # ('alpha108', alpha108),
-        # ('alpha109',alpha109),
-        # ('alpha112',alpha112),
-        # ('alpha111',alpha111),
-        # ('alpha112',alpha112),
-        # ('alpha113',alpha113),
-        # ('alpha114',alpha114),
-        # ('alpha115',alpha115),
-        # ('alpha116',alpha116),
-        # ('alpha117',alpha117),
-
+        'alpha3',
     ]
     config = dl.DataLoaderConfig.load("load_config.yaml")
     data_loader = dl.DataLoader(config)
     df = data_loader.load_all_data()
     print(df)
-    df = compute_alpha_parallel(df, alpha_funcs[0][1])
-    FE = FactorEvaluator(df, "alpha104", n_future_days=1)
+    FC = FactorConstructor(df)
+    FC.run_alphas(alpha_funcs)
+    FE = FactorEvaluator(df, "alpha3", n_future_days=1)
     FE.plot_factor_distribution()
-    FE.plot_nvalue(high=2, medium=0,is_short=False)
+    long_range = (-np.inf,-0.05)
+    short_range = (0.05,np.inf)
+    FE.plot_nvalue(long_range, short_range,is_long=True,is_short=False)

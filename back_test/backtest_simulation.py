@@ -14,7 +14,7 @@ class Broker:
     Broker 为撮合类，对回测交易的函数调用高层封装
     """
 
-    def __init__(self, account: Account, leverage_manager=None, stop_loss_logic=None):
+    def __init__(self, account: Account, leverage_manager=None, stop_loss_logic=None,fees = 0.001):
         """
         撮合订单的类
         传入账号据数据用于记录交易历史
@@ -25,16 +25,17 @@ class Broker:
         :param account:
         :param leverage_manager:
         :param stop_loss_logic:
+        :param fees: 手续费，默认千1
         """
+        self.fees = fees
         self.account = account
         self.leverage_manager = leverage_manager
         self.stop_loss_logic = stop_loss_logic
 
     def open_position(self, asset, direction, quantity, price, leverage, position_type, current_time):
-        # 简化: 扣除自有资金 = quantity * price / leverage
         cost = quantity * price / leverage
         # 计算手续费 现在默认是maker: 双向千1
-        cost = cost * 1.001
+        cost = cost * (1+self.fees)
         if self.account.cash < cost:
             print("Insufficient cash to open position.")
             return
@@ -97,7 +98,7 @@ class Broker:
             pnl = -pos.quantity * (price - pos.entry_price)
 
         total_gain = (pos.entry_price * pos.quantity + pnl)
-        self.account.cash += total_gain * 0.999  # 千分之一手续费
+        self.account.cash += total_gain * (1 - self.fees) # 千分之一手续费
         self.account.record_transaction({
             "time": current_time,
             "action": "close",
@@ -158,40 +159,22 @@ class Backtest:
     def run(self):
         # 获取所有时间点
         all_times = self.strategy_results.index.get_level_values('time').unique()
-
-        # 初始化存储净值历史
-        net_value_history = []
-
-        # 矢量化遍历时间
         for current_time in all_times:
-
-            # 筛选当前时间的分组数据
             group_df = self.strategy_results.loc[current_time]
-            # 矢量化计算当前市值（示例：假设为 `close` 总和）
-
-            # 矢量化构建 price_map
             price_map = group_df['close'].to_dict()
             atr_value = None
             MA = None
-            if "atr" in group_df.columns:
-                atr_value = group_df['atr'].to_dict()
-            if "MA5" in group_df.columns:
-                MA = group_df['MA5'].to_dict()
-            # 矢量化处理信号
-            signals = group_df[['signal', 'close']].reset_index().to_dict('records')
-
-            for signal_data in signals:
+            for row in group_df.itertuples():
                 current_market_cap = self.get_market_cap(group_df)
                 self.process_signal(
-                    signal_data['signal'],
-                    signal_data['asset'],
-                    signal_data['close'],
-                    current_time,
-                    current_market_cap,
+                    signal=row.signal,
+                    asset=row.Index if isinstance(row.Index, str) else row.asset,
+                    price=row.close,
+                    current_time=current_time,
+                    current_market_cap=current_market_cap,
                     atr_value=atr_value
                 )
 
-            # 矢量化调用 on_bar_end
             if price_map:
                 self.broker.on_bar_end(current_time, price_map, atr_value=atr_value, MA=MA)
             else:
@@ -210,10 +193,10 @@ class Backtest:
     def process_signal(self, signal, asset, price, current_time, current_market_cap, atr_value=None):
         # 简化: signal=1 -> 开多, signal=-1 -> 开空, signal=0 -> 不操作
 
-        position = self.pos_manager.get_allocate_pos(asset, price, signal, current_market_cap, self.broker.account,
-                                                     atr_value)
-        quantity = position / (price * 1.001)
+        position = self.pos_manager.get_allocate_pos(asset, price, signal, current_market_cap, self.broker.account)
+        quantity = position / (price * (1+self.broker.fees))
         quantity = math.floor(quantity * 100) / 100  # 去尾法保证小数点后两位
+
         if self.broker.leverage_manager is not None:
             leverage = self.broker.leverage_manager.leverage
         else:
@@ -227,7 +210,6 @@ class Backtest:
                 return
             if existing_short_key in holdings:
                 self.broker.close_position(asset, "short", price, current_time)
-                return
             if quantity <= 0.001:  # 余额不足
                 return
             self.broker.open_position(
@@ -239,12 +221,11 @@ class Backtest:
                 position_type="spot",
                 quantity=quantity  # 可以根据策略或资金管理计算
             )
-        elif signal == 2:
+        elif signal == -1:
             if existing_short_key in holdings:
                 return
             if existing_long_key in holdings:
                 self.broker.close_position(asset, "long", price, current_time)
-            return
             if quantity <= 0.01:  # 余额不足
                 return
             self.broker.open_position(
@@ -256,24 +237,12 @@ class Backtest:
                 position_type="spot",
                 quantity=quantity
             )
-        # elif signal == -2:
-        #     if existing_short_key in holdings:
-        #         return
+        # else:
         #     if existing_long_key in holdings:
         #         self.broker.close_position(asset, "long", price, current_time)
-        #
-        #     if quantity <= 0.01:  # 余额不足
-        #         return
-        #     self.broker.open_position(
-        #         asset=asset,
-        #         direction="short",
-        #         price=price,
-        #         leverage=leverage,
-        #         current_time=current_time,
-        #         position_type="spot",
-        #         quantity=quantity
-        #     )
-        #     pass  # signal=0, 不开仓
+        #     if existing_short_key in holdings:
+        #         self.broker.close_position(asset, "short", price, current_time)
+
 
     def get_market_cap(self, current_df: pd.DataFrame):
         """

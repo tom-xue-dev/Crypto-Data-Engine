@@ -24,6 +24,7 @@ class PerformanceAnalyzer:
         也可以在这里计算日度收益率、累计收益等。
         """
         # 如果 time 不是 datetime，需要先转换
+        self.net_value_df['time'] = self.net_value_df['time'].dt.tz_localize(None)
         if not np.issubdtype(self.net_value_df['time'].dtype, np.datetime64):
             self.net_value_df['time'] = pd.to_datetime(self.net_value_df['time'])
 

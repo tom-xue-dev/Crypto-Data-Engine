@@ -10,6 +10,7 @@ from typing import List, Optional
 import mplfinance as mpf
 from dataclasses import dataclass
 import yaml
+import pickle
 
 @dataclass
 class DataLoaderConfig:
@@ -127,4 +128,8 @@ if __name__ == "__main__":
    print(df.describe())
    print(df.index.get_level_values(0)[0])
    print(df.index.get_level_values(0)[-1])
+   print(df['tick_interval_mean'].mean())
+
+   with open("tick_bar_all.pkl", "wb") as f:
+       pickle.dump(df, f)
 

@@ -8,6 +8,7 @@ import numpy as np
 from scipy.stats import skew, kurtosis
 import inspect
 from functools import partial
+
 class FactorConstructor:
     def __init__(self, df):
         self.df = df
@@ -52,29 +53,84 @@ class FactorConstructor:
         return self.df
 
     @staticmethod
+    def alpha1(df: pd.DataFrame, window: int = 100) -> pd.DataFrame:
+        """
+        计算收益率的偏度和峰度.目前来看只有偏度有用
+        换成tick bar后 不知道为什么似乎峰度效果好
+        峰度+趋势反转 似乎比较好用
+
+        区间：
+        long_range = (-20,-4)
+        short_range = (4,20)
+        """
+        df = df.copy()
+        returns = (df['close']-df['close'].shift(window))/df['close']*10
+        #df['skew_rolling'] = df['skewness'].rolling(window).mean()
+        df['kurt_rolling'] = df['kurtosis'].rolling(window).mean()
+        df['alpha1'] = df['kurt_rolling'] * returns
+        return df
+
+    @staticmethod
+    def alpha2(df: pd.DataFrame,window = 20,rolling_window = 1200) -> pd.DataFrame:
+        """
+        计算流动性指标amihud
+        本质为过去n根k线单位dollar推动的涨幅
+        短时间内 如果很少金钱就推动了很大涨幅 那么容易反转
+        默认参数
+        long_range = (-1,-0.3)
+        short_range = (0.3,1)
+        """
+        df = df.copy()
+        df['return'] = (df['close'] - df['close'].shift(window)) / df['close']
+        df['dollar'] = df['volume'] * df['close']
+        df['amount'] = df['dollar'].rolling(window=window).sum()
+        df['factor'] = np.where(
+            df['amount'] == 0,
+            np.nan,
+            df['return'] * 1e7 / df['amount']
+        )
+        volatility = df['return'].rolling(window=rolling_window).std() + 1e-6
+        factor = df['factor']/volatility  #波动率中性化
+        factor_mean = factor.rolling(window=window).mean() #平缓因子过滤噪声
+        df['alpha2'] = factor_mean
+        return df
+
+    @staticmethod
     def alpha3(df,window=20):
         """
         乖离率，检验距离均线偏离程度
+        优化下乘以一个主动买入系数
+        如果
         """
         df = df.copy()
         df['MA'] = df['close'].rolling(window=window).mean()
-        df['alpha3'] = (df['close'] - df['MA']) / df['MA']
+        ratio = (df['buy_volume'] - df['sell_volume'])/ df['volume']
+        df['alpha3'] = (-(df['close'] - df['MA']) / df['MA']) * ratio.rolling(window=window).mean()*100
         df.drop(columns=['MA'], inplace=True)
         return df  # 如果只需要返回这个因子
+
     @staticmethod
-    def alpha4(df, window=20):
+    def alpha4(df: pd.DataFrame, window=50) -> pd.DataFrame:
         """
-        过去 window 个 bar 中上涨 bar 的占比
+        主动买入的推动涨幅，
+        只有大幅主动买入，且推动涨幅，才认为上涨强烈
+        如果大幅卖出，且大幅下跌，则卖出强烈
+        闹麻了怎么这个也是反转
+        long_range = (-10,-5)
+        short_range = (5,10)
         """
-        df = df.copy()
-        df['return'] = df['close'].pct_change()
-        df['up'] = (df['return'] > 0).astype(int)
-        df['alpha4'] = df['up'].rolling(window).sum() / window
-        df.drop(columns=['return', 'up'], inplace=True)
+        df['return'] = (df['close'] - df['close'].shift(window)) / df['close']
+        df['buyer_volume'] = df['buy_volume'].rolling(window=window).sum()
+        df['sell_volume'] = df['volume'] - df['buyer_volume']
+        df['imbalance'] = (df['buyer_volume'] - df['sell_volume']) / df['volume']
+        df['alpha4'] = df['imbalance'] * df['return']
         return df
 
     @staticmethod
     def alpha5(df, window=20):
+        """
+        bar中中位成交价格占bar柱的情况
+        """
         df = df.copy()
         df['alpha5'] = (df['medium_price'] - df['low']) / (df['high'] - df['low'])
         df['alpha5'] = df['alpha5'].rolling(window).mean()
@@ -82,6 +138,9 @@ class FactorConstructor:
 
     @staticmethod
     def alpha6(df, window=20):
+        """
+        中位成交价和vwap的乖离率
+        """
         df = df.copy()
         df['alpha6'] = (df['medium_price'] - df['vwap']) / df['vwap']
         df['alpha6'] = df['alpha6'].rolling(window).mean()
@@ -121,33 +180,9 @@ class FactorConstructor:
         # group['alpha102'] = (group['beta'] - beta_mean) / beta_std
         return group
 
-    @staticmethod
-    def alpha9(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
-        """
-        计算收益率的偏度和峰度.目前来看只有偏度有用
-        换成tick bar后 不知道为什么似乎峰度效果好
-        """
-        df = df.copy()
-        df['log_ret'] = np.log(df['close'] / df['close'].shift(1))
-        # df['alpha9'] = df['log_ret'].rolling(window).apply(lambda x: skew(x, bias=False), raw=True)
-        df['alpha9'] = df['log_ret'].rolling(window).apply(lambda x: kurtosis(x, fisher=True, bias=False), raw=True)
-        df.drop(columns=['log_ret'], inplace=True)
-        return df
 
-    @staticmethod
-    def alpha10(df: pd.DataFrame) -> pd.DataFrame:
-        """
-        计算流动性指标amihud
-        本质为过去一根k线单位dollar推动的涨幅
-        """
-        df = df.copy()
-        df['return'] = df['close'].pct_change()
-        df['amount'] = df['close'] * df['volume']
-        df['ILLIQ'] = np.abs(df['return']) / (df['amount'])
-        df['alpha10'] = np.where(df['amount'] == 0, np.nan,
-                                     np.abs(df['return']) / df['amount'])
-        df = df.drop(columns=['ILLIQ', 'amount'])
-        return df
+
+
 
     @staticmethod
     def alpha11(df: pd.DataFrame, time_period=300):
@@ -302,6 +337,21 @@ class FactorConstructor:
     @staticmethod
     def alpha25(df, window=20):
         df['alpha25'] = df['up_move_ratio']
+        return df
+    @staticmethod
+    def alpha26(df, window=200):
+        """
+        检测看看是不是有机构短时间大幅扫货
+        终于找到一个是趋势跟随的了
+        参数1:
+        long_range = (1,5),short_range = (-5,-1),window = 100
+        参数2同上，window改为200
+        """
+        df['return'] = (df['close'] - df['close'].shift(window)) / df['close']
+        tick_inv_norm = 1 / df['tick_interval_mean']
+        tick_inv_norm = (tick_inv_norm - tick_inv_norm.rolling(window).mean()) / tick_inv_norm.rolling(window).std()
+        df['alpha26'] = df['return'] * tick_inv_norm*10
+
         return df
 
 
