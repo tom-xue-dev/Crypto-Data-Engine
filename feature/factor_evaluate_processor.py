@@ -1,3 +1,5 @@
+import pickle
+
 import pandas as pd
 import numpy as np
 from scipy.stats import spearmanr
@@ -103,12 +105,21 @@ class FactorEvaluator:
         layered = self.calc_layer_returns(n_layers)
         return layered.mean(axis=1)
 
-    def plot_factor_distribution(self):
+    def plot_factor_distribution(self, cut_pct=0.01):
         """
-        可视化因子值分布（所有日期拼一起）
+        可视化因子值分布，支持按百分位裁剪（默认裁剪上下1%）。
+
+        参数:
+            cut_pct: float, 剪裁比例（默认0.01表示1%）
         """
-        self.df[self.factor_col].hist(bins=100)
-        plt.title("Factor Value Distribution")
+        factor_series = self.df[self.factor_col].dropna()
+
+        lower = factor_series.quantile(cut_pct)
+        upper = factor_series.quantile(1 - cut_pct)
+        clipped = factor_series[(factor_series >= lower) & (factor_series <= upper)]
+
+        clipped.hist(bins=100)
+        plt.title(f"Factor Distribution (cut {cut_pct * 100:.1f}% tails)")
         plt.xlabel("Factor")
         plt.ylabel("Frequency")
         plt.grid(True)
@@ -347,6 +358,136 @@ class FactorEvaluator:
 
         return result_df, nav_dict
 
+    def _naive(self,ts):
+        """确保时间戳是 tz-naive，用于相减比较"""
+        return ts.tz_convert(None) if ts.tzinfo is not None else ts
+
+    def backtest_factor_range(
+            self,
+            long_pct: float = 0.99,
+            short_pct: float = 0.005,
+            window: int = 60,
+            take_profit: float = 0.06,
+            stop_loss: float = 0.06,
+            min_holding_bars: int = 1,
+            max_holding_bars: int = 500,
+            cooldown_bars: int = 5,
+            fee: float = 0.002,
+    ):
+        """Factor‑range back‑test using **bar counts** instead of calendar days.
+
+        Parameters
+        ----------
+        long_pct / short_pct
+            Percentile thresholds (0‑1). 0.95 → top 5 % 做多；0.05 → bottom 5 % 做空。
+        window
+            Rolling window length for potential future use.
+        take_profit / stop_loss
+            Absolute return thresholds triggering TP/SL.
+        min_holding_bars / max_holding_bars
+            最少 / 最多持仓的 K 线数量（包含建仓后的第一根）。
+        cooldown_bars
+            同一资产两次信号之间必须间隔的 K 线数量。
+        fee
+            双边手续费（百分比）。
+        """
+
+
+        all_trades = []
+        assets = self.df.index.get_level_values(1).unique()
+        factor = self.df[self.factor_col]
+        # factor = factor.iloc[-len(factor) // 3: ]
+
+        long_thresh = factor.quantile(long_pct)
+        short_thresh = factor.quantile(short_pct)
+        # long_thresh = -20
+        # short_thresh = -80
+        print("long quantile", long_thresh)
+        print("short quantile", short_thresh)
+        for asset in assets:
+            df_asset = (
+                self.df.xs(asset, level=1).sort_index().copy()
+            )  # 假设 index 已按时间顺序
+            if len(df_asset) < window:
+                continue
+
+            factor = df_asset[self.factor_col]
+            returns = df_asset[self.future_return_col]
+
+            # 静态分位阈值（可替换为滚动阈值）
+
+
+            signal = pd.Series(0, index=df_asset.index)
+            signal[factor >= long_thresh] = 1
+            signal[factor <= short_thresh] = -1
+
+            signal_idx = np.flatnonzero(signal.values)  # bar 位置数组
+            last_exit_loc = -np.inf  # 上一次退出的 bar 位置
+            times = 0
+            for entry_loc in signal_idx:
+                # 冷却期：距离上次退出 < cooldown_bars，则跳过
+                if entry_loc - last_exit_loc < cooldown_bars:
+                    continue
+
+                direction = signal.iloc[entry_loc]
+                future_slice = df_asset.iloc[
+                               entry_loc + 1: entry_loc + 1 + max_holding_bars
+                               ]
+                if future_slice.empty:
+                    break
+
+                cum_ret = 0.0
+                exit_loc = None
+
+                for i, (idx, row) in enumerate(future_slice.iterrows(), start=1):
+                    cum_ret += row[self.future_return_col] * direction
+
+                    if i >= min_holding_bars:
+                        if cum_ret >= take_profit or cum_ret <= -stop_loss:
+                            exit_loc = entry_loc + i
+                            break
+                else:
+                    # 未触发 TP/SL，在 max_holding_bars 处离场
+                    exit_loc = entry_loc + len(future_slice)
+
+                gross_return = cum_ret
+                net_return = cum_ret - fee
+                times+=1
+                all_trades.append(
+                    {
+                        "asset": asset,
+                        "entry_bar": entry_loc,
+                        "exit_bar": exit_loc,
+                        "holding_bars": exit_loc - entry_loc,
+                        "direction": direction,
+                        "gross_return": gross_return,
+                        "gain": gross_return * 100,
+                        "gain_net": net_return * 100,
+                        "times": times,
+                    }
+                )
+
+                last_exit_loc = exit_loc  # 更新冷却期基准
+
+        return pd.DataFrame(all_trades)
+
+    def plot_all_assets_cumulative_profit(self,trade_df: pd.DataFrame):
+        plt.figure(figsize=(30, 12))
+        print(len(trade_df['asset'].unique()))
+        for asset in trade_df['asset'].unique():
+            sub_df = trade_df[trade_df['asset'] == asset].copy()
+            sub_df = sub_df.sort_values('entry_bar')
+            sub_df['cumulative_profit'] = sub_df['gain_net'].cumsum()
+            plt.plot(sub_df['times'], sub_df['cumulative_profit'], label=asset)
+
+        plt.title("Cumulative Profit Curves by Asset")
+        plt.xlabel("trading times")
+        plt.ylabel("Cumulative Net Gain (%)")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
     def plot_nvalue(
             self,
             long_range = (0.1, 0.5),
@@ -483,21 +624,29 @@ class FactorProcessor:
             self.df['factor'] = df['factor']
         else:
             return df
-        for i in range(10):
 
 
 if __name__ == '__main__':
     alpha_funcs = [
-        'alpha3',
+        'alpha12',
     ]
     config = dl.DataLoaderConfig.load("load_config.yaml")
     data_loader = dl.DataLoader(config)
-    df = data_loader.load_all_data()
-    print(df)
+    #df = data_loader.load_all_data()
+    with open("tick_bar_all.pkl",'rb') as f:
+        df = pickle.load(f)
+    print(df.columns)
     FC = FactorConstructor(df)
     FC.run_alphas(alpha_funcs)
-    FE = FactorEvaluator(df, "alpha3", n_future_days=1)
+    FE = FactorEvaluator(df, "alpha12", n_future_days=1)
     FE.plot_factor_distribution()
-    long_range = (-np.inf,-0.05)
-    short_range = (0.05,np.inf)
-    FE.plot_nvalue(long_range, short_range,is_long=True,is_short=False)
+    long_range= (0.15,3)
+    short_range = (-3,-0.15)
+    df = FE.backtest_factor_range()
+    FE.plot_all_assets_cumulative_profit(df)
+    print("平均每次交易收益:", df['gain'].mean())
+    print("胜率:", (df['gain'] > 0).mean())
+    print("平均每次交易收益(手续费):", df['gain_net'].mean())
+    print("胜率:", (df['gain_net'] > 0).mean())
+    print("交易次数:", len(df))
+    # FE.plot_nvalue(long_range, short_range,is_long=True,is_short=False)

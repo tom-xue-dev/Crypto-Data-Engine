@@ -67,11 +67,12 @@ class FactorConstructor:
         returns = (df['close']-df['close'].shift(window))/df['close']*10
         #df['skew_rolling'] = df['skewness'].rolling(window).mean()
         df['kurt_rolling'] = df['kurtosis'].rolling(window).mean()
-        df['alpha1'] = df['kurt_rolling'] * returns
+        df['std'] = df['close'].rolling(window=20).std() / df['close'].rolling(window=20 * 10).std()
+        df['alpha1'] = -df['kurt_rolling']*df['std']*returns
         return df
 
     @staticmethod
-    def alpha2(df: pd.DataFrame,window = 20,rolling_window = 1200) -> pd.DataFrame:
+    def alpha2(df: pd.DataFrame,window = 120,rolling_window = 1200) -> pd.DataFrame:
         """
         计算流动性指标amihud
         本质为过去n根k线单位dollar推动的涨幅
@@ -89,10 +90,9 @@ class FactorConstructor:
             np.nan,
             df['return'] * 1e7 / df['amount']
         )
-        volatility = df['return'].rolling(window=rolling_window).std() + 1e-6
-        factor = df['factor']/volatility  #波动率中性化
-        factor_mean = factor.rolling(window=window).mean() #平缓因子过滤噪声
-        df['alpha2'] = factor_mean
+        factor = df['factor']
+        df['std'] = df['close'].rolling(window=window).std() / df['close'].rolling(window=window * 10).std()
+        df['alpha2'] = -factor/df['std']
         return df
 
     @staticmethod
@@ -104,36 +104,41 @@ class FactorConstructor:
         """
         df = df.copy()
         df['MA'] = df['close'].rolling(window=window).mean()
-        ratio = (df['buy_volume'] - df['sell_volume'])/ df['volume']
-        df['alpha3'] = (-(df['close'] - df['MA']) / df['MA']) * ratio.rolling(window=window).mean()*100
+        df['std'] = df['close'].rolling(window=window).std()/df['close'].rolling(window=window*10).std()
+        volume = df['volume'].rolling(window=window).mean()
+        volume_ratio = volume / volume.rolling(window=window*20).mean()
+        #df['alpha3'] = (-(df['close'] - df['MA']) / df['MA']) * df['std']#过滤低波噪声
+        df['alpha3'] = (-(df['close'] - df['MA']) / df['MA'])*volume_ratio
         df.drop(columns=['MA'], inplace=True)
         return df  # 如果只需要返回这个因子
 
     @staticmethod
-    def alpha4(df: pd.DataFrame, window=50) -> pd.DataFrame:
+    def alpha4(df: pd.DataFrame, window=20) -> pd.DataFrame:
         """
         主动买入的推动涨幅，
         只有大幅主动买入，且推动涨幅，才认为上涨强烈
         如果大幅卖出，且大幅下跌，则卖出强烈
-        闹麻了怎么这个也是反转
         long_range = (-10,-5)
         short_range = (5,10)
         """
         df['return'] = (df['close'] - df['close'].shift(window)) / df['close']
-        df['buyer_volume'] = df['buy_volume'].rolling(window=window).sum()
-        df['sell_volume'] = df['volume'] - df['buyer_volume']
-        df['imbalance'] = (df['buyer_volume'] - df['sell_volume']) / df['volume']
-        df['alpha4'] = df['imbalance'] * df['return']
+        df['buyer_volume'] = df['buy_volume'].rolling(window=window).mean()
+        # df['sell_volume'] = df['volume'] - df['buyer_volume']
+        df['imbalance'] = df['buyer_volume'] / df['volume'].rolling(window=window).mean()
+        df['alpha4'] =- df['imbalance'] * df['return']
+        # df['alpha4'] = (df['alpha4'] - df['alpha4'].rolling(window*100).mean()) / df['alpha4'].rolling(window*100).std()
         return df
 
     @staticmethod
     def alpha5(df, window=20):
         """
         bar中中位成交价格占bar柱的情况
+        理论上来说
         """
         df = df.copy()
+        returns = (df['close'] - df['close'].shift(window)) / df['close']
         df['alpha5'] = (df['medium_price'] - df['low']) / (df['high'] - df['low'])
-        df['alpha5'] = df['alpha5'].rolling(window).mean()
+        df['alpha5'] = -df['alpha5'].rolling(window).mean()*returns
         return df
 
     @staticmethod
@@ -157,35 +162,38 @@ class FactorConstructor:
         group = compute_zscore(group, column='APO', window=window)
         group = group.drop(columns='APO')
         group = group.rename(columns={'zscore_APO': 'alpha7'})
+        group['alpha7'] = -group['alpha7']
         return group
 
     @staticmethod
     def alpha8(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
-        """
-        RSRI指标，对过去n天的最高价最低价去作线性回归
-        针对单个资产的数据，使用过去 time_period 天（或 K 线）的最低价和最高价
-        进行最小二乘回归，计算回归斜率 beta，
-        beta 定义为：beta = Cov(low, high) / Var(low)
-        """
         group = df.copy()
-        # 计算滚动窗口内 'low' 与 'high' 的协方差和 'low' 的方差
-        rolling_cov = group['low'].rolling(window=window, min_periods=window).cov(group['high'])
-        rolling_var = group['low'].rolling(window=window, min_periods=window).var()
-        # 计算 beta
-        beta_raw = np.where(rolling_var == 0, np.nan, rolling_cov / rolling_var)
-        beta = pd.Series(beta_raw, index=group.index).ffill()
+        log_low = np.log(group['low'].clip(lower=1e-5))  # 防止 log(0)
+        log_high = np.log(group['high'].clip(lower=1e-5))
+
+        cov = log_low.rolling(window).cov(log_high)
+        var = log_low.rolling(window).var()
+        beta = pd.Series(np.where(var == 0, np.nan, cov / var), index=group.index).ffill()
+
         group['alpha8'] = beta
-        # beta_mean = group['beta'].rolling(window=1200, min_periods=time_period).mean()
-        # beta_std = group['beta'].rolling(window=1200, min_periods=time_period).std()
-        # group['alpha102'] = (group['beta'] - beta_mean) / beta_std
+
         return group
 
-
-
-
+    @staticmethod
+    def alpha9(df,window=20):
+        df['ret'] = df['close'].pct_change()
+        df['reverse_signal'] = -df['ret'].rolling(20).mean()
+        df['alpha9'] = (df['reverse_signal'] - df['reverse_signal'].rolling(200).mean()) / df[
+            'reverse_signal'].rolling(200).std()
+        return df
 
     @staticmethod
-    def alpha11(df: pd.DataFrame, time_period=300):
+    def alpha10(df, window=20):
+        df['alpha10'] = df['reversals'] / df['tick_nums']
+        return df
+
+    @staticmethod
+    def alpha11(df: pd.DataFrame, window=20):
         """
         计算 DataFrame 中 'close' 列与领先成交量之间的滚动相关系数。
 
@@ -200,20 +208,20 @@ class FactorConstructor:
         """
         # 目前来看在tick数据上表现不太好
         # 复制数据，防止对原数据修改
-        group = df.copy()
-        group['returns'] = group['close'].pct_change()
-        group['dollar_volume'] = group['volume'].pct_change()
-        group['alpha11'] = group['returns'].rolling(window=time_period).corr(group['dollar_volume'])
-        group.drop(columns=['returns', 'dollar_volume'], inplace=True)
-        return group
+        df['alpha12'] = -talib.ROC(df['vwap'], timeperiod=window)
+        return df
 
     @staticmethod
-    def alpha12(df, window=30):
+    def alpha12(df, window=60):
         """
         计算vwap的滚动
         """
-        df['alpha12'] = (df['vwap'] - df['medium_price']) / df['vwap']
-        df['alpha12'] = df['alpha12'].rolling(window=window).mean()
+        # df['alpha12'] = (df['vwap'] - df['medium_price']) / df['vwap']
+        # df['alpha12'] = df['alpha12'].rolling(window=window).mean()
+        # df['vol_spike'] = df['price_std'] / df['price_std'].rolling(20).mean()
+        # df['buy_strength'] = df['buy_ticks']/df['tick_nums']
+
+        df['alpha12'] = (df['vwap'].rolling(window).mean()-df['close'].rolling(window).mean()) / df['close']
         return df
     @staticmethod
     def alpha13(df, window=1200, vol_window=30):
