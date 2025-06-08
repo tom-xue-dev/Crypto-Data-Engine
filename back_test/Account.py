@@ -66,6 +66,7 @@ class Account:
             print("-" * 30)
 
 
+
 class Position:
     """
     Position类对开仓的信息进行封装
@@ -259,17 +260,17 @@ class CostThresholdStrategy(StopLossLogic):
         self.holding_cost[(asset, direction)] = price
         self.holding_time[asset] = 0
 
-    def check_stop_loss(self, account, current_time, price_map, **kwargs):
+    def check_stop_loss(self, account, current_time, price_map, update_asset,**kwargs):
         """
-        price_map为一个字典，为当前时间戳所有的资产信息
+        price_map为一个字df_asset = group_df.get_group('BTCUSDT')典，为当前时间戳所有的资产信息
         """
         positions_to_close = []
-
         for (asset, direction), pos in account.positions.items():
             curr_price = price_map.get(asset)
             if (asset, direction) not in self.holding_cost:
                 raise ValueError(f"holding {asset} not exist")
-            self.holding_time[asset] += 1
+            if asset == update_asset:
+                self.holding_time[asset] += 1
             if self.holding_time[asset] == self.windows:
                 positions_to_close.append((asset, direction))
                 self.holding_time[asset] = 0
@@ -281,8 +282,6 @@ class CostThresholdStrategy(StopLossLogic):
                 elif curr_price > pos.entry_price * (1 + self.gain_threshold):
                     # 止盈
                     positions_to_close.append((asset, direction))
-
-
             elif direction == "short":
                 if curr_price > pos.entry_price * (1 + self.loss_threshold):
                     # 止损
@@ -295,7 +294,6 @@ class CostThresholdStrategy(StopLossLogic):
     def holding_close(self, asset, direction):
         del self.holding_cost[(asset, direction)]
         del self.holding_time[asset]
-
 
 class CostATRStrategy(StopLossLogic):
     def __init__(self, long_gain_times=4, long_loss_times=2, short_gain_times=1, short_loss_times=1):
@@ -368,7 +366,7 @@ class PositionManager:
         if asset_pos > total_cap * self.threshold:
             return 0
         target_pos = min(total_cap * self.threshold - asset_pos, account.cash)
-        return target_pos
+        return 100
 
 
 class AtrPositionManager:

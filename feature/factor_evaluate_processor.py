@@ -1,4 +1,5 @@
 import pickle
+import sys
 
 import pandas as pd
 import numpy as np
@@ -364,14 +365,14 @@ class FactorEvaluator:
 
     def backtest_factor_range(
             self,
-            long_pct: float = 0.99,
+            long_pct: float = 0.995,
             short_pct: float = 0.005,
             window: int = 60,
             take_profit: float = 0.06,
             stop_loss: float = 0.06,
             min_holding_bars: int = 1,
             max_holding_bars: int = 500,
-            cooldown_bars: int = 5,
+            cooldown_bars: int = 0,
             fee: float = 0.002,
     ):
         """Factor‑range back‑test using **bar counts** instead of calendar days.
@@ -400,14 +401,17 @@ class FactorEvaluator:
 
         long_thresh = factor.quantile(long_pct)
         short_thresh = factor.quantile(short_pct)
-        # long_thresh = -20
-        # short_thresh = -80
+        long_thresh = 0.003038929369778835
+        short_thresh = -0.002762653532982321
         print("long quantile", long_thresh)
         print("short quantile", short_thresh)
+        # grouped = self.df.groupby('asset')
+
         for asset in assets:
             df_asset = (
                 self.df.xs(asset, level=1).sort_index().copy()
             )  # 假设 index 已按时间顺序
+            #df_asset = grouped.get_group(asset)
             if len(df_asset) < window:
                 continue
 
@@ -424,51 +428,58 @@ class FactorEvaluator:
             signal_idx = np.flatnonzero(signal.values)  # bar 位置数组
             last_exit_loc = -np.inf  # 上一次退出的 bar 位置
             times = 0
+            cum_ret = 0.0
             for entry_loc in signal_idx:
                 # 冷却期：距离上次退出 < cooldown_bars，则跳过
                 if entry_loc - last_exit_loc < cooldown_bars:
                     continue
-
+                if asset == "MLNUSDT":
+                    print(signal_idx)
                 direction = signal.iloc[entry_loc]
                 future_slice = df_asset.iloc[
                                entry_loc + 1: entry_loc + 1 + max_holding_bars
                                ]
+                print("len fut",len(future_slice))
                 if future_slice.empty:
                     break
 
-                cum_ret = 0.0
                 exit_loc = None
 
+                entry_price = df_asset.iloc[entry_loc]['close']
+                exit_loc = None
                 for i, (idx, row) in enumerate(future_slice.iterrows(), start=1):
-                    cum_ret += row[self.future_return_col] * direction
-
+                    current_price = row['close']
+                    price_return = (current_price - entry_price) / entry_price * direction  # 方向性收益（百分比）
                     if i >= min_holding_bars:
-                        if cum_ret >= take_profit or cum_ret <= -stop_loss:
+                        if price_return >= take_profit or price_return <= -stop_loss:
                             exit_loc = entry_loc + i
+                            print(f"asset{asset} exit at {exit_loc} because it reaches stop loss or take profit")
                             break
                 else:
                     # 未触发 TP/SL，在 max_holding_bars 处离场
-                    exit_loc = entry_loc + len(future_slice)
-
-                gross_return = cum_ret
-                net_return = cum_ret - fee
-                times+=1
+                    exit_loc = entry_loc + len(future_slice)-1
+                exit_price = df_asset.iloc[exit_loc]['close']
+                gross_return = (exit_price - entry_price) / entry_price * direction
+                #print("entry,exit,gross",asset,df_asset.index[entry_loc],df_asset.index[exit_loc],entry_price,exit_price,gross_return)
+                net_return = gross_return - fee
+                times += 1
                 all_trades.append(
                     {
                         "asset": asset,
+                        "entry_time": df_asset.index[entry_loc],
+                        "exit_time": df_asset.index[exit_loc],
+                        "entry_price": entry_price,
+                        "exit_price": exit_price,
                         "entry_bar": entry_loc,
                         "exit_bar": exit_loc,
                         "holding_bars": exit_loc - entry_loc,
                         "direction": direction,
-                        "gross_return": gross_return,
-                        "gain": gross_return * 100,
-                        "gain_net": net_return * 100,
+                        "cumulative_profit": cum_ret+gross_return,
+                        "gain": gross_return,  # 百分比形式
+                        "gain_net": net_return,  # 扣掉手续费后的百分比
                         "times": times,
-                    }
-                )
-
-                last_exit_loc = exit_loc  # 更新冷却期基准
-
+                    })
+                last_exit_loc = exit_loc
         return pd.DataFrame(all_trades)
 
     def plot_all_assets_cumulative_profit(self,trade_df: pd.DataFrame):
@@ -632,21 +643,33 @@ if __name__ == '__main__':
     ]
     config = dl.DataLoaderConfig.load("load_config.yaml")
     data_loader = dl.DataLoader(config)
-    #df = data_loader.load_all_data()
-    with open("tick_bar_all.pkl",'rb') as f:
-        df = pickle.load(f)
-    print(df.columns)
+    df = data_loader.load_all_data()
+    # with open("tick_bar_all.pkl",'rb') as f:
+    #     df = pickle.load(f)
+    # df = df[:len(df)//50]
     FC = FactorConstructor(df)
+
     FC.run_alphas(alpha_funcs)
+    df['signal'] = 0
+    long_cond = (df['alpha12'] > 0.003738929369778835)
+    short_cond = (df['alpha12'] < -0.002762653532982321)
+    df['signal'] = df['signal'].mask(long_cond, 1)
+    df['signal'] = df['signal'].mask(short_cond, -1)
+
+    with open("data.pkl",'wb') as f:
+        pickle.dump(df,f)
     FE = FactorEvaluator(df, "alpha12", n_future_days=1)
     FE.plot_factor_distribution()
     long_range= (0.15,3)
     short_range = (-3,-0.15)
     df = FE.backtest_factor_range()
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.max_rows', None)
+    print(df)
     FE.plot_all_assets_cumulative_profit(df)
-    print("平均每次交易收益:", df['gain'].mean())
+    print("平均每次交易收益:", df['gain'].mean()*100)
     print("胜率:", (df['gain'] > 0).mean())
-    print("平均每次交易收益(手续费):", df['gain_net'].mean())
+    print("平均每次交易收益(手续费):", df['gain_net'].mean()*100)
     print("胜率:", (df['gain_net'] > 0).mean())
     print("交易次数:", len(df))
     # FE.plot_nvalue(long_range, short_range,is_long=True,is_short=False)
