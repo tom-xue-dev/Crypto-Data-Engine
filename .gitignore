@@ -17,3 +17,6 @@ back_test/transactions.txt
 /feature/.idea
 /data_aggr
 /tick_data
+*.txt
+*.txt
+back_test/transactions.txt

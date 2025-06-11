@@ -64,7 +64,7 @@ class FactorConstructor:
         short_range = (4,20)
         """
         df = df.copy()
-        returns = (df['close']-df['close'].shift(window))/df['close']*10
+        returns = (df['close']-df['close'].shift(10))/df['close']*10
         #df['skew_rolling'] = df['skewness'].rolling(window).mean()
         df['kurt_rolling'] = df['kurtosis'].rolling(window).mean()
         df['std'] = df['close'].rolling(window=20).std() / df['close'].rolling(window=20 * 10).std()
@@ -100,15 +100,15 @@ class FactorConstructor:
         """
         乖离率，检验距离均线偏离程度
         优化下乘以一个主动买入系数
-        如果
+        mean reversion策略需要强风控来控制回撤 不然收益率很难看(卡玛约在1)
         """
         df = df.copy()
         df['MA'] = df['close'].rolling(window=window).mean()
         df['std'] = df['close'].rolling(window=window).std()/df['close'].rolling(window=window*10).std()
         volume = df['volume'].rolling(window=window).mean()
         volume_ratio = volume / volume.rolling(window=window*20).mean()
-        #df['alpha3'] = (-(df['close'] - df['MA']) / df['MA']) * df['std']#过滤低波噪声
-        df['alpha3'] = (-(df['close'] - df['MA']) / df['MA'])*volume_ratio
+        df['alpha3'] = (-(df['close'] - df['MA']) / df['MA']) * df['std']#过滤低波噪声
+        # df['alpha3'] = (-(df['close'] - df['MA']) / df['MA'])*volume_ratio
         df.drop(columns=['MA'], inplace=True)
         return df  # 如果只需要返回这个因子
 
@@ -189,6 +189,9 @@ class FactorConstructor:
 
     @staticmethod
     def alpha10(df, window=20):
+        """
+        测试集效果一般
+        """
         df['alpha10'] = df['reversals'] / df['tick_nums']
         return df
 
@@ -208,20 +211,19 @@ class FactorConstructor:
         """
         # 目前来看在tick数据上表现不太好
         # 复制数据，防止对原数据修改
-        df['alpha12'] = -talib.ROC(df['vwap'], timeperiod=window)
+        df['alpha11'] = -talib.ROC(df['close'], timeperiod=window)
         return df
 
     @staticmethod
-    def alpha12(df, window=60):
+    def alpha12(df, window=3):
         """
         计算vwap的滚动
         """
-        # df['alpha12'] = (df['vwap'] - df['medium_price']) / df['vwap']
-        # df['alpha12'] = df['alpha12'].rolling(window=window).mean()
-        # df['vol_spike'] = df['price_std'] / df['price_std'].rolling(20).mean()
-        # df['buy_strength'] = df['buy_ticks']/df['tick_nums']
 
-        df['alpha12'] = (df['vwap'].rolling(window).mean()-df['close'].rolling(window).mean()) / df['close']
+        # gain = df['close']
+        # df['alpha12'] = (df['vwap'].rolling(window).mean()-df['close'].rolling(window).mean()) / df['close'] * 10
+        vals = (df['vwap']- df['close']) / df['close']
+        df['alpha12'] = vals.rolling(window).mean()
         return df
     @staticmethod
     def alpha13(df, window=1200, vol_window=30):
@@ -259,20 +261,58 @@ class FactorConstructor:
         imbalance = (df['buy_volume'] - df['sell_volume']) / total_volume.replace(0, np.nan)
         df['alpha14'] = imbalance.rolling(window).mean()
         return df
+
     @staticmethod
-    def alpha15(df, window=20):
-        df = df.copy()
-        df['alpha15'] = df['tick_interval_mean'].ewm(span=window).mean()
+    def alpha15(df: pd.DataFrame, n=120) -> pd.DataFrame:
+        """
+        alpha15：过去 n 根 K 线中当前价格高于多少比例的 open（胜率）× 平均盈亏（当前价 - 均值开盘价）
+        """
+        open_array = df['vwap'].to_numpy()
+        close_array = df['close'].to_numpy()
+        # 滚动窗口 open
+        open_rolling = np.lib.stride_tricks.sliding_window_view(open_array, window_shape=n)
+        current_close = close_array[n - 1:]
+        # 胜率计算
+        win_matrix = current_close[:, None] > open_rolling
+        win_ratio = win_matrix.sum(axis=1) / n
+        # 平均盈亏计算
+        avg_open = open_rolling.mean(axis=1)
+        avg_pnl = (current_close - avg_open)/avg_open
+        # 相乘得期望因子值
+        alpha_val = win_ratio * avg_pnl
+        # 填充为与原 df 一致长度
+        alpha_col = np.full_like(close_array, np.nan, dtype=np.float64)
+        alpha_col[n - 1:] = alpha_val
+        df["alpha15"] = -alpha_col
         return df
+
     @staticmethod
-    def alpha16(df, window=20):
-        df_copy = df.copy()
-        cols = []
-        for i in range(1, window + 1):
-            colname = f'alpha111_{i}'
-            cols.append(colname)
-            df_copy[colname] = df['close'].pct_change(i)
-        df['alpha16'] = apply_pca(df_copy, cols)
+    def alpha16(df, threshold=1.2, epsilon=1e-8, decay=0.9):
+        """
+        趋势增强 alpha（带衰减记忆）：
+        - 当当前趋势明显增强 → 设置新的方向 * 强度
+        - 否则 → 上一个 alpha × 衰减因子
+        """
+
+        df = df.copy()
+        df['ret'] = df['vwap'].pct_change()
+
+        # 滞后构建：预测 t 时点的 alpha
+        ret_prev = df['ret'].shift(1)  # t-2 → t-1
+        ret_curr = df['ret'] # t-1 → t
+
+        strength = abs(ret_curr) / (abs(ret_prev) + epsilon)
+        direction = np.sign(ret_curr)
+        # 初始化 alpha 数组
+        alpha = np.zeros(len(df))
+        # 逐步构建（仅用一次 for 循环）
+        for i in range(2, len(df)):
+            if strength.iloc[i] > threshold:
+                alpha[i] = -direction.iloc[i] * strength.iloc[i]
+            else:
+                alpha[i] = alpha[i - 1] * decay
+
+        df['alpha16'] = alpha
         return df
 
     @staticmethod

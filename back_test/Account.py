@@ -43,6 +43,7 @@ class Account:
         self.cash = initial_cash
         self.positions = {}
         self.transactions = []
+        self.reversed_cash = 0
 
     def record_transaction(self, tx):
         self.transactions.append(tx)
@@ -341,13 +342,15 @@ class CostATRStrategy(StopLossLogic):
 
 
 class PositionManager:
-    def __init__(self, threshold=0.05):
+    def __init__(self, threshold=0.05,fixed_pos = 0.05):
         self.threshold = threshold
+        self.fixed_pos = fixed_pos
         pass
 
     def get_allocate_pos(self, asset, price, signal, market_cap, account: Account):
         """
         检测多空持仓，限制单方持仓大于6成仓位
+        market_cap:权益市值(多+空)
         """
         long_cap = 0
         short_cap = 0
@@ -363,10 +366,12 @@ class PositionManager:
             asset_pos = account.positions[(asset, direct)].quantity * price
 
         total_cap = market_cap + account.cash
-        if asset_pos > total_cap * self.threshold:
+        if long_cap > total_cap * self.threshold and direct == "long":
             return 0
-        target_pos = min(total_cap * self.threshold - asset_pos, account.cash)
-        return 100
+        if short_cap > total_cap * self.threshold and direct == "short":
+            return 0
+        target_pos = min((total_cap * self.threshold - asset_pos) * self.fixed_pos, account.cash)
+        return target_pos
 
 
 class AtrPositionManager:

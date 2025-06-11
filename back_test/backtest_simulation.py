@@ -52,8 +52,9 @@ class Broker:
 
         if (asset, direction) not in self.account.positions:
             self.account.positions[(asset, direction)] = pos
+            if direction == "short": #增加冻结保证金
+                self.account.reversed_cash += quantity * price / leverage
         else:
-
             existing_pos = self.account.positions[(asset, direction)]
             old_quantity = existing_pos.quantity
             new_quantity = old_quantity + quantity
@@ -61,6 +62,7 @@ class Broker:
             existing_pos.quantity = new_quantity
             existing_pos.entry_price = weighted_price
             self.account.positions[(asset, direction)] = existing_pos
+
 
         self.account.record_transaction({
             "time": current_time,
@@ -96,6 +98,7 @@ class Broker:
             pnl = pos.quantity * (price - pos.entry_price)
         else:
             pnl = -pos.quantity * (price - pos.entry_price)
+            self.account.reversed_cash -= pos.quantity * pos.entry_price #释放保证金
 
         total_gain = (pos.entry_price * pos.quantity + pnl)
         self.account.cash += total_gain * (1 - self.fees) # 千分之一手续费
@@ -179,43 +182,47 @@ class Backtest:
         self.cross_section = True
 
     def run(self):
-        all_times = self.strategy_results.index.get_level_values('time').unique()
+        """
+        最高效：一次顺序扫描 MultiIndex(time, asset)。
+        适用于绝大多数 time 只有 1 行、少数多行的场景。
+        """
+        df = self.strategy_results.sort_index(level='time')
+
         price_map = {}
-        atr_map = {}
-        ma_map = {}
+        current_time = None
+        current_market_cap = 0
         cnt = 0
-        for current_time in all_times:
-            if cnt % 10000 == 0:
-                print(current_time)
-            cnt += 1
-            group_df = self.strategy_results.loc[current_time]
 
-            # 更新价格（逐个资产）
-            for row in group_df.itertuples():
-                asset = row.Index if isinstance(row.Index, str) else row.asset
-                price = row.close
-                price_map[asset] = price
-
+        for index_tuple, close, signal in zip(df.index, df['close'].values, df['signal'].values):
+            time_i, asset = index_tuple  # MultiIndex 拆分
+            price = close
+            if time_i != current_time:
+                if current_time is not None:
+                    self.log_net_value(price_map, current_time)
+                current_time = time_i
+                if cnt % 10_000 == 0:
+                    print(current_time)
+                cnt += 1
                 current_market_cap = self.get_market_cap(price_map)
-                self.broker.on_bar_end(current_time, price_map.copy(),asset)
-                self.process_signal(
-                    signal=row.signal,
-                    asset=asset,
-                    price=price,
-                    current_time=current_time,
-                    current_market_cap=current_market_cap,
-                )
-
-            self.log_net_value(price_map.copy(), current_time)
-
+            price_map[asset] = price
+            self.broker.on_bar_end(current_time, price_map, asset)
+            self.process_signal(
+                signal=signal,
+                asset=asset,
+                price=price,
+                current_time=current_time,
+                current_market_cap=current_market_cap,
+            )
+        if current_time is not None:
+            self.log_net_value(price_map, current_time)
         self.broker.clear_position(price_map)
+
         return {
             "final_cash": self.broker.account.cash,
             "positions": self.broker.account.positions,
             "transactions": self.broker.account.transactions,
             "net_value_history": pd.DataFrame(self.net_value_history)
         }
-
 
     def process_signal(self, signal, asset, price, current_time, current_market_cap, atr_value=None):
         # 简化: signal=1 -> 开多, signal=-1 -> 开空, signal=0 -> 不操作
@@ -280,16 +287,19 @@ class Backtest:
         """
         total_market_value = 0
         holdings = self.broker.account.positions
-
+        long_cap = short_cap = 0
         for (asset, direction), position in list(holdings.items()):
             if asset in price_map:
                 current_price = price_map[asset]
-                total_market_value += abs(position.quantity * current_price)
+                if direction == "long":
+                    long_cap += current_price * position.quantity
+                else:
+                    short_cap += current_price * position.quantity
             else:
                 # 缺失价格时警告，但不删除持仓
                 print(f"Warning: Missing price for asset {asset}, cannot compute market cap at this time.")
                 continue
-
+        total_market_value = long_cap + 2 * self.broker.account.reversed_cash-short_cap
         return total_market_value
 
     def log_net_value(self, price_map:dict, current_time: datetime.datetime):

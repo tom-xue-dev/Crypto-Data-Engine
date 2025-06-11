@@ -365,8 +365,8 @@ class FactorEvaluator:
 
     def backtest_factor_range(
             self,
-            long_pct: float = 0.995,
-            short_pct: float = 0.005,
+            long_pct: float = 0.99,
+            short_pct: float = 0.01,
             window: int = 60,
             take_profit: float = 0.06,
             stop_loss: float = 0.06,
@@ -397,12 +397,11 @@ class FactorEvaluator:
         all_trades = []
         assets = self.df.index.get_level_values(1).unique()
         factor = self.df[self.factor_col]
-        # factor = factor.iloc[-len(factor) // 3: ]
 
         long_thresh = factor.quantile(long_pct)
         short_thresh = factor.quantile(short_pct)
-        long_thresh = 0.003038929369778835
-        short_thresh = -0.002762653532982321
+        # long_thresh = 0.032634975379053105
+        # short_thresh = -0.255089568439138
         print("long quantile", long_thresh)
         print("short quantile", short_thresh)
         # grouped = self.df.groupby('asset')
@@ -433,13 +432,10 @@ class FactorEvaluator:
                 # 冷却期：距离上次退出 < cooldown_bars，则跳过
                 if entry_loc - last_exit_loc < cooldown_bars:
                     continue
-                if asset == "MLNUSDT":
-                    print(signal_idx)
                 direction = signal.iloc[entry_loc]
                 future_slice = df_asset.iloc[
                                entry_loc + 1: entry_loc + 1 + max_holding_bars
                                ]
-                print("len fut",len(future_slice))
                 if future_slice.empty:
                     break
 
@@ -449,11 +445,11 @@ class FactorEvaluator:
                 exit_loc = None
                 for i, (idx, row) in enumerate(future_slice.iterrows(), start=1):
                     current_price = row['close']
+                    current_factor = factor.iloc[entry_loc + i]
                     price_return = (current_price - entry_price) / entry_price * direction  # 方向性收益（百分比）
                     if i >= min_holding_bars:
                         if price_return >= take_profit or price_return <= -stop_loss:
                             exit_loc = entry_loc + i
-                            print(f"asset{asset} exit at {exit_loc} because it reaches stop loss or take profit")
                             break
                 else:
                     # 未触发 TP/SL，在 max_holding_bars 处离场
@@ -639,11 +635,13 @@ class FactorProcessor:
 
 if __name__ == '__main__':
     alpha_funcs = [
-        'alpha12',
+        'alpha15',
     ]
     config = dl.DataLoaderConfig.load("load_config.yaml")
     data_loader = dl.DataLoader(config)
-    df = data_loader.load_all_data()
+    # # df = data_loader.load_all_data()
+    with open("test_data.pkl",'rb') as f:
+        df = pickle.load(f)
     # with open("tick_bar_all.pkl",'rb') as f:
     #     df = pickle.load(f)
     # df = df[:len(df)//50]
@@ -651,21 +649,19 @@ if __name__ == '__main__':
 
     FC.run_alphas(alpha_funcs)
     df['signal'] = 0
-    long_cond = (df['alpha12'] > 0.003738929369778835)
-    short_cond = (df['alpha12'] < -0.002762653532982321)
+    long_cond = (df['alpha15'] > 0.024851057700291536)
+    short_cond = (df['alpha15'] < -0.19902297286650047)
     df['signal'] = df['signal'].mask(long_cond, 1)
     df['signal'] = df['signal'].mask(short_cond, -1)
 
     with open("data.pkl",'wb') as f:
         pickle.dump(df,f)
-    FE = FactorEvaluator(df, "alpha12", n_future_days=1)
+    FE = FactorEvaluator(df, "alpha15", n_future_days=1)
     FE.plot_factor_distribution()
-    long_range= (0.15,3)
-    short_range = (-3,-0.15)
     df = FE.backtest_factor_range()
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_rows', None)
-    print(df)
+    # print(df)
     FE.plot_all_assets_cumulative_profit(df)
     print("平均每次交易收益:", df['gain'].mean()*100)
     print("胜率:", (df['gain'] > 0).mean())
