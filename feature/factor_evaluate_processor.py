@@ -365,11 +365,11 @@ class FactorEvaluator:
 
     def backtest_factor_range(
             self,
-            long_pct: float = 0.99,
-            short_pct: float = 0.01,
+            long_pct: float = 0.97,
+            short_pct: float = 0.03,
             window: int = 60,
-            take_profit: float = 0.06,
-            stop_loss: float = 0.06,
+            take_profit: float = 0.08,
+            stop_loss: float = 0.08,
             min_holding_bars: int = 1,
             max_holding_bars: int = 500,
             cooldown_bars: int = 0,
@@ -400,8 +400,8 @@ class FactorEvaluator:
 
         long_thresh = factor.quantile(long_pct)
         short_thresh = factor.quantile(short_pct)
-        # long_thresh = 0.032634975379053105
-        # short_thresh = -0.255089568439138
+        long_thresh = 0.084
+        short_thresh = -0.027
         print("long quantile", long_thresh)
         print("short quantile", short_thresh)
         # grouped = self.df.groupby('asset')
@@ -635,7 +635,7 @@ class FactorProcessor:
 
 if __name__ == '__main__':
     alpha_funcs = [
-        'alpha15',
+        'alpha14',
     ]
     config = dl.DataLoaderConfig.load("load_config.yaml")
     data_loader = dl.DataLoader(config)
@@ -644,19 +644,20 @@ if __name__ == '__main__':
         df = pickle.load(f)
     # with open("tick_bar_all.pkl",'rb') as f:
     #     df = pickle.load(f)
+    print(df.columns)
     # df = df[:len(df)//50]
     FC = FactorConstructor(df)
 
     FC.run_alphas(alpha_funcs)
     df['signal'] = 0
-    long_cond = (df['alpha15'] > 0.024851057700291536)
-    short_cond = (df['alpha15'] < -0.19902297286650047)
+    long_cond = (df['alpha14'] > 0.08)
+    short_cond = (df['alpha14'] < -0.02)
     df['signal'] = df['signal'].mask(long_cond, 1)
     df['signal'] = df['signal'].mask(short_cond, -1)
 
     with open("data.pkl",'wb') as f:
         pickle.dump(df,f)
-    FE = FactorEvaluator(df, "alpha15", n_future_days=1)
+    FE = FactorEvaluator(df, "alpha14", n_future_days=1)
     FE.plot_factor_distribution()
     df = FE.backtest_factor_range()
     pd.set_option('display.max_columns', None)

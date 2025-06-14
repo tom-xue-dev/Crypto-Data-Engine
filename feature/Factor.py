@@ -53,22 +53,26 @@ class FactorConstructor:
         return self.df
 
     @staticmethod
-    def alpha1(df: pd.DataFrame, window: int = 100) -> pd.DataFrame:
+    def alpha1(df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
         """
-        计算收益率的偏度和峰度.目前来看只有偏度有用
-        换成tick bar后 不知道为什么似乎峰度效果好
-        峰度+趋势反转 似乎比较好用
-
+        meam reversion都有一个问题
+        当出现大量信号的时候，会几乎全仓
+        这个时候市场突破导致大仓位巨大亏损
+        而平时只能小幅度稀疏仓位上行
         区间：
         long_range = (-20,-4)
         short_range = (4,20)
         """
         df = df.copy()
-        returns = (df['close']-df['close'].shift(10))/df['close']*10
+        returns = (df['close']-df['close'].shift(window))/df['close'].shift(window)
         #df['skew_rolling'] = df['skewness'].rolling(window).mean()
-        df['kurt_rolling'] = df['kurtosis'].rolling(window).mean()
-        df['std'] = df['close'].rolling(window=20).std() / df['close'].rolling(window=20 * 10).std()
-        df['alpha1'] = -df['kurt_rolling']*df['std']*returns
+        # df['kurt_rolling'] = df['kurtosis'].rolling(window).mean()
+        # df['std'] = df['close'].rolling(window=20).std() / df['close'].rolling(window=20 * 10).std() #长短期方差来过滤低波时期
+        # df['time_std'] = df['tick_interval_mean'] / df['tick_interval_mean'].rolling(window=window).mean()
+        # cum_buyer = df['cumulative_buyer'].rolling(window=window).mean()
+        # up_move_ratio = df['up_move_ratio'].rolling(window=window).mean()
+        alpha  =-df['cumulative_buyer']*df['up_move_ratio']/df['tick_interval_mean']
+        df['alpha1'] = alpha.rolling(window=window).mean()
         return df
 
     @staticmethod
@@ -96,7 +100,7 @@ class FactorConstructor:
         return df
 
     @staticmethod
-    def alpha3(df,window=20):
+    def alpha3(df,window=60):
         """
         乖离率，检验距离均线偏离程度
         优化下乘以一个主动买入系数
@@ -104,7 +108,7 @@ class FactorConstructor:
         """
         df = df.copy()
         df['MA'] = df['close'].rolling(window=window).mean()
-        df['std'] = df['close'].rolling(window=window).std()/df['close'].rolling(window=window*10).std()
+        df['std'] = df['close'].rolling(window=window).std()/df['close'].rolling(window=window*5).std()
         volume = df['volume'].rolling(window=window).mean()
         volume_ratio = volume / volume.rolling(window=window*20).mean()
         df['alpha3'] = (-(df['close'] - df['MA']) / df['MA']) * df['std']#过滤低波噪声
@@ -226,40 +230,25 @@ class FactorConstructor:
         df['alpha12'] = vals.rolling(window).mean()
         return df
     @staticmethod
-    def alpha13(df, window=1200, vol_window=30):
+    def alpha13(df, window=30, vol_window=30):
         """
-        计算高斯波动率（基于滚动标准差）并标准化
-
-        参数：
-            df: DataFrame，包含价格数据
-            window: 用于计算 Z-score 的标准化窗口
-            vol_window: 计算波动率的滚动窗口大小（例如 60 表示用过去 60 期计算波动率）
-
-        返回:
-            df: 添加了 'gaussian_volatility' 列的 DataFrame
         """
-        df = df.copy()
-        df['gk_volatility'] = np.sqrt(
-            (0.5 * (np.log(df['high']) - np.log(df['low'])) ** 2) -
-            ((2 * np.log(2) - 1) * (np.log(df['close']) - np.log(df['open'])) ** 2)
-        )
-
-        # 计算滚动窗口高斯波动率
-        df['gaussian_volatility'] = df['gk_volatility'].rolling(vol_window).mean()
-        # 计算 Z-score 标准化
-        df = compute_zscore(df, 'gaussian_volatility', window)
-        # 清理临时列
-        df = df.drop(columns=['gaussian_volatility'])
-        df = df.rename(columns={'zscore_gaussian_volatility': 'alpha13'})
-
+        # alpha = df['up_move_ratio'].rolling(window).mean()
+        # buyer = df['buy_volume'].rolling(window).mean()
+        # seller = df['sell_volume'].rolling(window).mean()
+        # interval = df['tick_interval_mean'].diff(window) / df['tick_interval_mean'].shift(window)
+        ret = df['close'].pct_change(window)
+        # imbalance = -(buyer - seller) / df['volume'].shift(window) * interval
+        # df['alpha13'] = imbalance
+        df['alpha13'] = -ret / (df['buy_volume'].rolling(window).mean() / df['volume'].rolling(window).mean()) # 主动抗住下跌
         return df
 
     @staticmethod
-    def alpha14(df, window=20):
+    def alpha14(df, window=360):
         df = df.copy()
-        total_volume = df['buy_volume'] + df['sell_volume']
-        imbalance = (df['buy_volume'] - df['sell_volume']) / total_volume.replace(0, np.nan)
-        df['alpha14'] = imbalance.rolling(window).mean()
+        tick_change = -df['tick_interval_mean'] /df['tick_interval_mean'].rolling(window).mean()
+        buyer = (df['buy_volume'].rolling(window).mean() / df['volume'].rolling(window).mean())-0.5
+        df['alpha14'] = buyer * tick_change
         return df
 
     @staticmethod
