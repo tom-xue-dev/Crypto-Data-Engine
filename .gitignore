@@ -7,3 +7,5 @@ data/
 /data_aggr
 /tick_data/data_aggr
 /tick_data/data_aggrate
+/back_test
+*.pkl
