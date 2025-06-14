@@ -1,3 +1,4 @@
+import math
 from multiprocessing import Pool
 import talib
 from sklearn.decomposition import PCA
@@ -194,9 +195,11 @@ class FactorConstructor:
     @staticmethod
     def alpha10(df, window=20):
         """
-        测试集效果一般
+        买入强度因子
         """
-        df['alpha10'] = df['reversals'] / df['tick_nums']
+        reversed= df['reversals'] / df['tick_nums']
+        alpha = df['close'].pct_change() / np.log(reversed+1)
+        df['alpha10'] = alpha.rolling(window).mean()
         return df
 
     @staticmethod
@@ -277,65 +280,79 @@ class FactorConstructor:
 
     @staticmethod
     def alpha16(df, threshold=1.2, epsilon=1e-8, decay=0.9):
-        """
-        趋势增强 alpha（带衰减记忆）：
-        - 当当前趋势明显增强 → 设置新的方向 * 强度
-        - 否则 → 上一个 alpha × 衰减因子
-        """
+        devitiation = (df['vwap'] - df['medium_price'])/df['close']
+        df['alpha16'] = -devitiation.rolling(window=20).mean()
+        return df
 
+    @staticmethod
+    def alpha17(df, window=120):
+        returns = df['close'].pct_change()
+        squared_up = returns.where(returns > 0, 0) ** 2
+        std_up = squared_up.rolling(window=window).sum().apply(np.sqrt)
+        squared_down = returns.where(returns < 0, 0) ** 2
+        std_down = squared_down.rolling(window=window).sum().apply(np.sqrt)
+        df['alpha17'] = -(std_up-std_down)/(std_up+std_down)
+
+        return df
+
+    @staticmethod
+    def alpha18(df, window=120):
+        """
+          计算趋势强度指标（Trend Strength）
+          """
+        price = df['close']
+        net_change = price.diff(window*100)
+        total_movement = price.diff().abs().rolling(window=window*100).sum()
+        trend_strength = net_change / total_movement
+        volume_score = df['volume'].rolling(window=window).mean()/df['volume']
+        df['alpha18'] = trend_strength * volume_score
+        return df
+
+    @staticmethod
+    def alpha19(
+            df: pd.DataFrame,
+            window: int = 120,
+            pct: float = 0.05,
+            price_col: str = "close",
+            vol_col: str = "volume",
+            out_col: str = "alpha19",
+    ) -> pd.DataFrame:
+        """
+        统计过去 `window` 个 bar 中，成交量最大的 `pct` 比例 bar
+        贡献的累计涨幅，并将结果写入 `out_col`。
+        仅仅适合做多,且需要cut掉极端值
+        """
+        # ----------- 基本检查 -----------
+        need = {price_col, vol_col}
+        miss = need - set(df.columns)
+        if miss:
+            raise KeyError(f"缺失列：{miss}")
+
+        if not (0 < pct <= 1):
+            raise ValueError("pct 必须在 (0, 1] 区间内")
+
+        # ----------- 预处理 -----------
         df = df.copy()
-        df['ret'] = df['vwap'].pct_change()
+        df["_ret"] = df[price_col].pct_change().to_numpy()
+        vols = df[vol_col].to_numpy()
+        rets = df["_ret"].to_numpy()
 
-        # 滞后构建：预测 t 时点的 alpha
-        ret_prev = df['ret'].shift(1)  # t-2 → t-1
-        ret_curr = df['ret'] # t-1 → t
+        k = max(1, int(math.ceil(window * pct)))  # 需要选出的 bar 数
+        n = len(df)
+        out = np.full(n, np.nan, dtype=np.float64)
 
-        strength = abs(ret_curr) / (abs(ret_prev) + epsilon)
-        direction = np.sign(ret_curr)
-        # 初始化 alpha 数组
-        alpha = np.zeros(len(df))
-        # 逐步构建（仅用一次 for 循环）
-        for i in range(2, len(df)):
-            if strength.iloc[i] > threshold:
-                alpha[i] = -direction.iloc[i] * strength.iloc[i]
-            else:
-                alpha[i] = alpha[i - 1] * decay
+        # ----------- 主循环（可用 numba 再提速） -----------
+        for i in range(window - 1, n):
+            start = i - window + 1
+            vol_slice = vols[start: i + 1]
+            ret_slice = rets[start: i + 1]
 
-        df['alpha16'] = alpha
-        return df
+            # 找到成交量最大的 k 个位置
+            top_idx = np.argpartition(-vol_slice, k - 1)[:k]
+            out[i] = np.prod(1.0 + ret_slice[top_idx]) - 1.0
 
-    @staticmethod
-    def alpha17(df, window=20):
-        df_copy = df.copy()
-        cols = []
-        for i in range(1, window + 1):
-            colname = f'alpha112_{i}'
-            cols.append(colname)
-            df_copy[colname] = df['high'].pct_change(i)
-        df['alpha17'] = apply_pca(df_copy, cols)
-        return df
-
-    @staticmethod
-    def alpha18(df, window=20):
-        df_copy = df.copy()
-        cols = []
-        for i in range(1, window + 1):
-            colname = f'alpha113_{i}'
-            cols.append(colname)
-            df_copy[colname] = df['open'].pct_change(i)
-        df['alpha18'] = apply_pca(df_copy, cols)
-        return df
-
-    @staticmethod
-    def alpha19(df, window=20):
-        df_copy = df.copy()
-        cols = []
-        for i in range(1, window + 1):
-            colname = f'alpha114_{i}'
-            cols.append(colname)
-            df_copy[colname] = df['low'].pct_change(i)
-        df['alpha19'] = apply_pca(df_copy, cols)
-        return df
+        df[out_col] = out
+        return df.drop(columns="_ret")
 
     @staticmethod
     def alpha20(df, window=20):
