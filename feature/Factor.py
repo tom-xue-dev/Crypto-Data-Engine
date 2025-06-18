@@ -119,7 +119,7 @@ class FactorConstructor:
         return df  # 如果只需要返回这个因子
 
     @staticmethod
-    def alpha4(df: pd.DataFrame, window=20) -> pd.DataFrame:
+    def alpha4(df: pd.DataFrame, window=120) -> pd.DataFrame:
         """
         主动买入的推动涨幅，
         只有大幅主动买入，且推动涨幅，才认为上涨强烈
@@ -128,27 +128,26 @@ class FactorConstructor:
         short_range = (5,10)
         """
         df['return'] = (df['close'] - df['close'].shift(window)) / df['close']
-        df['buyer_volume'] = df['buy_volume'].rolling(window=window).mean()
-        # df['sell_volume'] = df['volume'] - df['buyer_volume']
-        df['imbalance'] = df['buyer_volume'] / df['volume'].rolling(window=window).mean()
-        df['alpha4'] =- df['imbalance'] * df['return']
-        # df['alpha4'] = (df['alpha4'] - df['alpha4'].rolling(window*100).mean()) / df['alpha4'].rolling(window*100).std()
+        buyer = df['buy_volume']
+        seller = df['volume'] - df['buy_volume']
+        df['imbalance'] = (buyer - seller)/df['volume']
+        df['alpha4'] = 100*df['imbalance'].rolling(window).sum() * np.sign(df['return'])*np.log1p(abs(df['return']))**4
+
         return df
 
     @staticmethod
-    def alpha5(df, window=20):
+    def alpha5(df, window=60):
         """
         bar中中位成交价格占bar柱的情况
         理论上来说
         """
         df = df.copy()
-        returns = (df['close'] - df['close'].shift(window)) / df['close']
         df['alpha5'] = (df['medium_price'] - df['low']) / (df['high'] - df['low'])
-        df['alpha5'] = -df['alpha5'].rolling(window).mean()*returns
+        df['alpha5'] = -df['alpha5'].rolling(window).mean()
         return df
 
     @staticmethod
-    def alpha6(df, window=20):
+    def alpha6(df, window=60):
         """
         中位成交价和vwap的乖离率
         """
@@ -158,7 +157,7 @@ class FactorConstructor:
         return df
 
     @staticmethod
-    def alpha7(df, fast_period=12, slow_period=26, window=1200):
+    def alpha7(df, fast_period=30, slow_period=60, window=1200):
         """
         计算APO的滚动标准分
         """
@@ -172,15 +171,14 @@ class FactorConstructor:
         return group
 
     @staticmethod
-    def alpha8(df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+    def alpha8(df: pd.DataFrame, window: int = 120) -> pd.DataFrame:
         group = df.copy()
-        log_low = np.log(group['low'].clip(lower=1e-5))  # 防止 log(0)
-        log_high = np.log(group['high'].clip(lower=1e-5))
-
-        cov = log_low.rolling(window).cov(log_high)
-        var = log_low.rolling(window).var()
-        beta = pd.Series(np.where(var == 0, np.nan, cov / var), index=group.index).ffill()
-
+        group['hl_range'] = group['high'] - group['low']
+        group['mid_price'] = (group['high'] + group['low']) / 2
+        group['log_range'] = np.log(group['high'] / group['low'])
+        cov = group['log_range'].rolling(window).cov(group['mid_price'])
+        var = group['mid_price'].rolling(window).var()
+        beta = np.where(var == 0, np.nan, cov / var)
         group['alpha8'] = beta
 
         return group
@@ -194,13 +192,16 @@ class FactorConstructor:
         return df
 
     @staticmethod
-    def alpha10(df, window=20):
+    def alpha10(df, window=300):
         """
         买入强度因子
+        好像没啥卵用
         """
-        reversed= df['reversals'] / df['tick_nums']
-        alpha = np.sign(df['close'].diff())/ np.log(reversed+1)
-        df['alpha10'] = alpha.rolling(window).mean()
+        reversed = df['reversals'] / df['tick_nums']
+        ticks = df['tick_nums']
+        total_reverse = reversed.rolling(window).sum() / ticks.rolling(window).sum() #买入卖出转变占比
+        alpha = (total_reverse-0.0007) * np.sign(df['close'].diff(window))
+        df['alpha10'] = alpha
         return df
 
     @staticmethod

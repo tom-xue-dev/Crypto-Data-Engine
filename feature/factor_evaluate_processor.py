@@ -106,7 +106,7 @@ class FactorEvaluator:
         layered = self.calc_layer_returns(n_layers)
         return layered.mean(axis=1)
 
-    def plot_factor_distribution(self, cut_pct=0):
+    def plot_factor_distribution(self, cut_pct=0.003):
         """
         可视化因子值分布，支持按百分位裁剪（默认裁剪上下1%）。
 
@@ -365,8 +365,8 @@ class FactorEvaluator:
 
     def backtest_factor_range(
             self,
-            long_pct: float = 0.99,
-            short_pct: float = 0.01,
+            long_pct: float = 0.98,
+            short_pct: float = 0.02,
             window: int = 60,
             take_profit: float = 0.1,
             stop_loss: float = 0.08,
@@ -428,8 +428,8 @@ class FactorEvaluator:
 
             signal_idx = np.flatnonzero(signal.values)  # bar 位置数组
             trade_times = 6000
-            if len(signal_idx) > trade_times:
-                continue
+            # if len(signal_idx) > trade_times:
+            #     continue
             last_exit_loc = -np.inf  # 上一次退出的 bar 位置
             times = 0
             cum_ret = 0.0
@@ -448,8 +448,12 @@ class FactorEvaluator:
 
                 entry_price = df_asset.iloc[entry_loc]['close']
                 exit_loc = None
-                atr_profit = df_asset['close'].rolling(window=500).std().iloc[entry_loc] * 1 + entry_price
-                atr_loss = entry_price - df_asset['close'].rolling(window=500).std().iloc[entry_loc] * 1
+                atr_profit = df_asset['close'].rolling(window=300).std().iloc[entry_loc] * 2 + entry_price
+                atr_loss = entry_price - df_asset['close'].rolling(window=300).std().iloc[entry_loc] * 1
+                if atr_profit / entry_price <1.03:
+                    atr_profit = entry_price*1.03
+                if entry_price / atr_loss <1.03:
+                    atr_loss = entry_price*0.97
                 for i, (idx, row) in enumerate(future_slice.iterrows(), start=1):
                     current_price = row['close']
                     current_factor = factor.iloc[entry_loc + i]
@@ -645,7 +649,7 @@ class FactorProcessor:
 
 if __name__ == '__main__':
     alpha_funcs = [
-        'alpha15',
+        'alpha4',
     ]
     config = dl.DataLoaderConfig.load("load_config.yaml")
     data_loader = dl.DataLoader(config)
@@ -658,8 +662,7 @@ if __name__ == '__main__':
     # df = df[:len(df)//50]
     FC = FactorConstructor(df)
 
-    # FC.run_alphas(alpha_funcs)
-    df['alpha15'] = np.random.rand(len(df))
+    FC.run_alphas(alpha_funcs)
     # df['signal'] = 0
     # long_cond = (df['alpha23'] > 3.66)
     # short_cond = (df['alpha23'] <0.23)
@@ -668,7 +671,7 @@ if __name__ == '__main__':
     #
     # with open("data.pkl",'wb') as f:
     #     pickle.dump(df,f)
-    FE = FactorEvaluator(df, "alpha15", n_future_days=1)
+    FE = FactorEvaluator(df, "alpha4", n_future_days=1)
     FE.plot_factor_distribution()
     df = FE.backtest_factor_range()
     pd.set_option('display.max_columns', None)
