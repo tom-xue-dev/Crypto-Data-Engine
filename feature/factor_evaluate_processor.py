@@ -106,7 +106,7 @@ class FactorEvaluator:
         layered = self.calc_layer_returns(n_layers)
         return layered.mean(axis=1)
 
-    def plot_factor_distribution(self, cut_pct=0.01):
+    def plot_factor_distribution(self, cut_pct=0):
         """
         可视化因子值分布，支持按百分位裁剪（默认裁剪上下1%）。
 
@@ -365,13 +365,13 @@ class FactorEvaluator:
 
     def backtest_factor_range(
             self,
-            long_pct: float = 0.97,
+            long_pct: float = 0.99,
             short_pct: float = 0.01,
             window: int = 60,
-            take_profit: float = 0.08,
+            take_profit: float = 0.1,
             stop_loss: float = 0.08,
             min_holding_bars: int = 1,
-            max_holding_bars: int = 300,
+            max_holding_bars: int = 500,
             cooldown_bars: int = 0,
             fee: float = 0.002,
     ):
@@ -402,8 +402,8 @@ class FactorEvaluator:
         long_upper = factor.quantile(0.99)
         short_thresh = factor.quantile(short_pct)
         short_upper = factor.quantile(0.005)
-        # long_thresh = 0.03
-        # short_thresh = -100
+        # long_thresh = -8.87582594012509
+        # short_thresh = -13
         print("long quantile", long_thresh)
         print("short quantile", short_thresh)
         # grouped = self.df.groupby('asset')
@@ -427,6 +427,9 @@ class FactorEvaluator:
             signal[factor <= short_thresh] = -1
 
             signal_idx = np.flatnonzero(signal.values)  # bar 位置数组
+            trade_times = 6000
+            if len(signal_idx) > trade_times:
+                continue
             last_exit_loc = -np.inf  # 上一次退出的 bar 位置
             times = 0
             cum_ret = 0.0
@@ -445,12 +448,17 @@ class FactorEvaluator:
 
                 entry_price = df_asset.iloc[entry_loc]['close']
                 exit_loc = None
+                atr_profit = df_asset['close'].rolling(window=500).std().iloc[entry_loc] * 1 + entry_price
+                atr_loss = entry_price - df_asset['close'].rolling(window=500).std().iloc[entry_loc] * 1
                 for i, (idx, row) in enumerate(future_slice.iterrows(), start=1):
                     current_price = row['close']
                     current_factor = factor.iloc[entry_loc + i]
                     price_return = (current_price - entry_price) / entry_price * direction  # 方向性收益（百分比）
                     if i >= min_holding_bars:
-                        if price_return >= take_profit or price_return <= -stop_loss:
+                        # if price_return >= take_profit or price_return <= -stop_loss:
+                        #     exit_loc = entry_loc + i
+                        #     break
+                        if current_price >= atr_profit or current_price <= atr_loss:
                             exit_loc = entry_loc + i
                             break
                 else:
@@ -637,11 +645,11 @@ class FactorProcessor:
 
 if __name__ == '__main__':
     alpha_funcs = [
-        'alpha19',
+        'alpha15',
     ]
     config = dl.DataLoaderConfig.load("load_config.yaml")
     data_loader = dl.DataLoader(config)
-    # # df = data_loader.load_all_data()
+    # df = data_loader.load_all_data()
     # with open("test_data.pkl",'rb') as f:
     #     df = pickle.load(f)
     with open("tick_bar_all.pkl",'rb') as f:
@@ -650,16 +658,17 @@ if __name__ == '__main__':
     # df = df[:len(df)//50]
     FC = FactorConstructor(df)
 
-    FC.run_alphas(alpha_funcs)
-    df['signal'] = 0
-    # long_cond = (df['alpha10'] > 0.03)
-    # short_cond = (df['alpha10'] < -0.03)
+    # FC.run_alphas(alpha_funcs)
+    df['alpha15'] = np.random.rand(len(df))
+    # df['signal'] = 0
+    # long_cond = (df['alpha23'] > 3.66)
+    # short_cond = (df['alpha23'] <0.23)
     # df['signal'] = df['signal'].mask(long_cond, 1)
     # df['signal'] = df['signal'].mask(short_cond, -1)
     #
     # with open("data.pkl",'wb') as f:
     #     pickle.dump(df,f)
-    FE = FactorEvaluator(df, "alpha19", n_future_days=1)
+    FE = FactorEvaluator(df, "alpha15", n_future_days=1)
     FE.plot_factor_distribution()
     df = FE.backtest_factor_range()
     pd.set_option('display.max_columns', None)
@@ -667,8 +676,8 @@ if __name__ == '__main__':
     # print(df)
     FE.plot_all_assets_cumulative_profit(df)
     print("平均每次交易收益:", df['gain'].mean()*100)
-    print("胜率:", (df['gain'] > 0).mean())
+    print("胜率:", (df['gain'] > 0).sum() / df['gain_net'].count())
     print("平均每次交易收益(手续费):", df['gain_net'].mean()*100)
-    print("胜率:", (df['gain_net'] > 0).mean())
+    print("胜率:", (df['gain_net'] > 0).sum() / df['gain_net'].count())
     print("交易次数:", len(df))
     # FE.plot_nvalue(long_range, short_range,is_long=True,is_short=False)

@@ -1,5 +1,6 @@
 import math
 from multiprocessing import Pool
+from sklearn.linear_model import LinearRegression
 import talib
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
@@ -198,7 +199,7 @@ class FactorConstructor:
         买入强度因子
         """
         reversed= df['reversals'] / df['tick_nums']
-        alpha = df['close'].pct_change() / np.log(reversed+1)
+        alpha = np.sign(df['close'].diff())/ np.log(reversed+1)
         df['alpha10'] = alpha.rolling(window).mean()
         return df
 
@@ -247,7 +248,7 @@ class FactorConstructor:
         return df
 
     @staticmethod
-    def alpha14(df, window=360):
+    def alpha14(df, window=20):
         df = df.copy()
         tick_change = -df['tick_interval_mean'] /df['tick_interval_mean'].rolling(window).mean()
         buyer = (df['buy_volume'].rolling(window).mean() / df['volume'].rolling(window).mean())-0.5
@@ -310,79 +311,124 @@ class FactorConstructor:
 
     @staticmethod
     def alpha19(
-            df: pd.DataFrame,
-            window: int = 120,
-            pct: float = 0.05,
-            price_col: str = "close",
-            vol_col: str = "volume",
-            out_col: str = "alpha19",
+        df: pd.DataFrame,
+        short_window: int = 20,
+        long_window: int = 120,
+        impact_col: str = "max_trade_impact",
+        dir_col: str = "max_trade_direction",
+        vol_ratio_col: str = "max_trade_vol_ratio",
+        out_col: str = "alpha19",
     ) -> pd.DataFrame:
         """
-        统计过去 `window` 个 bar 中，成交量最大的 `pct` 比例 bar
-        贡献的累计涨幅，并将结果写入 `out_col`。
-        仅仅适合做多,且需要cut掉极端值
+        α19: 过去 n 根 K 线中 **大单推动涨幅**（近端 - 远端）
+
+        定义：
+            signed_impact = max_trade_impact * ( 1 if max_trade_direction==0 else -1 )
+            bar_score     = signed_impact * max_trade_vol_ratio
+
+            alpha19_t = Σ_{t-short+1}^{t} bar_score  -  Σ_{t-long+1}^{t} bar_score
+
+        参数
+        ----
+        df : DataFrame
+            已经包含 impact, direction, vol_ratio 三列；按时间升序。
+        short_window : int
+            近端窗口长度（默认 20 根 bar）
+        long_window : int
+            远端窗口长度（默认 120 根 bar；需 > short_window）
+        impact_col, dir_col, vol_ratio_col : str
+            对应列名；如你改过名字可在调用时指定。
+        out_col : str
+            输出列名（默认 'alpha19'）
+
+        返回
+        ----
+        DataFrame
+            原 df 的复制，增加一列 `out_col`
         """
-        # ----------- 基本检查 -----------
-        need = {price_col, vol_col}
-        miss = need - set(df.columns)
-        if miss:
-            raise KeyError(f"缺失列：{miss}")
+        sign = np.where(df[dir_col] == 0, 1.0, -1.0)
+        impact = np.where(df[impact_col]!=np.nan,df[impact_col],0)
+        signed_imp =  impact * sign
+        bar_score = signed_imp * df[vol_ratio_col].to_numpy()
+        df["_bar_score"] = bar_score
 
-        if not (0 < pct <= 1):
-            raise ValueError("pct 必须在 (0, 1] 区间内")
+        # -------- 2. 近期 / 远期 均值 --------
+        recent_sum = (
+            df["_bar_score"]
+            .rolling(window=short_window, min_periods=short_window)
+            .sum()
+        )
 
-        # ----------- 预处理 -----------
+        cum_long_sum = (
+            df["_bar_score"]
+            .rolling(window=long_window, min_periods=long_window)
+            .sum()
+        )
+
+        past_sum = cum_long_sum - recent_sum
+        past_len = long_window - short_window
+
+        recent_mean = recent_sum / short_window
+        past_mean = past_sum / (past_len + 1e-12)  # 防 0
+
+        # -------- 3. alpha19 --------
+        df[out_col] = (recent_mean -recent_mean.rolling(window=600).mean()) / recent_mean.rolling(window=600).std()
+
+        return df.drop(columns="_bar_score")
+
+    @staticmethod
+    def alpha20(df, window=200):
         df = df.copy()
-        df["_ret"] = df[price_col].pct_change().to_numpy()
-        vols = df[vol_col].to_numpy()
-        rets = df["_ret"].to_numpy()
-
-        k = max(1, int(math.ceil(window * pct)))  # 需要选出的 bar 数
-        n = len(df)
-        out = np.full(n, np.nan, dtype=np.float64)
-
-        # ----------- 主循环（可用 numba 再提速） -----------
-        for i in range(window - 1, n):
-            start = i - window + 1
-            vol_slice = vols[start: i + 1]
-            ret_slice = rets[start: i + 1]
-
-            # 找到成交量最大的 k 个位置
-            top_idx = np.argpartition(-vol_slice, k - 1)[:k]
-            out[i] = np.prod(1.0 + ret_slice[top_idx]) - 1.0
-
-        df[out_col] = out
-        return df.drop(columns="_ret")
-
-    @staticmethod
-    def alpha20(df, window=20):
-        df_copy = df.copy()
-        cols = []
-        for i in range(1, window + 1):
-            colname = f'alpha115_{i}'
-            cols.append(colname)
-            df_copy[colname] = df['vwap'].pct_change(i)
-        df['alpha20'] = apply_pca(df_copy, cols)
+        close = df['close']
+        net_return = close - close.shift(window)
+        path_length = close.diff().abs().rolling(window=window).sum()
+        tqf = (net_return.abs() / path_length).replace([np.inf, -np.inf], np.nan)
+        df['alpha20'] = tqf
         return df
 
     @staticmethod
-    def alpha21(df, window=20):
-        df_copy = df.copy()
-        cols = []
-        for i in range(1, window + 1):
-            colname = f'alpha116_{i}'
-            cols.append(colname)
-            df_copy[colname] = df['volume'].pct_change(i)
-        df['alpha21'] = apply_pca(df_copy, cols)
+    def alpha21(df, window=200):
+        df = df.copy()
+        r2_list = [np.nan] * window
+        for i in range(window, len(df)):
+            y = df['close'].iloc[i - window:i].values.reshape(-1, 1)
+            x = np.arange(window).reshape(-1, 1)
+            model = LinearRegression().fit(x, y)
+            r2 = model.score(x, y)
+            r2_list.append(r2)
+        df['alpha21'] = r2_list
         return df
 
     @staticmethod
-    def alpha22(df, window=20):
-        df['alpha22'] = df['reversals']
+    def alpha22(df, window=120):
+        df = df.copy()
+        # 回归斜率
+        x = np.arange(window)
+        slopes = []
+        for i in range(window, len(df)):
+            y = df['close'].iloc[i - window:i].values
+            coef = np.polyfit(x, y, 1)[0]
+            slopes.append(coef)
+        slopes = [np.nan] * window + slopes
+        df['slope'] = slopes
+
+        # 波动率（标准差）
+        df['vol'] = df['close'].rolling(window).std()
+
+        df['alpha22'] = -df['slope'] / df['vol']
         return df
     @staticmethod
-    def alpha23(df, window=20):
-        df['alpha23'] = df['skewness']
+    def alpha23(df, window=300):
+        df = df.copy()
+        # 计算滚动最高价
+        rolling_max = df['close'].rolling(window=window, min_periods=1).max()
+        # 计算每一日的回撤百分比
+        drawdown_pct = 100 * (df['close'] - rolling_max) / rolling_max
+        # 计算 Ulcer Index：滚动窗口内回撤平方的均值的平方根
+        ulcer_index = drawdown_pct.pow(2).rolling(window=window, min_periods=1).mean().pow(0.5)
+        # 保存结果
+        alpha = np.log1p(ulcer_index)
+        df['alpha23'] = alpha
         return df
     @staticmethod
     def alpha24(df, window=20):

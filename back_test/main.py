@@ -20,18 +20,18 @@ if __name__ == "__main__":
     with open("data.pkl", "rb") as file:
         strategy_results = pickle.load(file)
 
-    # strategy_results = strategy_results[:len(strategy_results)//20]
+    # strategy_results = strategy_results[len(strategy_results)//2:]
     group_df = strategy_results.groupby('asset')
     pd.set_option('display.max_rows', None)
     df_select = group_df.get_group('ENSUSDT')
     account = Account(initial_cash=8000)
-    stop = CostThresholdStrategy(gain_threshold=0.06, loss_threshold=0.06, windows=500)
+    stop = CostThresholdStrategy(gain_threshold=0.1, loss_threshold=0.08, windows=600)
     # stop = HoldNBarStopLossLogic(windows=20)
     # stop = DefaultStopLossLogic(max_drawdown=0.1)
     # stop = CostATRStrategy()
     broker = Broker(account, stop_loss_logic=stop, fees=0.001)
     # pos_manager = AtrPositionManager(risk_percent=0.05,loss_times=1)
-    pos_manager = PositionManager(threshold=0.6,fixed_pos=0.1)
+    pos_manager = PositionManager(threshold=0.6,fixed_pos=0.3)
     backtester = Backtest(broker, strategy_results, pos_manager)
     # print("start_running")
     s = time.time()
