@@ -6,6 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="bc12984d-7d11-47a5-8c98-e45dcf0a2ac4" name="更改" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/back_test/Account.py" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/Account.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/back_test/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/back_test/result.txt" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/result.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/back_test/transactions.txt" beforeDir="false" afterPath="$PROJECT_DIR$/back_test/transactions.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/feature/Factor.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/Factor.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/feature/factor_evaluate_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/feature/factor_evaluate_processor.py" afterDir="false" />
     </list>
@@ -97,7 +101,7 @@
       <workItem from="1749646684093" duration="13527000" />
       <workItem from="1749881206524" duration="13979000" />
       <workItem from="1750210742952" duration="25922000" />
-      <workItem from="1750241082318" duration="13643000" />
+      <workItem from="1750241082318" duration="25642000" />
     </task>
     <servers />
   </component>
@@ -115,9 +119,9 @@
     <SUITE FILE_PATH="coverage/bar_constructor_py$bar_constructor.coverage" NAME="bar_constructor 覆盖结果" MODIFIED="1744400434508" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tick_data" />
     <SUITE FILE_PATH="coverage/pre_process_py$pre_process.coverage" NAME="pre_process 覆盖结果" MODIFIED="1744080166780" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tick_data" />
     <SUITE FILE_PATH="coverage/bar_constructor_py$pre_process.coverage" NAME="pre_process 覆盖结果" MODIFIED="1744414478152" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/tick_data" />
-    <SUITE FILE_PATH="coverage/factor_evaluate_processor_py$factor_evaluate_processor.coverage" NAME="factor_evaluate_processor 覆盖结果" MODIFIED="1750254638996" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
+    <SUITE FILE_PATH="coverage/factor_evaluate_processor_py$factor_evaluate_processor.coverage" NAME="factor_evaluate_processor 覆盖结果" MODIFIED="1750290874717" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
     <SUITE FILE_PATH="coverage/main_py$factor_evaluate_processor.coverage" NAME="factor_evaluate_processor 覆盖结果" MODIFIED="1748474404626" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
-    <SUITE FILE_PATH="coverage/factor_evaluate_processor_py$main.coverage" NAME="main 覆盖结果" MODIFIED="1750228160281" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/back_test" />
+    <SUITE FILE_PATH="coverage/factor_evaluate_processor_py$main.coverage" NAME="main 覆盖结果" MODIFIED="1750257540732" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/back_test" />
     <SUITE FILE_PATH="coverage/factor_evaluate_processor_py$Dataloader.coverage" NAME="Dataloader 覆盖结果" MODIFIED="1748484383357" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/feature" />
   </component>
 </project>

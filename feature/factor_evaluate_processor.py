@@ -365,13 +365,13 @@ class FactorEvaluator:
 
     def backtest_factor_range(
             self,
-            long_pct: float = 0.98,
-            short_pct: float = 0.02,
+            long_pct: float = 0.99,
+            short_pct: float = 0.01,
             window: int = 60,
             take_profit: float = 0.1,
             stop_loss: float = 0.08,
             min_holding_bars: int = 1,
-            max_holding_bars: int = 500,
+            max_holding_bars: int = 300,
             cooldown_bars: int = 0,
             fee: float = 0.002,
     ):
@@ -402,8 +402,6 @@ class FactorEvaluator:
         long_upper = factor.quantile(0.99)
         short_thresh = factor.quantile(short_pct)
         short_upper = factor.quantile(0.005)
-        # long_thresh = -8.87582594012509
-        # short_thresh = -13
         print("long quantile", long_thresh)
         print("short quantile", short_thresh)
         # grouped = self.df.groupby('asset')
@@ -448,8 +446,8 @@ class FactorEvaluator:
 
                 entry_price = df_asset.iloc[entry_loc]['close']
                 exit_loc = None
-                atr_profit = df_asset['close'].rolling(window=300).std().iloc[entry_loc] * 2 + entry_price
-                atr_loss = entry_price - df_asset['close'].rolling(window=300).std().iloc[entry_loc] * 1
+                atr_profit = df_asset['close'].rolling(window=120).std().iloc[entry_loc] * 1 + entry_price
+                atr_loss = entry_price - df_asset['close'].rolling(window=120).std().iloc[entry_loc] * 1
                 if atr_profit / entry_price <1.03:
                     atr_profit = entry_price*1.03
                 if entry_price / atr_loss <1.03:
@@ -649,29 +647,29 @@ class FactorProcessor:
 
 if __name__ == '__main__':
     alpha_funcs = [
-        'alpha4',
+        'alpha2',
     ]
     config = dl.DataLoaderConfig.load("load_config.yaml")
     data_loader = dl.DataLoader(config)
     # df = data_loader.load_all_data()
-    # with open("test_data.pkl",'rb') as f:
-    #     df = pickle.load(f)
-    with open("tick_bar_all.pkl",'rb') as f:
+    with open("test_data.pkl",'rb') as f:
         df = pickle.load(f)
+    # with open("tick_bar_all.pkl",'rb') as f:
+    #     df = pickle.load(f)
     print(df.columns)
     # df = df[:len(df)//50]
     FC = FactorConstructor(df)
 
     FC.run_alphas(alpha_funcs)
-    # df['signal'] = 0
-    # long_cond = (df['alpha23'] > 3.66)
-    # short_cond = (df['alpha23'] <0.23)
+    df['signal'] = 0
+    # long_cond = (df['alpha1'] > 28)
+    # short_cond = (df['alpha1'] < -28)
     # df['signal'] = df['signal'].mask(long_cond, 1)
     # df['signal'] = df['signal'].mask(short_cond, -1)
     #
     # with open("data.pkl",'wb') as f:
     #     pickle.dump(df,f)
-    FE = FactorEvaluator(df, "alpha4", n_future_days=1)
+    FE = FactorEvaluator(df, "alpha2", n_future_days=1)
     FE.plot_factor_distribution()
     df = FE.backtest_factor_range()
     pd.set_option('display.max_columns', None)

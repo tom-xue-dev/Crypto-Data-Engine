@@ -372,7 +372,7 @@ class PositionManager:
             return 0
         target_pos = min((total_cap * self.threshold - asset_pos) * self.fixed_pos, account.cash)
         target_pos = target_pos if target_pos > 0 else 0
-        return target_pos
+        return 100
 
 
 class AtrPositionManager:

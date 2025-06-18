@@ -66,19 +66,16 @@ class FactorConstructor:
         short_range = (4,20)
         """
         df = df.copy()
-        returns = (df['close']-df['close'].shift(window))/df['close'].shift(window)
-        #df['skew_rolling'] = df['skewness'].rolling(window).mean()
-        # df['kurt_rolling'] = df['kurtosis'].rolling(window).mean()
-        # df['std'] = df['close'].rolling(window=20).std() / df['close'].rolling(window=20 * 10).std() #长短期方差来过滤低波时期
-        # df['time_std'] = df['tick_interval_mean'] / df['tick_interval_mean'].rolling(window=window).mean()
-        # cum_buyer = df['cumulative_buyer'].rolling(window=window).mean()
-        # up_move_ratio = df['up_move_ratio'].rolling(window=window).mean()
-        alpha  =-df['cumulative_buyer']*df['up_move_ratio']/df['tick_interval_mean']
-        df['alpha1'] = alpha.rolling(window=window).mean()
+        df['return'] = (df['close']-df['close'].shift(window))/df['close'].shift(window)
+        returns = np.sign(df['return'])*np.log1p(abs(df['return']))**2
+        up_ratio = df['up_move_ratio']-0.5
+        up_ratio = up_ratio.rolling(window=window).sum()
+        alpha = up_ratio * returns
+        df['alpha1'] =alpha*1000
         return df
 
     @staticmethod
-    def alpha2(df: pd.DataFrame,window = 120,rolling_window = 1200) -> pd.DataFrame:
+    def alpha2(df: pd.DataFrame,window = 60,rolling_window = 1200) -> pd.DataFrame:
         """
         计算流动性指标amihud
         本质为过去n根k线单位dollar推动的涨幅
@@ -88,17 +85,18 @@ class FactorConstructor:
         short_range = (0.3,1)
         """
         df = df.copy()
-        df['return'] = (df['close'] - df['close'].shift(window)) / df['close']
-        df['dollar'] = df['volume'] * df['close']
-        df['amount'] = df['dollar'].rolling(window=window).sum()
+        ret = df['close'].pct_change(window)
+        df['return'] = ret
+        df['dollar'] = df['volume'] * df['vwap']
+        df['amount'] = np.log10(df['dollar'].rolling(window=window).sum())
         df['factor'] = np.where(
             df['amount'] == 0,
             np.nan,
-            df['return'] * 1e7 / df['amount']
+            df['return'] *1e3/ df['amount']
         )
-        factor = df['factor']
-        df['std'] = df['close'].rolling(window=window).std() / df['close'].rolling(window=window * 10).std()
-        df['alpha2'] = -factor/df['std']
+        factor =df['factor']
+        # df['std'] = df['close'].rolling(window=window).std() / df['close'].rolling(window=window * 10).std()
+        df['alpha2'] = -factor
         return df
 
     @staticmethod
@@ -112,7 +110,6 @@ class FactorConstructor:
         df['MA'] = df['close'].rolling(window=window).mean()
         df['std'] = df['close'].rolling(window=window).std()/df['close'].rolling(window=window*5).std()
         volume = df['volume'].rolling(window=window).mean()
-        volume_ratio = volume / volume.rolling(window=window*20).mean()
         df['alpha3'] = (-(df['close'] - df['MA']) / df['MA']) * df['std']#过滤低波噪声
         # df['alpha3'] = (-(df['close'] - df['MA']) / df['MA'])*volume_ratio
         df.drop(columns=['MA'], inplace=True)
@@ -126,6 +123,7 @@ class FactorConstructor:
         如果大幅卖出，且大幅下跌，则卖出强烈
         long_range = (-10,-5)
         short_range = (5,10)
+        注意这类策略需要把持有窗口期和atr稍微开大一些
         """
         df['return'] = (df['close'] - df['close'].shift(window)) / df['close']
         buyer = df['buy_volume']
@@ -192,15 +190,16 @@ class FactorConstructor:
         return df
 
     @staticmethod
-    def alpha10(df, window=300):
+    def alpha10(df, window=60):
         """
         买入强度因子
         好像没啥卵用
         """
         reversed = df['reversals'] / df['tick_nums']
         ticks = df['tick_nums']
-        total_reverse = reversed.rolling(window).sum() / ticks.rolling(window).sum() #买入卖出转变占比
-        alpha = (total_reverse-0.0007) * np.sign(df['close'].diff(window))
+        total_reverse = reversed.rolling(window).sum()#买入卖出转变占比
+        ret = df['close'].diff(window)
+        alpha = -(total_reverse/total_reverse.rolling(window).mean()-1)*np.sign(ret)
         df['alpha10'] = alpha
         return df
 
@@ -224,7 +223,7 @@ class FactorConstructor:
         return df
 
     @staticmethod
-    def alpha12(df, window=3):
+    def alpha12(df, window=30):
         """
         计算vwap的滚动
         """
@@ -281,9 +280,9 @@ class FactorConstructor:
         return df
 
     @staticmethod
-    def alpha16(df, threshold=1.2, epsilon=1e-8, decay=0.9):
+    def alpha16(df, window = 20):
         devitiation = (df['vwap'] - df['medium_price'])/df['close']
-        df['alpha16'] = -devitiation.rolling(window=20).mean()
+        df['alpha16'] = -devitiation.rolling(window=window).mean()
         return df
 
     @staticmethod
