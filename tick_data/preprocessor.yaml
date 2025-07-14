@@ -2,8 +2,8 @@ data_dir: "./data"
 aggregated_data_dir: "./data_aggrate"
 bar_type: "tick_bar"
 threshold: 1000
-process_num_limit: 12
+process_num_limit: 4
 adaptive: true
-sample_days: 3
-target_bars: 144
+sample_days: 6
+target_bars: 384
 

@@ -6,3 +6,5 @@ proxies.yml
 /tick_data/data
 ./idea
 /tick_data/data_aggrate
+/back_test
+*.pkl

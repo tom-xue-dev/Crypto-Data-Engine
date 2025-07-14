@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from numba import njit
 from datetime import datetime, timezone
+from scipy.stats import skew,kurtosis
 
 @njit
 def get_volume_bar_indices(volume_arr, threshold):
@@ -74,22 +75,64 @@ class BarConstructor:
         return bars
 
     def build_bar(self, segment, bar_type='tick_bar'):
-        if bar_type == 'tick_bar':
+        if bar_type == "tick_bar":
+            price = segment["price"]
+            qty = segment["quantity"]
+            direction = segment["isBuyerMaker"].astype(int)
+            # ------- 单笔最大成交 ---------
+            idx_max = qty.idxmax()  # 行号
+            max_vol = qty.loc[idx_max]  # 最大单量
+            max_dir = direction.loc[idx_max]  # 方向 1=卖, 0=买
+            max_px = price.loc[idx_max]
+            # 计算这一单对价格的“即时冲击”
+            if idx_max != price.index[0]:
+                prev_px = price.shift().loc[idx_max]
+                max_px_imp = np.log(max_px / prev_px)  # 也可用 (max_px-prev_px)/prev_px
+            else:
+                max_px_imp = np.nan  # 首条 tick 没前价
+            # ------- 辅助比例因子 ----------
+            vol_ratio_bar = max_vol / qty.sum()  # 大单占当 bar 总量比例
+            vol_ratio_median = max_vol / qty.median()  # 大单 ÷ 中位单量
+            px_vs_vwap = max_px / ((price * qty).sum() / qty.sum()) - 1
+            px_pos_in_range = (max_px - price.min()) / (price.max() - price.min() + 1e-12)
+            # ------- 其他原有统计 ----------
+            path_length = price.diff().abs().sum()
+            streaks = (direction != direction.shift()).cumsum()
+            ret = np.log(price / price.shift(1)).dropna()
             return {
-                'start_time': self.convert_timestamp(segment['timestamp'].iloc[0]),
-                'open': segment['price'].iloc[0],
-                'high': segment['price'].max(),
-                'low': segment['price'].min(),
-                'close': segment['price'].iloc[-1],
-                'volume': segment['quantity'].sum(),
-                'sell_volume': segment[segment['isBuyerMaker']]['quantity'].sum(),
-                'buy_volume': segment[~segment['isBuyerMaker']]['quantity'].sum(),
-                'vwap': (segment['price'] * segment['quantity']).sum() / segment['quantity'].sum(),
-                'medium_price': segment['price'].median(),
-                'volume_std': segment['quantity'].std(),
-                'tick_interval_mean': segment['timestamp'].diff().mean(),
-                'best_match': segment['isBestMatch'].sum() / len(segment),
+                # ===== 时间与 OHLC =====
+                "start_time": self.convert_timestamp(segment["timestamp"].iloc[0]),
+                "open": price.iloc[0],
+                "high": price.max(),
+                "low": price.min(),
+                "close": price.iloc[-1],
+                # ===== 量价 / 市场活跃度 =====
+                "volume": qty.sum(),
+                "sell_volume": qty[segment["isBuyerMaker"]].sum(),
+                "buy_volume": qty[~segment["isBuyerMaker"]].sum(),
+                "buy_ticks": segment["isBuyerMaker"].sum(),
+                "tick_nums": len(segment),
+                "vwap": (price * qty).sum() / qty.sum(),
+                "medium_price": price.median(),
+                # ===== 波动 / 形态 =====
+                "price_std": price.std(),
+                "volume_std": qty.std(),
+                "tick_interval_mean": segment["timestamp"].diff().mean(),
+                "reversals": np.count_nonzero(direction != direction.shift()),
+                "cumulative_buyer": streaks.value_counts().max(),
+                "skewness": skew(ret),
+                "kurtosis": kurtosis(ret),
+                "up_move_ratio": (price.diff() > 0).mean(),
+                # ===== 大单相关新增 =====
+                "max_trade_volume": max_vol,
+                "max_trade_direction": max_dir,  # 1=卖单, 0=买单
+                "max_trade_impact": max_px_imp,  # 这一单对价格的 log-return
+                "max_trade_vol_ratio": vol_ratio_bar,  # 大单量 / bar 总量
+                "max_trade_vs_median": vol_ratio_median,
+                "max_trade_px_vs_vwap": px_vs_vwap,  # >0 => 大单价格高于 VWAP
+                "max_trade_px_position": px_pos_in_range  # 0-1 处于当 bar 区间位置
             }
+
         elif bar_type in ['dollar_bar', 'volume_bar']:
             return {
                 'start_time': self.convert_timestamp(segment['timestamp'].iloc[0]),
