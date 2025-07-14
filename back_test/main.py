@@ -3,16 +3,13 @@ import sys
 
 import pandas as pd
 
-from read_large_files import load_filtered_data_as_list, select_assets
-import time
-from strategy import DualMAStrategy
-from backtest_simulation import Backtest, Broker
-from Account import Account, PositionManager, DefaultStopLossLogic, HoldNBarStopLossLogic, CostThresholdStrategy, \
-    CostATRStrategy,AtrPositionManager
-from mann import MannKendallTrendByRow, filter_signals_by_daily_vectorized
+from back_test.Account import Account
+from back_test.Broker import Broker
+from back_test.Position_manager import PositionManager
+from back_test.StopLossManager import CostATRStrategy
+from back_test.backtest_simulation import Backtest
 from back_test_evaluation import PerformanceAnalyzer
-from concurrent.futures import ProcessPoolExecutor
-import numpy as np
+
 
 
 
@@ -25,10 +22,10 @@ if __name__ == "__main__":
     pd.set_option('display.max_rows', None)
     df_select = group_df.get_group('ENSUSDT')
     account = Account(initial_cash=20000)
-    stop = CostThresholdStrategy(gain_threshold=0.1, loss_threshold=0.08, windows=1200)
+    # stop = CostThresholdStrategy(gain_threshold=0.1, loss_threshold=0.08, windows=1200)
     # stop = HoldNBarStopLossLogic(windows=20)
     # stop = DefaultStopLossLogic(max_drawdown=0.1)
-    # stop = CostATRStrategy()
+    stop = CostATRStrategy()
     broker = Broker(account, stop_loss_logic=stop, fees=0.001)
     # pos_manager = AtrPositionManager(risk_percent=0.05,loss_times=1)
     pos_manager = PositionManager(threshold=0.6,fixed_pos=0.3)

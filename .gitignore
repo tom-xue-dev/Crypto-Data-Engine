@@ -21,3 +21,7 @@ back_test/transactions.txt
 *.txt
 back_test/transactions.txt
 back_test/result.txt
+/.idea
+/.idea
+.idea/.name
+/.idea

@@ -647,7 +647,7 @@ class FactorProcessor:
 
 if __name__ == '__main__':
     alpha_funcs = [
-        'alpha2',
+        'alpha1',
     ]
     config = dl.DataLoaderConfig.load("load_config.yaml")
     data_loader = dl.DataLoader(config)
@@ -669,7 +669,7 @@ if __name__ == '__main__':
     #
     # with open("data.pkl",'wb') as f:
     #     pickle.dump(df,f)
-    FE = FactorEvaluator(df, "alpha2", n_future_days=1)
+    FE = FactorEvaluator(df, "alpha1", n_future_days=1)
     FE.plot_factor_distribution()
     df = FE.backtest_factor_range()
     pd.set_option('display.max_columns', None)

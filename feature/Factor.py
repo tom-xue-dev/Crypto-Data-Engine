@@ -55,7 +55,7 @@ class FactorConstructor:
         return self.df
 
     @staticmethod
-    def alpha1(df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
+    def alpha1(df: pd.DataFrame, window: int = 60) -> pd.DataFrame:
         """
         meam reversion都有一个问题
         当出现大量信号的时候，会几乎全仓
@@ -66,12 +66,10 @@ class FactorConstructor:
         short_range = (4,20)
         """
         df = df.copy()
-        df['return'] = (df['close']-df['close'].shift(window))/df['close'].shift(window)
-        returns = np.sign(df['return'])*np.log1p(abs(df['return']))**2
-        up_ratio = df['up_move_ratio']-0.5
-        up_ratio = up_ratio.rolling(window=window).sum()
-        alpha = up_ratio * returns
-        df['alpha1'] =alpha*1000
+        # df['return'] = df['close'].pct_change(window)
+        # returns = np.sign(df['return'])*np.log1p(abs(df['return']))**2
+        up_ratio = df['up_move_ratio'].rolling(window=window).sum()
+        df['alpha1'] =up_ratio
         return df
 
     @staticmethod
