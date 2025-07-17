@@ -1,32 +1,65 @@
-__pycache__
-tmp
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment & packaging
+.venv/
+env/
+venv/
+*.egg-info/
+build/
+dist/
+
+# IDEs & editor configs
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# Logs
+*.log
+log/
 app.log
-proxies.yml
-/tick_data/data_aggr
-/tick_data/data
-./idea
-/tick_data/data_aggrate
-/back_test
+
+# Jupyter & IPython
+.ipynb_checkpoints/
+*.ipynb
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Data (raw, agg, processed, temp, intermediate)
+data/
+data_*/
+tick_data/
+tick_data/data/
+tick_data/data_aggr*/
+data_aggr*/
+data_fees/
+back_test/
+feature/.idea/
+strategy_report/
+tmp/
 *.pkl
-log
-/data/binance
-/data_fees
-back_test/BTC_USDT_USDT_funding_rate_history.csv
-/data
-*.txt
-back_test/result.txt
-back_test/result.txt
-back_test/transactions.txt
-*.pkl
-/strategy_report/78bed-main
-*.pyc
-*.pyc
 *.csv
-/feature/.idea
-/data_aggr
-/tick_data
 *.txt
-back_test/transactions.txt
+*.dat
+*.h5
+*.npz
+
+# Specific reports or outputs
+back_test/*.csv
+back_test/*.txt
 back_test/result.txt
-.idea/.name
-/.idea
+back_test/transactions.txt
+strategy_report/78bed-main/
+
+# Configs & secrets
+proxies.yml
+
+# Ignore backup and temp files
+*~
+*.bak
+*.tmp
