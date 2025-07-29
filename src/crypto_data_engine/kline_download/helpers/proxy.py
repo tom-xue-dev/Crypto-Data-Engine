@@ -6,7 +6,7 @@ import yaml
 
 from helpers.logger import Logger
 
-_proxy_path = os.path.join("config", "proxies.yml")
+_proxy_path = os.path.join("common", "proxies.yml")
 
 
 class ProxyManager:

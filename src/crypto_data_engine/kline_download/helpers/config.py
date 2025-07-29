@@ -2,7 +2,7 @@ import os
 
 import yaml
 
-_config_path = os.path.join("config", "config.yml")
+_config_path = os.path.join("common", "common.yml")
 
 
 class _ConfigMeta(type):

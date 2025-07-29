@@ -1,0 +1,7 @@
+services:
+  ray-head:
+    image: rayproject/ray:2.10.0
+    command: ray start --head --port=6380 --dashboard-host=0.0.0.0 --node-ip-address=192.168.0.104
+    ports:
+      - "6379:6379"     # Ray cluster
+      - "8265:8265"     # Dashboard

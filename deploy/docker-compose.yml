@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7.2
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:14
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: quantdb
+      POSTGRES_USER: quantuser
+      POSTGRES_PASSWORD: quantpass
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: quant-api
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://quantuser:quantpass@postgres:5432/quantdb
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - ../src:/app/src
+
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: quant-worker
+    command: celery -A src.celery_worker worker --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://quantuser:quantpass@postgres:5432/quantdb
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - ../src:/app/src
+
+volumes:
+  redis_data:
+  pg_data:

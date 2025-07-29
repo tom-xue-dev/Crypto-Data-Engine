@@ -1,0 +1,27 @@
+services:
+  redis:
+    image: redis:7.2
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+
+  celery_worker:
+    build:
+      context: .
+    container_name: celery_worker
+    command: celery -A your_module_name worker --loglevel=info
+    depends_on:
+      - redis
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    volumes:
+      - .:/app
+    working_dir: /app
+    restart: unless-stopped
+
+volumes:
+  redis_data:

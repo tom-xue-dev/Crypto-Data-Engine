@@ -1,53 +1,73 @@
-from services.tick_data_scraper.app.path_utils import get_sorted_assets, get_asset_file_path
-from services.tick_data_scraper.app.pre_process import PreprocessContext
-import ray
-# ---------- 外层控制函数 ----------
+"""
+Ray-powered two-stage pipeline
+stage A: download zipped CSV  (IO bound)
+stage B: unzip + convert to Parquet (CPU bound)
+"""
+import asyncio
+import io, zipfile, pyarrow.parquet as pq, httpx, ray
+import pyarrow.csv as pv
+from datetime import datetime, timedelta
+from typing import Dict
+from common.config.load_config import scraper_cfg
 
 
-def run_pipeline(config: dict) -> list[str]:
-    """拆分任务 → Ray 并行 → 收集输出文件路径"""
-    ctx = PreprocessContext(config)
-    assets = get_sorted_assets(ctx.data_dir, ctx.suffix_filter)
+# ---------- stage A : IO ----------
+@ray.remote(num_cpus=0.1, resources={"io": 1})
+def fetch_gz(meta: dict) -> bytes:
+    async def _inner():
+        url = (
+            f"{scraper_cfg.binance_url}/data/spot/daily/klines/"
+            f"{meta['symbol']}/{meta['interval']}/"
+            f"{meta['symbol']}-{meta['interval']}-{meta['date']}.zip"
+        )
+        async with httpx.AsyncClient(timeout=scraper_cfg.http_timeout) as cli:
+            r = await cli.get(url)
+            r.raise_for_status()
+            return r.content
 
-    # 过滤 2025 数据
-    asset_infos = [
-        (asset, size, ctx) for asset, size in assets
-        if not _skip_2025(asset, ctx)
-    ]
+    return asyncio.run(_inner())
 
-    # —— 广播只读 context，到每个 worker 内共享内存，避免复制 ——
-    ctx_id = ray.put(ctx)
+# ---------- stage B : CPU ----------
+@ray.remote(num_cpus=1)
+def gz_to_parquet(gz_bytes: bytes, meta: Dict) -> str:
+    """
+    解压 → 读 CSV → 写 Parquet，返回最终文件路径
+    """
+    zf = zipfile.ZipFile(io.BytesIO(gz_bytes))
+    csv_name = zf.namelist()[0]
+    df = pv.read_csv(zf.open(csv_name))
+    out_dir = scraper_cfg.DataRoot / "tick" / meta["symbol"] / meta["date"]
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / f"{csv_name[:-4]}.parquet"
+    pq.write_table(df, out_file, compression="zstd")
+    return str(out_file)
 
-    # —— 提交 Ray 任务 ——
-    object_ids = [
-        process_asset.remote(asset, size, ctx_id)
-        for asset, size, _ in asset_infos
-    ]
-
-    # —— 收集结果，同时可以在这里做进度上报 ——
-    done_paths = []
-    for oid in ray.progress(object_ids):         # 需要 pip install ray[default]
-        res = ray.get(oid)
-        if res:
-            print(f"{res} done!")
-            done_paths.append(res)
-
-    return done_paths
-
-
-# ---------- Ray 远程任务 ----------
+# ---------- orchestrator ----------
 @ray.remote
-def process_asset(asset: str, size: int, ctx_id) -> str | None:
-    ctx: PreprocessContext = ray.get(ctx_id)  # 共享对象
-    paths = get_asset_file_path(asset, data_dir=ctx.data_dir)
-    if not paths:
-        return None
-    # 省略实际聚合 / 写 parquet 逻辑 ...
-    output_path = f".../{asset}.parquet"
-    return output_path
+def download_pipeline(cfg: Dict, task_id: str) -> list[str]:
+    """
+    cfg = {symbol, start, end, interval, io_limit}
+    1) 生成 meta 列表
+    2) I/O 任务 fetch_gz.remote
+    3) CPU 任务 gz_to_parquet.remote
+    4) 返回写好的 Parquet 路径列表
+    """
+    start, end = map(lambda x: datetime.strptime(x, "%Y-%m-%d"), (cfg["start"], cfg["end"]))
+    dates = [(start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range((end - start).days + 1)]
+    metas = [{"symbol": cfg["symbol"], "date": d, "interval": cfg["interval"]} for d in dates]
 
+    # 1) 触发 IO
+    io_refs  = [fetch_gz.options(resources={"io":1}).remote(m) for m in metas[: cfg["io_limit"]]]
 
-# ---------- 工具 ----------
-def _skip_2025(asset: str, ctx) -> bool:
-    paths = get_asset_file_path(asset, data_dir=ctx.data_dir)
-    return not paths or paths[0][-15:-11] == "2025"
+    # 2) 动态补货 + 提交 CPU 任务
+    parquet_refs = []
+    remaining = metas[cfg["io_limit"]:]
+    while io_refs:
+        done, io_refs = ray.wait(io_refs, num_returns=1)
+        gz_bytes = done[0]
+        meta = metas[len(parquet_refs)]
+        parquet_refs.append(gz_to_parquet.remote(gz_bytes, meta))
+        if remaining:
+            io_refs.append(fetch_gz.remote(remaining.pop(0)))
+
+    return ray.get(parquet_refs)            # 列表[str]
