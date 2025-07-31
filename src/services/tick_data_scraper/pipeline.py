@@ -8,7 +8,7 @@ import io, zipfile, pyarrow.parquet as pq, httpx, ray
 import pyarrow.csv as pv
 from datetime import datetime, timedelta
 from typing import Dict
-from common.config.load_config import scraper_cfg
+
 
 
 # ---------- stage A : IO ----------

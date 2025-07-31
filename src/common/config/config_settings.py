@@ -10,12 +10,8 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 import yaml
 import re
-
+from common.config.config_utils import load_config, to_snake_case, create_template, LazyLoadConfig
 from common.config.paths import CONFIG_DIR, PROJECT_ROOT
-
-
-# ------------------Define project base paths -----------------------
-
 
 
 # ------------------define ur common here ------------------
@@ -42,9 +38,10 @@ class CeleryConfig(BasicSettings):
 
 
 
-class DataScraperConfig(BasicSettings):
-    DataRoot: Path = Field(default_factory=lambda: Path(__file__).parent.parent / "data_test")
-    binance_url: str = "https://data.binance.vision"
+class TickDownloadConfig(BasicSettings):
+    DataRoot: Path = PROJECT_ROOT/"data"/"tick_data"
+    url: str = "https://data.binance.vision/data/spot/monthly/aggTrades"
+    symbol_url:str = "https://api.binance.com/api/v3/exchangeInfo"
     io_limit: int = 8
     http_timeout: float = 60.0
 
@@ -66,33 +63,18 @@ class ServerConfig(BasicSettings):
 class RayConfig(BasicSettings):
     pass
 
-# ------------------ helper function------------------
-
-def to_snake_case(name: str) -> str:
-    """
-
-    convert the class name into yaml file name
-    """
-    return re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower() + ".yaml"
-
-
-def create_template(instance: BaseModel, output_dir: Path = Path("")) -> None:
-    """create yaml file based on the common instance"""
-    filename = to_snake_case(instance.__class__.__name__)
-    path = output_dir / filename
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(path, "w", encoding="utf-8") as f:
-        yaml.dump(instance.model_dump(mode="json"), f, sort_keys=False, allow_unicode=True)
-
-    print(f"✅ create setting template : {path.resolve()}")
-
+class Settings:
+    server_cfg = LazyLoadConfig(ServerConfig)
+    scraper_cfg = LazyLoadConfig(TickDownloadConfig)
+    ray_cfg = LazyLoadConfig(RayConfig)
+    celery_cfg = LazyLoadConfig(CeleryConfig)
+    tick_download_setting = LazyLoadConfig(TickDownloadConfig)
 
 def create_all_templates() -> None:
     """自动实例化所有配置类并生成对应 YAML 模板"""
     # 👉 在这里添加你需要注册的配置类
     instances = [
-        DataScraperConfig(),
+        TickDownloadConfig(),
         CeleryConfig(),
         RayConfig(),
         ServerConfig(),
@@ -101,9 +83,8 @@ def create_all_templates() -> None:
         create_template(inst, CONFIG_DIR)
 
 
+settings = Settings()
 
 if __name__ == "__main__":
-    import sys
-    if "--init" in sys.argv:
-        create_all_templates()
+    pass
 

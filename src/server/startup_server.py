@@ -6,11 +6,12 @@ import uvicorn
 import subprocess
 
 import ray
-from common.config.load_config import server_cfg
-from server.routers.datascraper import data_scraper_router
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+from common.config.config_settings import settings
+from common.logger.logger import logger, setup_logger
+from server.routers.datascraper import tick_router
+
+
 
 
 @asynccontextmanager
@@ -24,7 +25,7 @@ async def lifespan(app: FastAPI):
 
 
 def register_routers(app: FastAPI) -> None:
-    app.include_router(data_scraper_router)
+    app.include_router(tick_router)
 
 
 def create_app() -> FastAPI:
@@ -38,11 +39,14 @@ def create_app() -> FastAPI:
     return app
 
 
-def server_startup():
-    cfg = server_cfg
-    logger.info(f"🚀 Starting API server at {cfg.host}:{cfg.port}")
+def server_startup(host:int = None,port:int = None):
+    setup_logger()
+    cfg = settings.server_cfg
+    host = cfg.host if host is None else host
+    port = cfg.port if port is None else port
+    logger.info(f"🚀 Starting API server at {host}:{port}")
     app = create_app()
-    uvicorn.run(app, host=cfg.host, port=cfg.port)
+    uvicorn.run(app, host=host, port=port)
 
 
 def start_worker(service: str):
@@ -65,24 +69,3 @@ def start_worker(service: str):
     logger.info(f"🚀 Starting Celery worker: {' '.join(cmd)}")
     subprocess.run(cmd)
 
-
-def main():
-    if len(sys.argv) < 2:
-        logger.error("Usage: python startup.py [api|worker <type>]")
-        sys.exit(1)
-
-    mode = sys.argv[1]
-    if mode == "api":
-        server_startup()
-    elif mode == "worker":
-        if len(sys.argv) != 3:
-            logger.error("Usage: python startup.py worker [download|preprocess|backtest]")
-            sys.exit(1)
-        start_worker(sys.argv[2])
-    else:
-        logger.error(f"Unknown mode: {mode}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
