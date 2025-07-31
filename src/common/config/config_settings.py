@@ -37,7 +37,6 @@ class CeleryConfig(BasicSettings):
         extra = "ignore"
 
 
-
 class TickDownloadConfig(BasicSettings):
     DataRoot: Path = PROJECT_ROOT/"data"/"tick_data"
     url: str = "https://data.binance.vision/data/spot/monthly/aggTrades"
@@ -65,10 +64,9 @@ class RayConfig(BasicSettings):
 
 class Settings:
     server_cfg = LazyLoadConfig(ServerConfig)
-    scraper_cfg = LazyLoadConfig(TickDownloadConfig)
     ray_cfg = LazyLoadConfig(RayConfig)
-    celery_cfg = LazyLoadConfig(CeleryConfig)
-    tick_download_setting = LazyLoadConfig(TickDownloadConfig)
+    celery_cfg:CeleryConfig = LazyLoadConfig(CeleryConfig)
+    tick_download_setting:TickDownloadConfig = LazyLoadConfig(TickDownloadConfig)
 
 def create_all_templates() -> None:
     """自动实例化所有配置类并生成对应 YAML 模板"""

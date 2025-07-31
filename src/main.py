@@ -20,7 +20,7 @@ def run_worker(module: str = typer.Argument(..., help="模块名: downloader / b
     """启动指定模块的 Celery worker"""
     typer.echo(f"🎯 启动 {module} 的 Celery Worker")
     worker_module = f"{module}.tasks"
-    subprocess.run(["celery", "-A", worker_module, "worker", "--loglevel=info"])
+    subprocess.run(["celery", "-A", "task_manager.celery_app", "worker", "--loglevel=info","--pool=solo"])
 
 @app.command(help= "initialize all yaml template files")
 def init_config():

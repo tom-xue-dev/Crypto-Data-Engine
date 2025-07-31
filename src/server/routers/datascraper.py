@@ -25,6 +25,7 @@ def download_tick(payload: TickDownloadRequest):
         "task_id": task_id,
         "status": "PENDING"
     }
+
 @tick_router.get("/symbols")
 def get_symbols(request:CryptoSymbolRequest = Body(...)):
     url = settings.tick_download_setting.symbol_url
