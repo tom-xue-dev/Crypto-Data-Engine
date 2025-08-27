@@ -63,3 +63,4 @@ proxies.yml
 *~
 *.bak
 *.tmp
+/tests

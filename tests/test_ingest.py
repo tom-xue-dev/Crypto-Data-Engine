@@ -1,33 +1,34 @@
+# python
+# tests/test_server_worker.py
+import subprocess
+import types
 import pytest
-from httpx import AsyncClient
-from fastapi import FastAPI
+from startup_server import server_startup, start_worker
+from crypto_data_engine.common.config.config_settings import settings
 
-from server.routers.datascraper import data_scraper_router
+def test_server_startup_reads_settings(monkeypatch, injected_settings):
+    # 拦截 uvicorn.run，验证 host/port 来源于 settings.server_cfg
+    called = {}
+    def fake_run(app, host, port):
+        called["host"] = host
+        called["port"] = port
+    monkeypatch.setattr("startup_server.uvicorn.run", fake_run)
 
-# 构造一个最小的 app 实例用于测试
-app = FastAPI()
-app.include_router(data_scraper_router)
+    server_startup()  # 不传 host/port，应该读取 settings.server_cfg
+    assert called["host"] == settings.server_cfg.host
+    assert called["port"] == settings.server_cfg.port
 
-@pytest.mark.asyncio
-async def test_ingest_and_status():
-    async with AsyncClient(base_url="http://test") as ac:
-        # 构造请求体
-        payload = {
-            "symbol": "BTCUSDT",
-            "start": "2023-01-01",
-            "end": "2023-01-01",
-            "interval": "1s",
-            "io_limit": 10
-        }
+def test_start_worker_builds_command(monkeypatch):
+    calls = {}
+    def fake_run(cmd, *args, **kwargs):
+        calls["cmd"] = cmd
+        return types.SimpleNamespace(returncode=0)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
-        # 发送 POST /ingest
-        resp = await ac.post("/ingest", json=payload)
-        assert resp.status_code == 200
-        task_id = resp.json()["task_id"]
-        assert isinstance(task_id, str)
+    start_worker("download")
+    assert "--queues=download_tasks" in " ".join(calls["cmd"])
+    assert "-A celery_app.celery_app" in " ".join(calls["cmd"])
 
-        # 发送 GET /status/{task_id}
-        resp2 = await ac.get(f"/status/{task_id}")
-        assert resp2.status_code == 200
-        status = resp2.json()
-        assert "stage" in status or "progress" in status  # 视你的实现而定
+    # 未知服务应退出（通过 sys.exit），这里拦截为异常
+    with pytest.raises(SystemExit):
+        start_worker("unknown_service")

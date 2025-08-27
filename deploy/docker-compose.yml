@@ -18,8 +18,8 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_DB: quantdb
-      POSTGRES_USER: quantuser
-      POSTGRES_PASSWORD: quantpass
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 123456
     volumes:
       - pg_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -55,6 +55,21 @@ services:
       - postgres
     volumes:
       - ../src:/app/src
+
+  flower:
+    image: mher/flower
+    container_name: flower
+    restart: unless-stopped
+    command: >
+      flower
+      --broker=redis://redis:6379/0
+      --result-backend=redis://redis:6379/1
+      --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+
 
 volumes:
   redis_data:
