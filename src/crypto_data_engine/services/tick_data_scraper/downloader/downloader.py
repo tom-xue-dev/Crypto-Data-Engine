@@ -3,6 +3,8 @@ import requests
 import hashlib
 import concurrent.futures
 import multiprocessing
+import zipfile
+import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
@@ -20,6 +22,12 @@ class DownloadContext:
         self.completed_downloads_file = config.get('completed_downloads_file',
                                                    Path(config['data_dir']) / "completed_downloads.txt")
         self.exchange_name = config['exchange_name']
+
+        # 数据处理相关配置
+        self.output_format = config.get('output_format', 'parquet')
+        self.compression = config.get('compression', 'brotli')
+        self.sort_by_timestamp = config.get('sort_by_timestamp', True)
+        self.remove_duplicates = config.get('remove_duplicates', True)
 
         # 创建交易所适配器
         self.exchange_adapter = ExchangeFactory.create_adapter(
@@ -118,6 +126,51 @@ class FileDownloader:
             print(f"Download verification failed for {symbol} {year}-{month:02d}: {e}")
             return False
 
+    def _convert_to_parquet(self, zip_path: str) -> Optional[str]:
+        """将下载的 zip 文件解压并转换为 parquet"""
+        if self.context.output_format != 'parquet':
+            return None
+
+        if not os.path.exists(zip_path):
+            return None
+
+        try:
+            # 解析符号并准备输出目录
+            exchange_dir = os.path.join(self.context.save_dir, self.adapter.name)
+            base_name = os.path.basename(zip_path)
+            symbol = base_name.split('-')[0].split('_')[0]
+            symbol_dir = os.path.join(exchange_dir, symbol)
+            os.makedirs(symbol_dir, exist_ok=True)
+
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                csv_files = [f for f in zf.namelist() if f.endswith('.csv')]
+                if not csv_files:
+                    return None
+                csv_name = csv_files[0]
+                parquet_name = os.path.splitext(os.path.basename(csv_name))[0] + '.parquet'
+                parquet_path = os.path.join(symbol_dir, parquet_name)
+
+                # 如果已存在则跳过
+                if os.path.exists(parquet_path):
+                    return parquet_path
+
+                with zf.open(csv_name) as f:
+                    df = pd.read_csv(f)
+
+            if self.context.remove_duplicates:
+                df = df.drop_duplicates()
+
+            if self.context.sort_by_timestamp:
+                time_cols = [c for c in df.columns if 'time' in c.lower()]
+                if time_cols:
+                    df = df.sort_values(time_cols[0])
+
+            df.to_parquet(parquet_path, compression=self.context.compression, index=False)
+            return parquet_path
+        except Exception as e:
+            print(f"Failed to convert {zip_path} to parquet: {e}")
+            return None
+
     def run_download_pipeline(self, config: Dict):
         """运行下载流水线 - 只负责下载"""
         max_threads = config['max_threads']
@@ -180,6 +233,14 @@ class FileDownloader:
         try:
             result = self.download_file(symbol, year, month)
             pbar.update(1)
+
+            # 无论是否新下载，尝试转换为 parquet
+            local_path = result
+            if not local_path:
+                exchange_dir = os.path.join(self.context.save_dir, self.adapter.name)
+                local_path = os.path.join(exchange_dir, self.adapter.get_file_name(symbol, year, month))
+            if local_path:
+                self._convert_to_parquet(local_path)
 
             if result:
                 with success_counter.get_lock():
