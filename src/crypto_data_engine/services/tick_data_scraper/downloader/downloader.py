@@ -55,6 +55,7 @@ class FileDownloader:
         # 创建交易所特定的保存目录
         exchange_dir = os.path.join(self.context.save_dir, self.adapter.name)
         os.makedirs(exchange_dir, exist_ok=True)
+
         local_file_path = os.path.join(exchange_dir, file_name)
 
         # 检查是否已经下载过

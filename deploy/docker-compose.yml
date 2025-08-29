@@ -24,51 +24,62 @@ services:
       - pg_data:/var/lib/postgresql/data
     restart: unless-stopped
 
-  api:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    container_name: quant-api
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
-    ports:
-      - "8000:8000"
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://quantuser:quantpass@postgres:5432/quantdb
-    depends_on:
-      - redis
-      - postgres
-    volumes:
-      - ../src:/app/src
-
   worker:
     build:
       context: ..
-      dockerfile: Dockerfile
+      dockerfile: deploy/Dockerfile
     container_name: quant-worker
-    command: celery -A src.celery_worker worker --loglevel=info
+    command: >
+      celery -A task_manager.celery_app worker
+      --loglevel=info
+      --queues=io_intensive,cpu,celery
     environment:
-      - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://quantuser:quantpass@postgres:5432/quantdb
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      DB_URL: postgresql+psycopg://admin:123456@postgres:5432/quantdb  # 修改这里
     depends_on:
       - redis
       - postgres
     volumes:
       - ../src:/app/src
+      - ../data/config:/app/data/config
+      - ../data/tick_test:/app/data/tick_test
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: quant-api
+    command: [ "python", "-m", "crypto_data_engine.main","start" ]
+    ports:
+      - "8080:8080"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DB_URL=postgresql+psycopg://admin:123456@postgres:1234/quantdb
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - ../src:/app/src
+      - ../data/config:/app/data/config
+
+
+
+
+
+  # 🔥 Flower 监控服务
 
   flower:
-    image: mher/flower
-    container_name: flower
-    restart: unless-stopped
-    command: >
-      flower
-      --broker=redis://redis:6379/0
-      --result-backend=redis://redis:6379/1
-      --port=5555
+    image: mher/flower:2.0.1
+    container_name: quant-flower
+    command: ["celery", "--broker=redis://redis:6379/0", "flower","--port=5555"]
     ports:
       - "5555:5555"
     depends_on:
       - redis
+      - worker
+    restart: unless-stopped
 
 
 volumes:

@@ -14,9 +14,6 @@ def register_routers(app: FastAPI) -> None:
         ("tick", datascraper_router),
     ]
 
-    for name, router in routers:
-        app.include_router(router)
-
     total = 0
     for name, router in routers:
         app.include_router(router)

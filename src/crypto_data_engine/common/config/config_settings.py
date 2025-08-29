@@ -18,8 +18,8 @@ class BasicSettings(BaseSettings):
         extra = "allow"
 
 class CeleryConfig(BasicSettings):
-    broker_url: str = "redis://localhost:6379/0"
-    result_backend: str = "redis://localhost:6379/1"
+    broker_url: str = "redis://redis:6379/0"
+    result_backend: str = "redis://redis:6379/1"
 
     task_serializer: str = "json"
     result_serializer: str = "json"
@@ -49,7 +49,7 @@ class TickDownloadConfig(BasicSettings):
         frozen = True
 
 class ServerConfig(BasicSettings):
-    host: str = "localhost"
+    host: str = "0.0.0.0"
     port: int = 8080
     log_level: str = "INFO"
     reload: bool = False
@@ -60,7 +60,7 @@ class ServerConfig(BasicSettings):
         frozen = True
 
 class DbConfig(BasicSettings):
-    db_url: str = "postgresql+psycopg://admin:123456@localhost:5432/quantdb"
+    db_url: str = "postgresql+psycopg://admin:123456@postgres:5432/quantdb"
     db_pool_size: int = 10
     db_pool_timeout: int = 30
     db_pool_recycle: int = 3600
@@ -102,4 +102,7 @@ settings = Settings()
 
 if __name__ == "__main__":
     pass
+
+# Add this line to create a .env.example file
+create_template(DbConfig(), PROJECT_ROOT)
 
