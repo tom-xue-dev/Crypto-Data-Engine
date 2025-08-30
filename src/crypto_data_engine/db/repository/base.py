@@ -54,35 +54,35 @@ class BaseRepository(Generic[ModelType]):
     @classmethod
     @with_db_session
     def get_all(
-        cls,
-        offset: int = 0,
-        limit: int = 100,
-        order_by: str = "id",
-        desc_order: bool = False,
-        **kwargs
+            cls,
+            offset: int = None,
+            limit: int = None,
+            order_by: str = "id",
+            desc_order: bool = False,
+            **kwargs
     ) -> List[ModelType]:
         """获取记录列表"""
-        db: Session = kwargs.pop('db')
-        query = db.query(cls._get_model())
-
-        # 应用过滤条件
+        db: Session = kwargs.pop("db")
+        model = cls._get_model()
+        query = db.query(model)
         for key, value in kwargs.items():
-            if hasattr(cls._get_model(), key):
+            if hasattr(model, key):
+                col = getattr(model, key)
                 if isinstance(value, (list, tuple)):
-                    # 支持IN查询
-                    query = query.filter(getattr(cls._get_model(), key).in_(value))
+                    if value:  # 避免空 IN ()
+                        query = query.filter(col.in_(value))
+                    else:
+                        return []
                 else:
-                    query = query.filter(getattr(cls._get_model(), key) == value)
-
-        # 排序
-        if hasattr(cls._get_model(), order_by):
-            order_column = getattr(cls._get_model(), order_by)
-            if desc_order:
-                query = query.order_by(desc(order_column))
-            else:
-                query = query.order_by(asc(order_column))
-
-        return query.offset(offset).limit(limit).all()
+                    query = query.filter(col == value)
+        if hasattr(model, order_by):
+            order_column = getattr(model, order_by)
+            query = query.order_by(desc(order_column) if desc_order else asc(order_column))
+        if offset is not None:
+            query = query.offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
+        return query.all()
 
     @classmethod
     @with_db_session

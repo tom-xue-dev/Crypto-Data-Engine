@@ -7,20 +7,12 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import Dict, List, Optional, Union
-from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 from crypto_data_engine.common.config.paths import PROJECT_ROOT,DATA_ROOT
-
+from pydantic import BaseModel, Field, model_validator
 
 class BaseDownloadConfig(BaseSettings):
     """下载器基础配置 - 通用设置"""
-    # --- 存储配置 ---
-    data_dir: Path = DATA_ROOT / "tick_test"
-    # --- 任务窗口 ---
-    start_date: str = "2020-01"  # YYYY-MM
-    end_date: str = "2022-03"    # YYYY-MM
-    symbols: Union[str, List[str]] = "auto"  # "auto" or explicit list
-    filter_suffix: Optional[str] = "USDT"
     # --- 并发控制 ---
     max_threads: int = 16
     convert_processes: int = 4
@@ -52,34 +44,21 @@ class ExchangeConfig(BaseModel):
     name: str
     base_url: str
     symbol_info_url: str
-    data_dir: Optional[Path] = None
-    completed_tasks_file: Optional[Path] = None
-
-    # 交易所特定设置
+    data_dir: Optional[Path] = Field(default=None)
     supports_checksum: bool = True
     file_name_format: str = "{symbol}-aggTrades-{year}-{month:02d}.zip"
     checksum_url_format: Optional[str] = None
 
-    def get_data_dir(self, data_dir: Path) -> Path:
-        """获取交易所数据目录"""
-        if self.data_dir:
-            return self.data_dir
-        return data_dir / self.name
-
-    def get_completed_tasks_file(self, data_dir: Path) -> Path:
-        """获取已完成任务文件路径"""
-        if self.completed_tasks_file:
-            return self.completed_tasks_file
-        return self.get_data_dir(data_dir) / "completed_tasks.txt"
+    @model_validator(mode="after")
+    def set_data_dir(cls, values):
+        if values.data_dir is None:
+            values.data_dir = DATA_ROOT / values.name
+        return values
 
 
 class MultiExchangeDownloadConfig(BaseDownloadConfig):
     """多交易所下载配置"""
-
-    # 活跃的交易所列表
     active_exchanges: List[str] = ["binance"]
-
-    # 交易所配置映射
     exchange_configs: Dict[str, ExchangeConfig] = {
         "binance": ExchangeConfig(
             name="binance",
@@ -103,7 +82,6 @@ class MultiExchangeDownloadConfig(BaseDownloadConfig):
             file_name_format="{symbol}_{year}_{month:02d}.zip"
         )
     }
-
     def get_exchange_config(self, exchange_name: str) -> ExchangeConfig:
         """获取指定交易所配置"""
         if exchange_name not in self.exchange_configs:
@@ -115,11 +93,6 @@ class MultiExchangeDownloadConfig(BaseDownloadConfig):
         exchange_config = self.get_exchange_config(exchange_name)
 
         return {
-            # 基础配置
-            "start_date": self.start_date,
-            "end_date": self.end_date,
-            "symbols": self.symbols,
-            "filter_suffix": self.filter_suffix,
             "max_threads": self.max_threads,
             "convert_processes": self.convert_processes,
             "queue_size": self.queue_size,
@@ -134,13 +107,10 @@ class MultiExchangeDownloadConfig(BaseDownloadConfig):
             "remove_duplicates": self.remove_duplicates,
             "log_level": self.log_level,
             "enable_progress_bar": self.enable_progress_bar,
-
-            # 交易所特定配置
             "exchange_name": exchange_config.name,
             "base_url": exchange_config.base_url,
             "symbol_info_url": exchange_config.symbol_info_url,
-            "data_dir": exchange_config.get_data_dir(self.data_dir),
-            "completed_tasks_file": exchange_config.get_completed_tasks_file(self.data_dir),
+            "data_dir": exchange_config.data_dir,
             "supports_checksum": exchange_config.supports_checksum,
             "file_name_format": exchange_config.file_name_format,
             "checksum_url_format": exchange_config.checksum_url_format,
@@ -156,14 +126,15 @@ class MultiExchangeDownloadConfig(BaseDownloadConfig):
 
 if __name__ == "__main__":
     # 测试配置
-    # from config_settings import settings
-    # download_config = settings.download_cfg
-    # print("📦 支持的交易所:")
-    # for name in download_config.exchange_configs.keys():
-    #     print(f"  - {name}")
-    #
-    # print(f"\n📊 Binance 配置:")
-    # binance_config = download_config.get_exchange_config("binance")
+    from config_settings import settings
+    download_config = settings.downloader_cfg
+    print("📦 支持的交易所:")
+    for name in download_config.exchange_configs.keys():
+        print(f"  - {name}")
+
+    print(f"\n📊 Binance 配置:")
+    binance_config = download_config.get_exchange_config("binance")
+    print(binance_config.get_data_dir())
     # print(f"  数据目录: {binance_config['data_dir']}")
     # print(f"  下载URL: {binance_config['base_url']}")
     #

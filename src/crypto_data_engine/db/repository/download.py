@@ -12,15 +12,7 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
     # ==================== 插入新记录 ====================
 
     @classmethod
-    def create_task(
-        cls,
-        exchange: str,
-        symbol: str,
-        year: int,
-        month: int,
-        file_name: str = None,
-        **kwargs
-    ) -> DownloadTask:
+    def create_task(cls,exchange: str,symbol: str,year: int,month: int,file_name: str = None,**kwargs) -> DownloadTask:
         """创建下载任务"""
         if not file_name:
             file_name = f"{symbol}-aggTrades-{year}-{month:02d}.zip"
@@ -35,13 +27,8 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
         )
 
     @classmethod
-    def create_batch_tasks(
-            cls,
-            exchange: str,
-            symbols: List[str],
-            year_month_pairs: List[Tuple[int, int]],
-            **kwargs
-    ) -> Tuple[List[DownloadTask], List[Dict]]:
+    def create_batch_tasks(cls,exchange: str,symbols: List[str],year_month_pairs: List[Tuple[int, int]],**kwargs) \
+            -> Tuple[List[DownloadTask], List[Dict]]:
         """
         批量创建下载任务
         Args:
@@ -65,7 +52,7 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
                         'symbol': symbol,
                         'year': year,
                         'month': month,
-                        'reason': '任务已存在'
+                        'reason': 'task exsits'
                     })
                     continue
                 try:
@@ -99,11 +86,6 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
         return cls.update(task_id, status=status)
 
     @classmethod
-    def update_progress(cls, task_id: int, progress: int) -> Optional[DownloadTask]:
-        """更新任务进度"""
-        return cls.update(task_id, progress=progress)
-
-    @classmethod
     def update_file_info(
         cls,
         task_id: int,
@@ -134,13 +116,7 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
     # ==================== 查询当前所有记录等 ====================
 
     @classmethod
-    def get_all_tasks(
-        cls,
-        limit: int = 100,
-        offset: int = 0,
-        exchange: str = None,
-        status: TaskStatus = None
-    ) -> List[DownloadTask]:
+    def get_all_tasks(cls,exchange: str = None,status: TaskStatus = None)-> List[DownloadTask]:
         """获取所有任务"""
         filters = {}
         if exchange:
@@ -148,43 +124,9 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
         if status:
             filters['status'] = status
 
-        return cls.get_all(
-            limit=limit,
-            offset=offset,
-            order_by="created_at",
-            desc_order=True,
-            **filters
-        )
+        return cls.get_all(order_by="created_at",desc_order=True,**filters)
 
-    @classmethod
-    def get_task_by_key(
-        cls,
-        exchange: str,
-        symbol: str,
-        year: int,
-        month: int
-    ) -> Optional[DownloadTask]:
-        """根据唯一键获取任务"""
-        return cls.get_by_kwargs(
-            exchange=exchange,
-            symbol=symbol,
-            year=year,
-            month=month
-        )
 
-    @classmethod
-    def get_pending_tasks(cls, limit: int = 10) -> List[DownloadTask]:
-        """获取待处理任务"""
-        return cls.get_all(
-            status=TaskStatus.PENDING,
-            limit=limit,
-            order_by="created_at"
-        )
-
-    @classmethod
-    def count_tasks_by_status(cls, status: TaskStatus) -> int:
-        """统计指定状态的任务数量"""
-        return cls.count(status=status)
 
     @classmethod
     def task_exists(cls, exchange: str, symbol: str, year: int, month: int) -> bool:
@@ -195,3 +137,7 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
             year=year,
             month=month
         )
+
+    @classmethod
+    def get_task_id(cls,exchange:str,symbol:str,year:int,month:int) -> Optional[int]:
+        return cls.get_by_kwargs(exchange=exchange,symbol=symbol,year=year,month=month).id

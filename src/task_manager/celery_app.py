@@ -44,6 +44,8 @@ def create_celery_app(app_name: str = "crypto_data_engine") -> Celery:
         accept_content=['json'],
         # 结果后端配置
         result_expires=3600,  # 结果保存1小时
+        worker_redirect_stdouts=True,          # 重定向 print 到日志
+        worker_redirect_stdouts_level="INFO",  # 以 INFO 级别记录
     )
 
     logger.info(f"Celery app '{app_name}' 创建完成")

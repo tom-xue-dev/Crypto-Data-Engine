@@ -13,7 +13,9 @@ engine = create_engine(
     echo=cfg.db_echo
 )
 
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
 def init():
     from crypto_data_engine.db.models.download import DownloadTask
     from crypto_data_engine.db.models.Base import Base
@@ -26,5 +28,6 @@ def init():
         print(f"   当前数据库: {db_info[0]}")
         print(f"   当前用户: {db_info[1]}")
 
+
 if __name__ == "__main__":
-  pass
+    pass

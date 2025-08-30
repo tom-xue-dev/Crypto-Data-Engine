@@ -6,6 +6,7 @@ class TaskStatus(PyEnum):
     DOWNLOADED = "downloaded"  # 下载完成
     EXTRACTING = "extracting"  # 正在解压
     EXTRACTED = "extracted"  # 解压完成
+
     PROCESSING = "processing"  # 正在处理/转换
     COMPLETED = "completed"  # 全部完成
     FAILED = "failed"  # 失败

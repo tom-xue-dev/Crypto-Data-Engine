@@ -7,7 +7,7 @@ from pathlib import Path
 from pydantic_settings import BaseSettings
 from crypto_data_engine.common.config.config_utils import create_template, LazyLoadConfig
 from crypto_data_engine.common.config.paths import CONFIG_ROOT, PROJECT_ROOT
-from .downloader_config import MultiExchangeDownloadConfig
+from crypto_data_engine.common.config.downloader_config import MultiExchangeDownloadConfig
 
 # ------------------define ur common here ------------------
 
@@ -102,7 +102,4 @@ settings = Settings()
 
 if __name__ == "__main__":
     pass
-
-# Add this line to create a .env.example file
-create_template(DbConfig(), PROJECT_ROOT)
 

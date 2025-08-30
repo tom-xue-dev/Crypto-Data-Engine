@@ -1,5 +1,4 @@
 from typing import Dict, List
-
 from .binance import BinanceAdapter
 from .exchange_adapter import ExchangeAdapter
 from .okx import OKXAdapter

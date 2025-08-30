@@ -209,10 +209,10 @@
 #     try:
 #         # 创建处理上下文和处理器
 #         context = BarProcessorContext(config)
-#         processor = BarProcessor(context)
+#         backend_processor = BarProcessor(context)
 #
 #         # 运行 Bar 生成流水线
-#         result = processor.run_bar_generation_pipeline(config)
+#         result = backend_processor.run_bar_generation_pipeline(config)
 #
 #         logger.info(f"\n🎉 {exchange_name.upper()} Bar 生成完成！")
 #         logger.info(f"📊 处理结果: {result}")

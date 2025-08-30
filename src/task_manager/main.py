@@ -1,5 +1,3 @@
-# src/task_manager/startup.py
-
 import sys
 import subprocess
 import platform
@@ -25,13 +23,13 @@ def start_celery_worker(queue_name: str, service_name: str):
 
 def main():
     if len(sys.argv) != 3 or sys.argv[1] != "worker":
-        logger.error("Usage: python startup.py worker [download|preprocess|backtest]")
+        logger.error("Usage: python main.py worker [download|preprocess|backtest]")
         sys.exit(1)
 
     service = sys.argv[2]
     queue_map = {
-        "download": "download_tasks",
-        "preprocess": "bar_tasks",
+        "download": "io_intensive",
+        "extract": "extract",
         "backtest": "backtest_tasks"
     }
 
@@ -39,8 +37,13 @@ def main():
     if not queue:
         logger.error(f"❌ Unknown worker type '{service}'")
         sys.exit(1)
-
-    start_celery_worker(queue, service)
+    else:
+        print("queue",queue)
+    try:
+        start_celery_worker(queue, service)
+    except KeyboardInterrupt:
+        logger.info("celery worker stopped")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()

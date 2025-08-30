@@ -41,19 +41,12 @@ class BinanceAdapter(ExchangeAdapter):
         # Binance aggTrades格式: [aggTradeId, price, quantity, firstTradeId, lastTradeId, timestamp, isBuyerMaker, isBestMatch]
         if data.empty:
             return data
-
         data.columns = [
             'agg_trade_id', 'price', 'quantity', 'first_trade_id',
             'last_trade_id', 'timestamp', 'is_buyer_maker', 'is_best_match'
         ]
-
         # 转换数据类型
         data['price'] = pd.to_numeric(data['price'])
         data['quantity'] = pd.to_numeric(data['quantity'])
         data['timestamp'] = pd.to_datetime(data['timestamp'], unit='ms')
-
         return data
-
-    def validate_symbol(self, symbol: str) -> bool:
-        """验证Binance交易对格式"""
-        return symbol.isalpha() and len(symbol) >= 6

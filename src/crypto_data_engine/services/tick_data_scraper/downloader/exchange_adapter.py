@@ -38,8 +38,3 @@ class ExchangeAdapter(ABC):
     def process_raw_data(self, data: pd.DataFrame) -> pd.DataFrame:
         """处理原始数据格式"""
         pass
-
-    @abstractmethod
-    def validate_symbol(self, symbol: str) -> bool:
-        """验证交易对是否有效"""
-        pass

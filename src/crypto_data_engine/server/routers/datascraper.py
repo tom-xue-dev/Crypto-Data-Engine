@@ -116,53 +116,6 @@ async def create_download_job(request: BatchDownloadRequest):
         logger.error(f"推送任务失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"创建下载作业失败: {str(e)}")
 
-@datascraper_router.post("/downloads/single", summary="创建单个下载任务")
-async def create_single_download(
-    exchange: str = Body(..., description="交易所名称"),
-    symbol: str = Body(..., description="交易对"),
-    year: int = Body(..., description="年份"),
-    month: int = Body(..., description="月份")
-):
-    """创建单个下载任务并立即推送给Celery"""
-    try:
-        # 1️⃣ 创建数据库任务
-        task = DownloadTaskRepository.create_task(
-            exchange=exchange,
-            symbol=symbol,
-            year=year,
-            month=month
-        )
-
-        # 2️⃣ 推送给Celery
-        celery_config = {
-            'exchange_name': exchange,
-            'symbols': [symbol],
-            'start_date': f"{year}-{month:02d}",
-            'end_date': f"{year}-{month:02d}",
-            'max_threads': 4,
-            'task_id': task.id
-        }
-
-        celery_result = celery_app.send_task(
-            'tick.download',
-            args=[celery_config],
-            queue='io_intensive'
-        )
-
-        return {
-            'message': '任务已创建并推送到队列',
-            'db_task_id': task.id,
-            'celery_task_id': celery_result.id,
-            'celery_status': celery_result.state,
-            'task_info': {
-                'exchange': task.exchange,
-                'symbol': task.symbol,
-                'period': f"{task.year}-{task.month:02d}"
-            }
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"创建任务失败: {str(e)}")
 
 @datascraper_router.get("/celery/status/{celery_task_id}", summary="查询Celery任务状态")
 async def get_celery_task_status(celery_task_id: str):
@@ -183,29 +136,3 @@ async def get_celery_task_status(celery_task_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"查询失败: {str(e)}")
 
-# ==================== 测试端点 ====================
-
-@datascraper_router.post("/test/health", summary="测试Celery连接")
-async def test_celery_health():
-    """测试Celery连接和Worker状态"""
-    try:
-        # 发送健康检查任务
-        result = celery_app.send_task('tick.health_check', queue='cpu')
-
-        # 检查活跃的Worker
-        inspect = celery_app.control.inspect()
-        active_workers = inspect.active()
-        stats = inspect.stats()
-
-        return {
-            'celery_task_id': result.id,
-            'task_status': result.state,
-            'active_workers': list(active_workers.keys()) if active_workers else [],
-            'worker_stats': stats,
-            'broker_connected': True
-        }
-    except Exception as e:
-        return {
-            'error': str(e),
-            'broker_connected': False
-        }
