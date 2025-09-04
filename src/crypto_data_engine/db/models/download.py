@@ -5,7 +5,6 @@ from sqlalchemy import (
     Column, Integer, String, DateTime, Text, Boolean,
     Enum, Index, UniqueConstraint, BigInteger
 )
-
 from crypto_data_engine.db.constants import TaskStatus
 from crypto_data_engine.db.models.Base import Base
 

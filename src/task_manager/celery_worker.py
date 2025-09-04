@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 def register_tasks(celery_app):
-    """注册所有Celery任务"""
+    """register your celery tasks here"""
 
     @celery_app.task(name="tick.download", bind=True)
     def dispatch_tick_download(self, cfg: dict):
@@ -71,6 +71,10 @@ def register_tasks(celery_app):
             "parquet_files": parquet_files,
         }
 
+
+    @celery_app.task(name="bars.aggregate")
+    def extract_task_test(self,directory: str, file_name: str):
+        pass
     @celery_app.task(name="tick.health_check")
     def health_check():
         """健康检查任务"""
@@ -85,6 +89,7 @@ def register_tasks(celery_app):
 
         logger.info(f"健康检查: {worker_info}")
         return worker_info
+
 
     return {
         'dispatch_tick_download': dispatch_tick_download,

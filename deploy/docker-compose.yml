@@ -65,11 +65,6 @@ services:
       - ../data/config:/app/data/config
 
 
-
-
-
-  # 🔥 Flower 监控服务
-
   flower:
     image: mher/flower:2.0.1
     container_name: quant-flower
