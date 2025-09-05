@@ -1,19 +1,18 @@
 import pandas as pd
 import numpy as np
-from numba import njit
 from datetime import datetime, timezone
 from scipy.stats import skew, kurtosis
 
 
-@njit
 def get_volume_bar_indices(volume_arr, threshold):
+    """Pure-Python cumulative threshold splitter to avoid numba issues."""
     indices = []
-    cum_volume = 0
-    for i in range(len(volume_arr)):
-        cum_volume += volume_arr[i]
+    cum_volume = 0.0
+    for i, v in enumerate(volume_arr):
+        cum_volume += float(v)
         if cum_volume >= threshold:
             indices.append(i)
-            cum_volume = 0
+            cum_volume = 0.0
     return indices
 
 
@@ -21,7 +20,7 @@ class BarConstructor:
     """构建不同类型的 Bar 数据."""
 
     def __init__(self, folder_path, threshold=100000, bar_type="dollar_bar"):
-        self.bar_type = bar_type
+        self.bar_type = self._normalize_bar_type(bar_type)
         self.folder_path = folder_path
         self.threshold = threshold
         self.col_names = [
@@ -34,6 +33,14 @@ class BarConstructor:
             "isBuyerMaker",
             "isBestMatch",
         ]
+
+    def _normalize_bar_type(self, bar_type: str) -> str:
+        mapping = {
+            "tick": "tick_bar",
+            "volume": "volume_bar",
+            "dollar": "dollar_bar",
+        }
+        return mapping.get(bar_type, bar_type)
 
     def _construct_dollar_bar(self, data: pd.DataFrame) -> pd.DataFrame:
         dollar_volume = data["price"] * data["quantity"]
@@ -93,7 +100,7 @@ class BarConstructor:
             vol_ratio_median = max_vol / qty.median()
             px_vs_vwap = max_px / ((price * qty).sum() / qty.sum()) - 1
             px_pos_in_range = (max_px - price.min()) / (price.max() - price.min() + 1e-12)
-            path_length = price.diff().abs().sum()
+            # path_length = price.diff().abs().sum()
             streaks = (direction != direction.shift()).cumsum()
             ret = np.log(price / price.shift(1)).dropna()
             return {
@@ -105,7 +112,8 @@ class BarConstructor:
                 "volume": qty.sum(),
                 "sell_volume": qty[segment["isBuyerMaker"]].sum(),
                 "buy_volume": qty[~segment["isBuyerMaker"]].sum(),
-                "buy_ticks": segment["isBuyerMaker"].sum(),
+                "sell_ticks": segment["isBuyerMaker"].sum(),
+                "buy_ticks": (~segment["isBuyerMaker"]).sum(),
                 "tick_nums": len(segment),
                 "vwap": (price * qty).sum() / qty.sum(),
                 "medium_price": price.median(),
@@ -113,9 +121,9 @@ class BarConstructor:
                 "volume_std": qty.std(),
                 "tick_interval_mean": segment["timestamp"].diff().mean(),
                 "reversals": np.count_nonzero(direction != direction.shift()),
-                "cumulative_buyer": streaks.value_counts().max(),
-                "skewness": skew(ret),
-                "kurtosis": kurtosis(ret),
+                "cumulative_buyer": streaks.value_counts().max() if len(streaks) else 0,
+                "skewness": skew(ret) if len(ret) > 2 else np.nan,
+                "kurtosis": kurtosis(ret) if len(ret) > 3 else np.nan,
                 "up_move_ratio": (price.diff() > 0).mean(),
                 "max_trade_volume": max_vol,
                 "max_trade_direction": max_dir,
@@ -142,11 +150,13 @@ class BarConstructor:
             raise ValueError(f"Unsupported bar type: {bar_type}")
 
     def convert_timestamp(self, ts):
-        length = len(str(ts))
-        if length == 13:
-            ts = ts / 1000
-        elif length >= 16:
-            ts = ts / 1000000
+        length = len(str(int(ts)))
+        if length >= 16:       # microseconds or higher
+            ts = ts / 1_000_000
+        elif length == 13:     # milliseconds
+            ts = ts / 1_000
+        elif length == 10:     # seconds
+            ts = ts
         else:
             raise ValueError(f"Unsupported timestamp length: {length}")
         return datetime.fromtimestamp(ts, tz=timezone.utc)
@@ -157,7 +167,12 @@ class BarConstructor:
             df = pd.read_parquet(file)
             dataframes.append(df)
         data = pd.concat(dataframes, ignore_index=True)
-        data.columns = self.col_names
+        # Set expected column names only if shapes match and names are absent
+        if len(data.columns) == len(self.col_names) and "price" not in data.columns:
+            data.columns = self.col_names
+        # Ensure chronological order
+        if "timestamp" in data.columns:
+            data = data.sort_values("timestamp").reset_index(drop=True)
         if self.bar_type == "dollar_bar":
             bars_df = self._construct_dollar_bar(data)
         elif self.bar_type == "tick_bar":

@@ -23,7 +23,7 @@ class BarProcessorContext:
     """
     raw_data_dir: Optional[str] = None
     output_dir: Optional[str] = None
-    bar_type: str = "volume"
+    bar_type: str = "volume_bar"
     threshold: int = 10000000
     process_num_limit: int = 4
     suffix_filter: Optional[str] = None
@@ -52,8 +52,8 @@ class BarProcessor:
         logger.info("📊 Bar type: %s", self.context.bar_type)
         logger.info("📂 Input directory: %s", self.context.raw_data_dir)
         logger.info("📂 Output directory: %s", self.context.output_dir)
-        exchange_name = config.get("exchange")
-        symbols = self._get_symbols_to_process(exchange_name)
+        exchange_name = config.get("exchange") or "binance"
+        symbols = config.get("symbols") or self._get_symbols_to_process(exchange_name)
         if not symbols:
             logger.warning("⚠️  No symbols found for processing")
             return {"status": "completed", "processed": 0, "message": "No files to process"}
@@ -63,7 +63,7 @@ class BarProcessor:
         results: List[Dict[str, Any]] = []
         for symbol in tqdm(symbols, desc="Processing symbols"):
             try:
-                result = self._process_symbol(symbol)
+                result = self._process_symbol(symbol, exchange_name)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.error("❌ %s processing failed: %s", symbol, exc)
                 continue
@@ -83,28 +83,28 @@ class BarProcessor:
         }
 
     # ------------------------------------------------------------------
-    def _get_symbols_to_process(self,exchange_name:str) -> List[str]:
-        """Discover which symbols should be processed."""
-        task_extracted = DownloadTaskRepository.get_all_tasks(exchange=exchange_name,status=TaskStatus.COMPLETED)
-        task_aggregated = AggregateTaskRepository.get_all_tasks(exchange=exchange_name,status=TaskStatus.COMPLETED)
-        tasks = task_extracted - task_aggregated
-        symbols = None
+    def _get_symbols_to_process(self, exchange_name: str) -> List[str]:
+        """Discover which symbols should be processed based on DB tasks.
+        Use DownloadTask=EXTRACTED and exclude symbols already COMPLETED in AggregateTask.
+        """
+        extracted = DownloadTaskRepository.get_all_tasks(exchange=exchange_name, status=TaskStatus.EXTRACTED)
+        aggregated = AggregateTaskRepository.get_all_tasks(exchange=exchange_name, status=TaskStatus.COMPLETED)
+        extracted_symbols = {t.symbol for t in extracted}
+        aggregated_symbols = {t.symbol for t in aggregated}
+        symbols = sorted(extracted_symbols - aggregated_symbols) if aggregated else sorted(extracted_symbols)
         if self.context.suffix_filter:
-            symbols = [task.symbol for task in tasks if task.symbol.endswith(self.context.suffix_filter)]
-        logger.info("📋 %d symbols to process: %s", len(symbols), symbols[:10])
+            symbols = [s for s in symbols if s.endswith(self.context.suffix_filter)]
+        logger.info("📋 %d symbols to process%s", len(symbols), f": {symbols[:10]}" if symbols else "")
         return symbols
 
     # ------------------------------------------------------------------
-    def _process_symbol(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Load all parquet tick files for ``symbol`` and build bars."""
-        symbol_path = Path(self.context.raw_data_dir) / symbol
-        if not symbol_path.exists() or not symbol_path.is_dir():
-            logger.warning("⚠️  Symbol directory missing: %s", symbol_path)
-            return None
-
-        parquet_files = sorted(symbol_path.glob("*.parquet"))
+    def _process_symbol(self, symbol: str, exchange_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Load tick parquet files for ``symbol`` based on DB records and build bars.
+        Files are determined from DownloadTask entries (status=EXTRACTED).
+        """
+        parquet_files = self._collect_parquet_files_from_db(symbol, exchange_name)
         if not parquet_files:
-            logger.warning("⚠️  No parquet files found for %s", symbol)
+            logger.warning("⚠️  No parquet files found in DB for %s", symbol)
             return None
 
         constructor = BarConstructor(
@@ -127,6 +127,40 @@ class BarProcessor:
             "threshold": self.context.threshold,
             "processed_at": datetime.now().isoformat(),
         }
+
+    def _collect_parquet_files_from_db(self, symbol: str, exchange_name: Optional[str]) -> List[Path]:
+        """Resolve parquet file paths via DB tables instead of scanning filesystem.
+        Uses DownloadTask (status=EXTRACTED). Assumes `local_path` (or `file_path`) stores
+        directory and `file_name` is the archive name whose stem matches the extracted folder.
+        """
+        exchange_dir = self.context.raw_data_dir  # base for sanity/logging only
+        # Fetch tasks for this symbol
+        tasks = [
+            t for t in DownloadTaskRepository.get_all_tasks(
+                exchange=exchange_name, status=TaskStatus.EXTRACTED
+            ) if t.symbol == symbol
+        ]
+        files: List[Path] = []
+        for t in tasks:
+            base_dir = getattr(t, "file_path", None) or getattr(t, "local_path", None)
+            if not base_dir:
+                continue
+            stem = Path(t.file_name).stem if getattr(t, "file_name", None) else None
+            # Prefer extracted subdir under stem; fallback to base_dir
+            search_root = Path(base_dir) / stem if stem else Path(base_dir)
+            # Collect parquet files recursively
+            if search_root.exists():
+                files.extend(sorted(search_root.rglob("*.parquet")))
+        # Deduplicate
+        uniq = []
+        seen = set()
+        for p in files:
+            s = str(p)
+            if s not in seen:
+                seen.add(s)
+                uniq.append(p)
+        logger.info("🔎 %s parquet files resolved for %s", len(uniq), symbol)
+        return uniq
 
     # ------------------------------------------------------------------
     def _save_bars(self, symbol: str, bars_df: pd.DataFrame) -> Path:
@@ -164,7 +198,7 @@ class BarProcessor:
 def run_simple_bar_generation(
     exchange_name: str = "binance",
     symbols: Optional[List[str]] = None,
-    bar_type: str = "volume",
+    bar_type: str = "volume_bar",
     threshold: int = 10_000_000,
     raw_data_dir: str = "./data/tick_data",
     output_dir: str = "./data/bar_data",
@@ -187,6 +221,7 @@ def run_simple_bar_generation(
         "symbols": symbols,
         "process_num_limit": 4,
         "batch_size": 10,
+        "exchange": exchange_name,
     }
 
     try:

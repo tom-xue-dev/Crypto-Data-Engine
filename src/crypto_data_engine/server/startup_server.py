@@ -10,8 +10,10 @@ def register_routers(app: FastAPI) -> None:
     register your routers here
     """
     from crypto_data_engine.server.routers.datascraper import datascraper_router
+    from crypto_data_engine.server.routers.aggregation import router as aggregation_router
     routers = [
         ("tick", datascraper_router),
+        ("aggregate", aggregation_router),
     ]
 
     total = 0

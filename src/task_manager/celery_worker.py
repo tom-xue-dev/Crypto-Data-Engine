@@ -73,8 +73,51 @@ def register_tasks(celery_app):
 
 
     @celery_app.task(name="bars.aggregate")
-    def extract_task_test(self,directory: str, file_name: str):
-        pass
+    def aggregate_bars(cfg: dict):
+        """Bar aggregation task dispatched from API gateway.
+        cfg: {
+            "exchange": str,
+            "symbols": list[str] | None,
+            "bar_type": str,
+            "threshold": int | None,
+        }
+        Missing params are filled from AggregationConfig defaults.
+        """
+        from crypto_data_engine.common.config.config_settings import settings
+        from crypto_data_engine.services.bar_aggregator.bar_processor import (
+            BarProcessorContext, BarProcessor,
+        )
+
+        exchange = cfg.get("exchange")
+        symbols = cfg.get("symbols",None)
+        bar_type = cfg.get("bar_type", "volume_bar")
+        user_threshold = cfg.get("threshold")
+
+        # Resolve defaults
+        agg_cfg = settings.aggregator_cfg
+        merged = agg_cfg.resolve_defaults(bar_type)
+        threshold = user_threshold or merged.get("threshold")
+        bar_type_norm = merged["bar_type"]
+
+        # Resolve directories
+        raw_exchange_cfg = settings.downloader_cfg.get_exchange_config(exchange)
+        raw_data_dir = str(raw_exchange_cfg.data_dir)
+        output_dir = str(agg_cfg.make_output_dir(exchange))
+
+        # Build processor context
+        context = BarProcessorContext(
+            raw_data_dir=raw_data_dir,
+            output_dir=output_dir,
+            bar_type=bar_type_norm,
+            threshold=threshold,
+        )
+        processor = BarProcessor(context)
+        result = processor.run_bar_generation_pipeline({
+            "exchange": exchange,
+            "symbols": symbols,
+        })
+        return result
+
     @celery_app.task(name="tick.health_check")
     def health_check():
         """健康检查任务"""

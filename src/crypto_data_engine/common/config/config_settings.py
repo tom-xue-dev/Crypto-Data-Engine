@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings
 from crypto_data_engine.common.config.config_utils import create_template, LazyLoadConfig
 from crypto_data_engine.common.config.paths import CONFIG_ROOT, PROJECT_ROOT
 from crypto_data_engine.common.config.downloader_config import MultiExchangeDownloadConfig
+from crypto_data_engine.common.config.aggregation_config import AggregationConfig
 
 # ------------------define ur common here ------------------
 
@@ -83,6 +84,7 @@ class Settings:
     tick_download_cfg:TickDownloadConfig = LazyLoadConfig(TickDownloadConfig)
     downloader_cfg:MultiExchangeDownloadConfig = LazyLoadConfig(MultiExchangeDownloadConfig)
     db_cfg = LazyLoadConfig(DbConfig)
+    aggregator_cfg:AggregationConfig = LazyLoadConfig(AggregationConfig)
 
 def create_all_templates() -> None:
     """自动实例化所有配置类并生成对应 YAML 模板"""
@@ -92,7 +94,8 @@ def create_all_templates() -> None:
         CeleryConfig(),
         ServerConfig(),
         MultiExchangeDownloadConfig(),
-        DbConfig()
+        DbConfig(),
+        AggregationConfig(),
     ]
     for inst in instances:
         create_template(inst, CONFIG_ROOT)

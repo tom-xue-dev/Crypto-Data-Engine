@@ -42,7 +42,6 @@ class BarProcessorRequest(BaseModel):
     raw_data_dir: Optional[Path] = None
     output_dir: Optional[Path] = None
     suffix_filter: Optional[str] = None  # e.g. '.parquet'
-    version: int = 1
     kwargs: Optional[Dict[str, Any]] = None # you need to provide suitable args for each bar_type
 
     @root_validator
