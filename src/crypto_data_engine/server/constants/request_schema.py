@@ -33,35 +33,8 @@ class BatchDownloadRequest(BaseModel):
 
 BarType = Literal['time', 'tick', 'volume', 'dollar', 'imbalance']
 
-class BarProcessorRequest(BaseModel):
-    bar_type: BarType
-    # 通用
-    exchange_name: str = Field(..., description="binance/okx/...")
-    symbol: str = Field(..., description="BTCUSDT 等")
-    process_num_limit: int = 4
-    raw_data_dir: Optional[Path] = None
-    output_dir: Optional[Path] = None
-    suffix_filter: Optional[str] = None  # e.g. '.parquet'
-    kwargs: Optional[Dict[str, Any]] = None # you need to provide suitable args for each bar_type
-
-    @root_validator
-    def validate_by_bar_type(cls, v):
-        bt = v.get('bar_type')
-        thr = v.get('threshold')
-        itv = v.get('interval')
-        ema = v.get('ema_window')
-
-        if bt == 'time':
-            if not itv:
-                raise ValueError("time bar 需要 interval（如 '1s'/'1m'）")
-        elif bt == 'tick':
-            # tick bar 一般不需要 interval/thr；可选：固定 N 笔合一
-            pass
-        elif bt in ('volume', 'dollar'):
-            if thr is None or thr <= 0:
-                raise ValueError(f"{bt} bar 需要正整数 threshold")
-        elif bt == 'imbalance':
-            # 常见：以 tick/volume/dollar 不平衡触发；给个需要的窗口
-            if ema is None or ema <= 0:
-                raise ValueError("imbalance bar 需要 ema_window")
-        return v
+class AggregateRequest(BaseModel):
+    exchange: str = Field(..., description="交易所，如 binance")
+    symbols: Optional[List[str]] = Field(None, description="指定交易对；为空则自动从DB筛选")
+    bar_type: str = Field("volume_bar", description="tick/volume/dollar 或 *_bar 形式")
+    threshold: Optional[int] = Field(None, description="阈值（对 volume/dollar/tick 有效）")

@@ -183,12 +183,14 @@ class FileDownloader:
 
 
     def _set_complete_status(self, exchange, symbol, year, month, save_dir):
-        """追加完成的下载任务到文件,并发起解压任务"""
-        task_id = DownloadTaskRepository.get_task_id(exchange,symbol,year,month)
-        DownloadTaskRepository.update_file_info(task_id=task_id,local_path=str(os.path.join(save_dir,symbol)))
-        DownloadTaskRepository.update_status(task_id=task_id,status=TaskStatus.EXTRACTED)
-        DownloadTaskRepository.update(record_id=task_id,task_end = datetime.now())
-        task = DownloadTaskRepository.get_by_kwargs(exchange=exchange,symbol=symbol,year=year,month=month)
+        """Mark task as downloaded and dispatch extract task."""
+        task_id = DownloadTaskRepository.get_task_id(exchange, symbol, year, month)
+        # Save local path and mark as DOWNLOADED (extraction will update to EXTRACTED)
+        DownloadTaskRepository.update_file_info(
+            task_id=task_id, local_path=str(os.path.join(save_dir, symbol))
+        )
+        DownloadTaskRepository.update_status(task_id=task_id, status=TaskStatus.DOWNLOADED)
+        task = DownloadTaskRepository.get_by_kwargs(exchange=exchange, symbol=symbol, year=year, month=month)
         from task_manager.celery_app import celery_app
         celery_app.send_task(
             "tick.extract_task",

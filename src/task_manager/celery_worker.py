@@ -59,20 +59,55 @@ def register_tasks(celery_app):
                 'task_id': task_id
             }
 
-    @celery_app.task(name="tick.extract_task",bind=True)
+    @celery_app.task(name="tick.extract_task", bind=True)
     def extract_task(self, directory: str, file_name: str):
-        result = extract_archive(directory, file_name)
-        out_dir = result["out_dir"]
-        parquet_files = convert_dir_to_parquet(out_dir, pattern="*.csv")
-        return {
-            "archive": result["archive"],
-            "out_dir": out_dir,
-            "files": result["files"],
-            "parquet_files": parquet_files,
-        }
+        """Unpack an archive and convert CSVs to parquet.
+        Also updates DownloadTask status: DOWNLOADED -> EXTRACTING -> EXTRACTED.
+        """
+        from datetime import datetime as _dt
+        try:
+            # Mark EXTRACTING if we can locate the task by (local_path, file_name)
+            try:
+                task = DownloadTaskRepository.get_by_kwargs(local_path=directory, file_name=file_name)
+                if task:
+                    DownloadTaskRepository.update(task.id, status=TaskStatus.EXTRACTING)
+            except Exception as _:
+                pass
+
+            result = extract_archive(directory, file_name)
+            out_dir = result["out_dir"]
+            parquet_files = convert_dir_to_parquet(out_dir, pattern="*.csv")
+
+            # Mark EXTRACTED on success
+            try:
+                task = DownloadTaskRepository.get_by_kwargs(local_path=directory, file_name=file_name)
+                if task:
+                    DownloadTaskRepository.update(
+                        task.id,
+                        status=TaskStatus.EXTRACTED,
+                        task_end=_dt.now(),
+                    )
+            except Exception as _:
+                pass
+
+            return {
+                "archive": result["archive"],
+                "out_dir": out_dir,
+                "files": result["files"],
+                "parquet_files": parquet_files,
+            }
+        except Exception as e:
+            # Mark FAILED if possible
+            try:
+                task = DownloadTaskRepository.get_by_kwargs(local_path=directory, file_name=file_name)
+                if task:
+                    DownloadTaskRepository.update(task.id, status=TaskStatus.FAILED)
+            except Exception as _:
+                pass
+            raise
 
 
-    @celery_app.task(name="bars.aggregate")
+    @celery_app.task(name="bar.aggregate")
     def aggregate_bars(cfg: dict):
         """Bar aggregation task dispatched from API gateway.
         cfg: {
@@ -116,6 +151,43 @@ def register_tasks(celery_app):
             "exchange": exchange,
             "symbols": symbols,
         })
+        # Persist aggregation artifacts into AggregateTask table to prevent reprocessing
+        try:
+            from datetime import date as _date, datetime as _dt
+            from pathlib import Path
+            from crypto_data_engine.db.repository.aggregate import AggregateTaskRepository as _AggRepo
+            for item in (result or {}).get("results", []) or []:
+                symbol = item.get("symbol")
+                output_file = item.get("output_file")
+                if not symbol or not output_file:
+                    continue
+                # create or update
+                existing = _AggRepo.get_by_kwargs(
+                    exchange=exchange, symbol=symbol, bar_type=bar_type_norm, part_date=_date.today()
+                )
+                if existing:
+                    _AggRepo.update(
+                        existing.id,
+                        status=TaskStatus.COMPLETED,
+                        file_name=str(Path(output_file).name),
+                        file_path=str(output_file),
+                        task_end=_dt.now(),
+                    )
+                else:
+                    _AggRepo.create_task(
+                        exchange=exchange,
+                        symbol=symbol,
+                        bar_type=bar_type_norm,
+                        part_date=_date.today(),
+                        status=TaskStatus.COMPLETED,
+                        file_name=str(Path(output_file).name),
+                        file_path=str(output_file),
+                        task_end=_dt.now(),
+                    )
+        except Exception as _:
+            # Best-effort; do not fail the whole task if DB write fails
+            logger.warning("aggregate_bars: failed to persist aggregation records", exc_info=True)
+
         return result
 
     @celery_app.task(name="tick.health_check")

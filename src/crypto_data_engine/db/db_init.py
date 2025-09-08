@@ -17,7 +17,9 @@ engine = create_engine(
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 def init():
-    from crypto_data_engine.db.models.download import DownloadTask
+    # Import models to ensure metadata is populated before create_all
+    from crypto_data_engine.db.models.download import DownloadTask  # noqa: F401
+    from crypto_data_engine.db.models.aggregate import AggregateTask  # noqa: F401
     from crypto_data_engine.db.models.Base import Base
     Base.metadata.create_all(bind=engine)
     with engine.connect() as conn:

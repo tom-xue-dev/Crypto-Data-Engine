@@ -203,7 +203,7 @@ To add a new module (e.g., feature generation):
 ## 📧 Contact
 
 For issues, please open a GitHub issue or contact:  
-📮 `your-email@example.com`
+📮 `x513922066@gmail.com`
 
 ---
 

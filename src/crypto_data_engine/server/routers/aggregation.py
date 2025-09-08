@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
 from crypto_data_engine.common.logger.logger import get_logger
 from crypto_data_engine.common.config.config_settings import settings
+from crypto_data_engine.server.constants.request_schema import AggregateRequest
 from task_manager.celery_app import celery_app
 
 logger = get_logger(__name__)
@@ -11,11 +11,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/aggregate", tags=["Bar 聚合"])
 
 
-class AggregateRequest(BaseModel):
-    exchange: str = Field(..., description="交易所，如 binance")
-    symbols: Optional[List[str]] = Field(None, description="指定交易对；为空则自动从DB筛选")
-    bar_type: str = Field("volume_bar", description="tick/volume/dollar 或 *_bar 形式")
-    threshold: Optional[int] = Field(None, description="阈值（对 volume/dollar/tick 有效）")
+
 
 
 @router.post("/bars", summary="提交 Bar 聚合任务（推送至 Celery）")
