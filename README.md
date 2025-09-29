@@ -162,14 +162,7 @@ Below are example backtest result snapshots generated from the built-in backtest
 
 ![Backtest Result 2](backtest_results/res_2.png)
 
-Reproduce locally (example):
-```bash
-poetry run python -m crypto_data_engine.services.back_test.main
-```
 
-Notes:
-- Ensure aggregated bar data is available under `data/bar_data/<exchange>/...`.
-- Configure parameters in the backtest module as needed for your strategy.
 
 ---
 ## Data Layout
