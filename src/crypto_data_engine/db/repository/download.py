@@ -122,8 +122,8 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
             filters['exchange'] = exchange
         if status:
             filters['status'] = status
-
-        return cls.get_all(order_by="created_at",desc_order=True,**filters)
+        # Order by id to avoid referencing non-existent created_at
+        return cls.get_all(order_by="id",desc_order=True,**filters)
 
 
 

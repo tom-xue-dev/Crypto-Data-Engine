@@ -32,6 +32,7 @@ def create_celery_app(app_name: str = "crypto_data_engine") -> Celery:
         task_routes={
             'tick.download': {'queue': 'io_intensive'},
             'tick.health_check': {'queue': 'cpu'},
+            'bar.aggregate': {'queue': 'cpu'},
         },
         # Task execution configuration
         task_time_limit=3600,  # 1 hour hard timeout

@@ -108,8 +108,8 @@ class AggregateTaskRepository(BaseRepository[AggregateTask]):
             filters['exchange'] = exchange
         if status:
             filters['status'] = status
-
-        return cls.get_all(order_by="created_at",desc_order=True,**filters)
+        # Order by part_date if available; fallback to id
+        return cls.get_all(order_by="part_date",desc_order=True,**filters)
 
 
     from sqlalchemy.orm import Session

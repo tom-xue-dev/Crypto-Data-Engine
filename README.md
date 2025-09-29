@@ -153,10 +153,29 @@ curl -X POST "http://localhost:8080/api/v1/aggregate/bars" \
 The API resolves defaults from `AggregationConfig`, pushes a `bar.aggregate` Celery task, and writes aggregation results under `data/data_aggrate/`.
 
 ---
+---
+## Backtesting Results
+
+Below are example backtest result snapshots generated from the built-in backtest pipeline (`src/crypto_data_engine/services/back_test/`). These demonstrate end-to-end usage: download → extract → aggregate bars → signal generation → backtest.
+
+![Backtest Result 1](backtest_results/res_1.png)
+
+![Backtest Result 2](backtest_results/res_2.png)
+
+Reproduce locally (example):
+```bash
+poetry run python -m crypto_data_engine.services.back_test.main
+```
+
+Notes:
+- Ensure aggregated bar data is available under `data/bar_data/<exchange>/...`.
+- Configure parameters in the backtest module as needed for your strategy.
+
+---
 ## Data Layout
 - `data/tick_data/` – Downloaded and processed tick data (per exchange/symbol)
 - `data/tick_test/` – Sample archives used for local testing
-- `data/data_aggrate/` – Generated bar files grouped by bar type
+- `data/bar_data/` – Generated bar files grouped by bar type
 - `data/config/` – YAML configuration templates and overrides
 
 You can change default locations via the settings classes in `crypto_data_engine.common.config`.

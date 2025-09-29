@@ -1,7 +1,7 @@
 from crypto_data_engine.services.tick_data_scraper.extractor.convert import extract_archive, convert_dir_to_parquet
 from crypto_data_engine.services.tick_data_scraper.tick_worker import run_download
 from crypto_data_engine.db.repository.download import DownloadTaskRepository
-from crypto_data_engine.db.models.download import TaskStatus
+from crypto_data_engine.db.constants import TaskStatus
 import logging
 
 logger = logging.getLogger(__name__)
@@ -31,10 +31,11 @@ def register_tasks(celery_app):
                 max_threads=cfg.get('max_threads', 8)
             )
             logger.info(f"Download task finished: {exchange_name}")
+            symbols = cfg.get('symbols')
             return {
                 'status': 'SUCCESS',
                 'exchange': exchange_name,
-                'symbols_count': len(cfg.get('symbols')),
+                'symbols_count': (len(symbols) if isinstance(symbols, (list, tuple)) else 0),
                 'task_id': task_id,
                 'result': result
             }
@@ -86,12 +87,40 @@ def register_tasks(celery_app):
             except Exception as _:
                 pass
 
-            return {
+            response = {
                 "archive": result["archive"],
                 "out_dir": out_dir,
                 "files": result["files"],
                 "parquet_files": parquet_files,
             }
+
+            # Auto-dispatch aggregation for the exchange inferred from directory path
+            try:
+                # Heuristic: directory like data/tick_data/<exchange>/...
+                from pathlib import Path as _P
+                parts = _P(directory).parts
+                exchange_name = None
+                for i, p in enumerate(parts):
+                    if p.lower() in ("binance", "okx", "bybit", "huobi"):
+                        exchange_name = p.lower()
+                        break
+                if exchange_name:
+                    from task_manager.celery_app import celery_app as _app
+                    _app.send_task(
+                        "bar.aggregate",
+                        kwargs={
+                            "exchange": exchange_name,
+                            "symbols": None,  # let aggregator derive from DB
+                            "bar_type": "volume_bar",
+                            "threshold": None,
+                        },
+                        queue="cpu",
+                    )
+            except Exception:
+                # best-effort; do not fail extract task
+                pass
+
+            return response
         except Exception as e:
             # Mark FAILED if possible
             try:
@@ -207,5 +236,6 @@ def register_tasks(celery_app):
     return {
         'dispatch_tick_download': dispatch_tick_download,
         'extract': extract_task,
+        'aggregate_bars': aggregate_bars,
         'health_check': health_check
     }
