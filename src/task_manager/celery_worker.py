@@ -12,12 +12,10 @@ def register_tasks(celery_app):
 
     @celery_app.task(name="tick.download", bind=True)
     def dispatch_tick_download(self, cfg: dict):
-        """
-        分布式tick数据下载任务
-        """
+        """Distributed tick data download task."""
         task_id = cfg.get('task_id')
         try:
-            logger.info(f"开始执行下载任务: {cfg}")
+            logger.info(f"Starting download task: {cfg}")
             if task_id:
                 DownloadTaskRepository.update_status(task_id, TaskStatus.DOWNLOADING)
             exchange_name = cfg.get('exchange_name')
@@ -32,7 +30,7 @@ def register_tasks(celery_app):
                 end_date=cfg.get('end_date'),
                 max_threads=cfg.get('max_threads', 8)
             )
-            logger.info(f"download tasks finished: {exchange_name}")
+            logger.info(f"Download task finished: {exchange_name}")
             return {
                 'status': 'SUCCESS',
                 'exchange': exchange_name,
@@ -42,7 +40,7 @@ def register_tasks(celery_app):
             }
 
         except Exception as e:
-            logger.error(f"下载任务失败: {str(e)}")
+            logger.error(f"Download task failed: {str(e)}")
             if task_id:
                 DownloadTaskRepository.update(
                     task_id,
@@ -61,9 +59,7 @@ def register_tasks(celery_app):
 
     @celery_app.task(name="tick.extract_task", bind=True)
     def extract_task(self, directory: str, file_name: str):
-        """Unpack an archive and convert CSVs to parquet.
-        Also updates DownloadTask status: DOWNLOADED -> EXTRACTING -> EXTRACTED.
-        """
+        """Unpack an archive, convert CSVs to parquet, and update task status."""
         from datetime import datetime as _dt
         try:
             # Mark EXTRACTING if we can locate the task by (local_path, file_name)
@@ -110,13 +106,15 @@ def register_tasks(celery_app):
     @celery_app.task(name="bar.aggregate")
     def aggregate_bars(cfg: dict):
         """Bar aggregation task dispatched from API gateway.
+
         cfg: {
             "exchange": str,
             "symbols": list[str] | None,
             "bar_type": str,
             "threshold": int | None,
         }
-        Missing params are filled from AggregationConfig defaults.
+
+        Missing parameters are filled from `AggregationConfig` defaults.
         """
         from crypto_data_engine.common.config.config_settings import settings
         from crypto_data_engine.services.bar_aggregator.bar_processor import (
@@ -192,7 +190,7 @@ def register_tasks(celery_app):
 
     @celery_app.task(name="tick.health_check")
     def health_check():
-        """健康检查任务"""
+        """Celery worker health check task."""
         import time
         import socket
 
@@ -202,7 +200,7 @@ def register_tasks(celery_app):
             'status': 'healthy'
         }
 
-        logger.info(f"健康检查: {worker_info}")
+        logger.info(f"Health check: {worker_info}")
         return worker_info
 
 

@@ -17,7 +17,7 @@ def get_volume_bar_indices(volume_arr, threshold):
 
 
 class BarConstructor:
-    """构建不同类型的 Bar 数据."""
+    """Constructs multiple types of bar data."""
 
     def __init__(self, folder_path, threshold=100000, bar_type="dollar_bar"):
         self.bar_type = self._normalize_bar_type(bar_type)

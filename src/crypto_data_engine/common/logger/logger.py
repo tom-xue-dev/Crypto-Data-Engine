@@ -1,6 +1,6 @@
 """
-统一日志配置管理模块 - 改进版
-支持：模块化logger、单例配置、性能优化
+Unified logging configuration module (enhanced).
+Supports modular loggers, singleton configuration, and performance tuning.
 """
 import sys
 import logging
@@ -12,7 +12,7 @@ from crypto_data_engine.common.config.paths import PROJECT_ROOT
 
 
 class LogConfig(BaseModel):
-    """日志配置模型"""
+    """Logging configuration model."""
     level: str = "INFO"
     console_level: str = "INFO"
     file_level: str = "DEBUG"
@@ -39,7 +39,7 @@ class LogConfig(BaseModel):
 
 
 class LoggerManager:
-    """日志管理器 - 单例模式"""
+    """Singleton logger manager."""
 
     _instance: Optional['LoggerManager'] = None
     _initialized: bool = False
@@ -55,18 +55,18 @@ class LoggerManager:
             self._module_loggers: Dict[str, Any] = {}
 
     def setup_logger(self) -> None:
-        """全局日志配置 - 只执行一次"""
+        """Configure global logging once."""
         if self._initialized:
             return
 
-        # 清空默认配置
+        # Clear default sinks
         _loguru_logger.remove()
 
-        # 确保日志目录存在
+        # Ensure log directory exists
         self.config.log_dir.mkdir(parents=True, exist_ok=True)
         log_file_path = self.config.log_dir / self.config.log_file
 
-        # 控制台输出
+        # Console sink
         _loguru_logger.add(
             sys.stdout,
             level=self.config.console_level,
@@ -75,7 +75,7 @@ class LoggerManager:
             colorize=True
         )
 
-        # 文件输出
+        # File sink
         _loguru_logger.add(
             str(log_file_path),
             level=self.config.file_level,
@@ -87,7 +87,7 @@ class LoggerManager:
             enqueue=self.config.enqueue
         )
 
-        # 接管标准库日志
+        # Intercept standard logging if enabled
         if self.config.intercept_standard_logging:
             self._setup_standard_logging_intercept()
 
@@ -96,19 +96,19 @@ class LoggerManager:
         _loguru_logger.bind(module="LoggerManager").info(f"📁 Log files -> {log_file_path}")
 
     def get_module_logger(self, module_name: str):
-        """获取特定模块的 logger - 缓存复用"""
+        """Return module-specific logger with caching."""
         if module_name not in self._module_loggers:
-            # 确保全局配置已初始化
+            # Ensure global configuration initialized
             if not self._initialized:
                 self.setup_logger()
 
-            # 创建绑定模块名的 logger
+            # Create logger bound to module name
             self._module_loggers[module_name] = _loguru_logger.bind(module=module_name)
 
         return self._module_loggers[module_name]
 
     def _setup_standard_logging_intercept(self) -> None:
-        """接管标准库日志"""
+        """Intercept standard library logging and redirect to Loguru."""
         class InterceptHandler(logging.Handler):
             def emit(self, record):
                 try:
@@ -116,7 +116,7 @@ class LoggerManager:
                 except Exception:
                     level = record.levelno
 
-                # 使用原始 logger 名作为模块标识
+                # Use original logger name as module marker
                 bound_logger = _loguru_logger.bind(module=record.name)
                 bound_logger.opt(depth=6, exception=record.exc_info).log(
                     level, record.getMessage()
@@ -128,7 +128,7 @@ class LoggerManager:
             force=True
         )
 
-        # 接管常用库
+        # Intercept common libraries
         intercepted_loggers = [
             "uvicorn", "uvicorn.error", "uvicorn.access",
             "fastapi", "httpx", "requests",
@@ -141,7 +141,7 @@ class LoggerManager:
             logging.getLogger(logger_name).propagate = False
 
     def add_service_handler(self, service_name: str) -> None:
-        """为特定服务添加专门的日志文件"""
+        """Attach dedicated log file for a given service."""
         service_log_file = self.config.log_dir / f"{service_name}.log"
 
         _loguru_logger.add(
@@ -161,12 +161,12 @@ class LoggerManager:
         )
 
 
-# 全局管理器实例
+# Global manager instance
 _manager: Optional[LoggerManager] = None
 
 
 def get_logger_manager(config: Optional[LogConfig] = None) -> LoggerManager:
-    """获取全局日志管理器单例"""
+    """Return singleton logger manager."""
     global _manager
     if _manager is None:
         _manager = LoggerManager(config)
@@ -174,15 +174,15 @@ def get_logger_manager(config: Optional[LogConfig] = None) -> LoggerManager:
 
 
 def setup_logger(config: Optional[LogConfig] = None) -> None:
-    """全局日志初始化 - 应用启动时调用一次"""
+    """Initialize logging once at application startup."""
     manager = get_logger_manager(config)
     manager.setup_logger()
 
 
 def get_logger(module_name: Optional[str] = None):
-    """获取模块专用 logger - 每个模块调用一次并缓存"""
+    """Get module-specific logger and cache it."""
     if module_name is None:
-        # 获取调用者的模块名
+        # Infer caller's module name
         import inspect
         frame = inspect.currentframe()
         if frame and frame.f_back:
@@ -195,7 +195,7 @@ def get_logger(module_name: Optional[str] = None):
 
 
 def get_service_logger(service_name: str):
-    """获取服务专用 logger - 会写入独立文件"""
+    """Get service-specific logger writing to dedicated file."""
     manager = get_logger_manager()
     manager.add_service_handler(service_name)
     return _loguru_logger.bind(module=service_name, service=service_name)

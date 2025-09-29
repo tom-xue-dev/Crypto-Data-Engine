@@ -15,7 +15,7 @@ def start_celery_worker(queue_name: str, service_name: str):
         f"--queues={queue_name}",
         f"--hostname={service_name}@%h",
         f"--pool={pool_mode}",
-        "-E"  # ✅ 开启事件事件上报
+        "-E"  # Enable event reporting
     ]
 
     logger.info(f"🚀 Starting Celery worker: {' '.join(cmd)}")

@@ -14,7 +14,7 @@ class TaskType(Enum):
 
 @dataclass
 class TaskConfig:
-    """任务配置"""
+    """Task configuration."""
     task_type: TaskType
     name: str
     module_path: str

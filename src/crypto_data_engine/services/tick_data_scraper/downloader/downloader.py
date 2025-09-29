@@ -34,7 +34,7 @@ class DownloadContext:
 
 
 class FileDownloader:
-    """专注于文件下载的下载器"""
+    """Downloader dedicated to file retrieval."""
 
     def __init__(self, context: DownloadContext):
         self.context = context
@@ -42,7 +42,7 @@ class FileDownloader:
 
     @staticmethod
     def verify_checksum(file_path: str, expected_checksum: str) -> bool:
-        """验证文件校验和"""
+        """Validate checksum."""
         expected_checksum = expected_checksum.split()[0].strip()
         sha256 = hashlib.sha256()
 
@@ -54,7 +54,7 @@ class FileDownloader:
         return computed_checksum == expected_checksum
 
     def download_file(self, symbol: str, year: int, month: int) -> Optional[str]:
-        """下载单个文件，返回下载后的文件路径"""
+        """Download a single file and return its local path."""
         file_name = self.adapter.get_file_name(symbol, year, month)
         url = self.adapter.build_download_url(symbol, year, month)
         os.makedirs(os.path.join(self.context.save_dir,symbol), exist_ok=True)
@@ -70,7 +70,7 @@ class FileDownloader:
             r.raise_for_status()
             with open(local_file_path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=8192):
-                    if chunk:  # 过滤空块
+                    if chunk:  # Skip empty chunks
                         f.write(chunk)
             if self._verify_download(symbol, year, month, local_file_path):
                 return local_file_path
@@ -84,7 +84,7 @@ class FileDownloader:
             return None
 
     def _verify_download(self, symbol: str, year: int, month: int, file_path: str) -> bool:
-        """验证下载的文件（校验和等）"""
+        """Validate the downloaded file (checksum, size, etc.)."""
         try:
             if hasattr(self.adapter, 'supports_checksum') and self.adapter.supports_checksum:
                 checksum_url = self.adapter.build_checksum_url(symbol, year, month)
@@ -108,7 +108,7 @@ class FileDownloader:
             return False
 
     def run_download_pipeline(self, config: Dict):
-        """运行下载流水线 - 只负责下载"""
+        """Run the download pipeline (download only)."""
         max_threads = config['max_threads']
         start_date = config['start_date']
         end_date = config['end_date']
@@ -116,7 +116,7 @@ class FileDownloader:
         os.makedirs(save_dir, exist_ok=True)
         download_counter = multiprocessing.Value('i', 0)
         failed_counter = multiprocessing.Value('i', 0)
-        # 获取交易对列表
+        # Fetch symbols
         if config['symbols'] == "auto":
             symbols = self.adapter.get_all_symbols(config.get('filter_suffix'))
         else:
@@ -134,7 +134,7 @@ class FileDownloader:
 
         start_time = time.time()
 
-        # 使用线程池进行并发下载
+        # Use a thread pool for concurrent downloads
         with tqdm(total=total_tasks, desc=f"[{self.adapter.name} Download]") as pbar:
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_threads) as executor:
                 future_to_task = {
@@ -154,13 +154,13 @@ class FileDownloader:
 
         end_time = time.time()
 
-        logger.info(f"\n✅ {self.adapter.name} 下载完成:")
-        logger.info(f"   📥 成功下载: {download_counter.value}")
-        logger.info(f"   ❌ 失败/跳过: {failed_counter.value}")
-        logger.info(f"   ⏰ 耗时: {end_time - start_time:.2f} 秒")
+        logger.info(f"\n✅ {self.adapter.name} download finished:")
+        logger.info(f"   📥 Successful downloads: {download_counter.value}")
+        logger.info(f"   ❌ Failed/skipped: {failed_counter.value}")
+        logger.info(f"   ⏰ Elapsed seconds: {end_time - start_time:.2f}")
 
     def _download_task(self, symbol: str, year: int, month: int, pbar, success_counter, failed_counter) -> bool:
-        """单个下载任务"""
+        """Single download unit."""
         try:
             result = self.download_file(symbol, year, month)
             pbar.update(1)
@@ -205,7 +205,7 @@ class FileDownloader:
 
 
     def _generate_download_tasks(self, symbols: List[str], start_date: str, end_date: str,completed: list) -> List[Tuple[str, int, int]]:
-        """生成下载任务列表"""
+        """Generate download task list."""
         tasks = []
 
         for symbol in symbols:
@@ -221,6 +221,6 @@ class FileDownloader:
         return tasks
 
 
-# 保持向后兼容性的别名
+# Backward compatibility alias
 MultiExchangeDownloadContext = DownloadContext
 MultiExchangeDownloader = FileDownloader

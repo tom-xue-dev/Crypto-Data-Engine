@@ -7,7 +7,7 @@ import pandas as pd
 
 
 class ExchangeAdapter(ABC):
-    """交易所适配器抽象基类"""
+    """Abstract base class for exchange adapters."""
     def __init__(self, config: Dict):
         self.config = config
         self.base_url = config['base_url']
@@ -16,25 +16,25 @@ class ExchangeAdapter(ABC):
 
     @abstractmethod
     def get_all_symbols(self, suffix_filter: Optional[str] = None) -> List[str]:
-        """获取所有交易对"""
+        """Return all trading pairs."""
         pass
 
     @abstractmethod
     def build_download_url(self, symbol: str, year: int, month: int) -> str:
-        """构建下载URL"""
+        """Construct download URL."""
         pass
 
     @abstractmethod
     def build_checksum_url(self, symbol: str, year: int, month: int) -> str:
-        """构建校验和URL"""
+        """Construct checksum URL."""
         pass
 
     @abstractmethod
     def get_file_name(self, symbol: str, year: int, month: int) -> str:
-        """获取文件名"""
+        """Return file name."""
         pass
 
     @abstractmethod
     def process_raw_data(self, data: pd.DataFrame) -> pd.DataFrame:
-        """处理原始数据格式"""
+        """Process raw data format."""
         pass

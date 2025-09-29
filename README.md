@@ -1,218 +1,194 @@
-# Quantitative Backtesting System 
--> 🚀 A Modular, Distributed Framework for Quantitative Trading Backtesting
+# Crypto Data Engine
 
-This project implements a scalable quantitative backtesting system for cryptocurrency trading strategies. It processes high-frequency tick data from sources like Binance, aggregates it into bars (e.g., tick bars, volume bars, dollar bars), generates features, produces trading signals, performs backtesting, and visualizes results.
-
-The system is built with a microservices architecture and supports distributed computing via Celery and Ray. Each module communicates via HTTP APIs to ensure loose coupling, scalability, and independent deployment.
+A modular framework for downloading cryptocurrency tick data, aggregating it into research-ready bars, and running strategy backtests. The stack combines a FastAPI API surface, Celery-based distributed workers, and a structured configuration system so you can orchestrate data pipelines end-to-end.
 
 ---
-
-## 🔧 Key Modules
-
-- **Tick Data Download**: Fetches and processes raw trade data from exchanges like Binance.
-- **Bar Aggregation**: Constructs custom bars (tick, volume, dollar) from raw data.
-- **Feature Generation**: Computes statistical features and technical indicators.
-- **Signal Generation**: Applies rules or ML models to produce trading signals.
-- **Backtesting**: Simulates trading strategies with slippage, fees, and risk controls.
-- **Visualization**: Creates charts, reports, and dashboards for strategy evaluation.
+## Highlights
+- **FastAPI service** exposing download and aggregation endpoints under `/api/v1`
+- **Celery workers** for IO-heavy (tick download) and CPU-heavy (bar generation) tasks
+- **Composable configuration** via Pydantic settings + YAML templates
+- **Database persistence** for task state (PostgreSQL via SQLAlchemy)
+- **CLI tooling** powered by Typer for local orchestration and setup
+- **Docker support** for Redis, Postgres, API, and worker processes
 
 ---
+## Architecture
+```
+Client / CLI
+    ↓
+FastAPI (`crypto_data_engine.server`)
+    ↓ submit tasks
+Celery (Redis broker & backend)
+    ↓ dispatch queues (`io_intensive`, `cpu`)
+Task workers (`task_manager.celery_worker`)
+    ├─ Tick download pipeline
+    └─ Bar aggregation pipeline
+```
+Optional services such as Flower (Celery monitoring) and a Ray cluster can be added when you need extra observability or distributed compute.
 
-## 📂 Project Structure
-
+---
+## Project Structure
 ```text
-project/
-├── api_gateway/                  # FastAPI API Gateway for HTTP endpoints
-│   ├── main.py                   # FastAPI app entrypoint
-│   └── tasks.py                  # Celery task definitions
-├── celery_worker/                # Celery workers for task execution
-│   └── worker.py                 # Worker configuration and tasks
-├── ray_cluster/                  # Ray integration for distributed compute
-│   └── ray_tasks.py              # Ray remote functions
-├── modules/                      # Microservices for each core function
-│   ├── download/                 # Tick data download service
-│   ├── bar_aggregation/          # Bar construction service
-│   ├── feature_generation/       # Feature engineering service
-│   ├── signal_generation/        # Signal creation service
-│   ├── backtesting/              # Backtesting engine service
-│   └── visualization/            # Reporting and visualization service
-├── configs/                      # Configuration files (YAML/.env)
-│   ├── celery_config.py          # Celery settings
-│   └── ray_config.py             # Ray cluster settings
-├── data/                         # Raw and processed data storage
-├── docker-compose.yml            # Containerized deployment
-├── requirements.txt              # Python dependencies
-└── README.md                     # This file
-```
-
----
-# Distributed Cryptocurrency Backtesting System
-
-## ⚙️ Architecture Overview
-
-```
-Client → FastAPI (API Gateway)
-         → Celery.delay() Submit Task
-         → Redis (Broker/Backend)
-         → Celery Worker
-         → download_task() → Ray.remote()
-         → Ray Cluster (distributed compute)
-         → Optional Redis Backend (for results)
-```
-A modular framework for collecting market data, engineering features and running strategy backtests. The project targets high-frequency cryptocurrency trading and combines a FastAPI web server with Celery workers so heavy workloads can be processed in parallel.
-
-### Description
-## Features
-
-- **FastAPI Gateway**: Receives and routes incoming requests.
-- **Celery Dispatcher**: Enqueues tasks to Redis and distributes to workers.
-- **Ray Cluster**: Handles compute-intensive IO/CPU tasks in parallel.
-- **Redis**: Acts as broker/backend for Celery task coordination.
-- **Tick data scraper** – download and verify raw trade data from exchanges.
-- **Bar and feature pipeline** – aggregate ticks into research datasets and compute indicators.
-- **Backtesting engine** – evaluate strategies with realistic fees and slippage.
-- **Distributed tasks** – Celery workers execute jobs concurrently; optional Ray integration for large scale compute.
-- **CLI utilities** – Typer based commands to start servers, workers and manage configuration.
-
----
-## Project layout
-
-## 🛠 Installation & Setup
-```
-BTC-trading/
-├── deploy/                      # Docker compose and deployment helpers
-├── docs/                        # Additional documentation (e.g. API_README.md)
+crypto-data-engine/
+├── deploy/                  # Docker files and compose stack
+├── docs/                    # API reference and design notes
 ├── src/
-│   ├── crypto_data_engine/      # FastAPI server and data services
-│   └── task_manager/            # Celery configuration and workers
-├── tests/                       # Pytest suite
-├── pyproject.toml               # Project metadata & dependencies (Poetry)
+│   ├── crypto_data_engine/
+│   │   ├── common/          # Config loaders, logging utilities
+│   │   ├── db/              # Models, repositories, session helpers
+│   │   ├── server/          # FastAPI app, routers, request/response schemas
+│   │   └── services/        # Tick downloader, bar aggregator, backtest modules
+│   └── task_manager/
+│       ├── celery_app.py    # Celery configuration
+│       └── celery_worker.py # Registered Celery tasks
+├── data/                    # Local data artifacts (tick, aggregated, configs)
+├── logs/                    # Log output (Loguru)
+├── pyproject.toml           # Poetry project definition
 └── README.md
 ```
+> The `data/` directory is intended for local artifacts and is not meant to be checked into version control.
 
-### Prerequisites
-## Getting started
+---
+## Prerequisites
+- Python **3.12**
+- [Poetry](https://python-poetry.org/)
+- Redis (broker/result backend for Celery)
+- PostgreSQL (task metadata store)
+- Optional: Docker & Docker Compose
 
-- Python 3.10+
-- Redis (broker/backend)
-- Ray (`pip install ray[default]`)
-- Docker (optional, for full deployment)
-### Installation
-
-### Setup
-This project uses [Poetry](https://python-poetry.org/) for dependency management:
-
+---
+## Setup
 ```bash
-git clone https://github.com/your-repo/quant-backtest-system.git
-cd quant-backtest-system
-pip install -r requirements.txt
+# clone the repo
+git clone <repo-url>
+cd crypto-data-engine
+
+# install dependencies
 poetry install
+
+# activate virtual environment (optional)
+poetry shell
 ```
 
-### Start Services
-### Launch the API server
+### Environment Variables
+Create a `.env` in the project root or export the variables in your shell:
+```
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
+DB_URL=postgresql+psycopg://admin:123456@localhost:5432/quantdb
+SERVER_HOST=0.0.0.0
+SERVER_PORT=8080
+```
+Adjust Redis/Postgres credentials to match your environment. Additional configuration values live under `data/config/config_templates/` and can be generated with the CLI command below.
 
+---
+## CLI Commands
+All commands are exposed through Typer (`crypto_data_engine.main`). Prefix them with `poetry run` if you are not inside a Poetry shell.
+
+- `poetry run main start [--host HOST] [--port PORT]`
+  - Launch the FastAPI server (defaults pulled from `ServerConfig`).
+
+- `poetry run main run-worker <module>`
+  - Start a Celery worker bound to `task_manager.celery_app`. The `module` argument is informational; the worker currently consumes all registered queues.
+
+- `poetry run main init-config`
+  - Generate YAML configuration templates under `data/config/config_templates/` based on the Pydantic settings classes.
+
+- `poetry run main init-db`
+  - Initialize database tables required for task tracking.
+
+- `poetry run main dev-all`
+  - Convenience command that spins up three Celery workers (downloader, bar generator, backtest) plus a development FastAPI server. Use only in local environments.
+
+---
+## Running the Services
+1. **Ensure infrastructure is available**
+   - Redis (for Celery) and PostgreSQL (for task metadata)
+2. **Initialize configs and DB**
+   ```bash
+   poetry run main init-config
+   poetry run main init-db
+   ```
+3. **Start FastAPI**
+   ```bash
+   poetry run main start
+   ```
+4. **Start Celery worker(s)**
+   ```bash
+   poetry run main run-worker downloader
+   ```
+   The worker registers tasks such as `tick.download`, `tick.extract_task`, and `bar.aggregate`. You can run multiple workers and pin them to specific queues via Celery configuration if needed.
+
+---
+## API Usage
+### Download Symbols
+```
+curl "http://localhost:8080/api/v1/download/exchanges"
+```
+
+### Trigger a Download Job
+```
+curl -X POST "http://localhost:8080/api/v1/download/downloads/jobs" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "exchange": "binance",
+        "symbols": ["BTCUSDT"],
+        "year": 2023,
+        "months": [1, 2]
+      }'
+```
+This call creates task entries in the database and enqueues Celery jobs (`tick.download`).
+
+### Aggregate Bars
+```
+curl -X POST "http://localhost:8080/api/v1/aggregate/bars" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "exchange": "binance",
+        "bar_type": "volume_bar",
+        "threshold": 1000,
+        "symbols": ["BTCUSDT"]
+      }'
+```
+The API resolves defaults from `AggregationConfig`, pushes a `bar.aggregate` Celery task, and writes aggregation results under `data/data_aggrate/`.
+
+---
+## Data Layout
+- `data/tick_data/` – Downloaded and processed tick data (per exchange/symbol)
+- `data/tick_test/` – Sample archives used for local testing
+- `data/data_aggrate/` – Generated bar files grouped by bar type
+- `data/config/` – YAML configuration templates and overrides
+
+You can change default locations via the settings classes in `crypto_data_engine.common.config`.
+
+---
+## Development Notes
+- Logging is handled by Loguru. Logs are written to `logs/app.log` (see `crypto_data_engine.common.logger`).
+- Database models and repositories live under `crypto_data_engine.db`.
+- Celery task routing is configured in `task_manager.celery_app`.
+
+### Testing
+Pytest is configured in `pyproject.toml`. Once tests are added under `tests/`, run:
 ```bash
-# Redis
-redis-server         # or: docker run -d -p 6379:6379 redis
-
-# Ray (start head node)
-ray start --head
-
-# Celery worker
-celery -A api_gateway.tasks worker --loglevel=info
-
-# API Gateway
-uvicorn api_gateway.main:app --reload
-poetry run main start
+poetry run pytest -q
 ```
 
-### Docker (optional)
-### Run a Celery worker
-
+---
+## Docker Compose
+A reference stack is provided in `deploy/docker-compose.yml`.
 ```bash
-docker-compose up -d
-poetry run main run-worker downloader
+# build and start services in detached mode
+cd deploy
+docker compose up -d
 ```
+This brings up Redis, Postgres, the API service, a Celery worker, and Flower (Celery dashboard). Bind mounts map the source tree into containers for iterative development.
 
 ---
-
-## 🚀 Usage Example: Submitting a Download Task
-### Run the test suite
- 
-```bash
-curl -X POST "http://localhost:8000/submit_download"      -H "Content-Type: application/json"      -d '{
-           "symbols": ["BTCUSDT", "ETHUSDT"],
-           "start_date": "2022-01",
-           "end_date": "2022-03"
-         }'
-pytest
-```
-
-You will receive a `task_id`.
-## Docker deployment
-
-Check status:
-A minimal `docker-compose.yml` is provided under `deploy/`:
-
-```bash
-curl http://localhost:8000/status/{task_id}
-docker compose -f deploy/docker-compose.yml up -d
-```
-
----
-
-## 🔍 Monitoring
-
-| Component | Tool                  | URL                         |
-|-----------|-----------------------|-----------------------------|
-| Celery    | Flower                | http://localhost:5555       |
-| Ray       | Ray Dashboard         | http://localhost:8265       |
-
----
-
-## ➕ Extending the System
-
-To add a new module (e.g., feature generation):
-
-1. Create a FastAPI service under `modules/feature_generation/`
-2. Add Celery tasks that call Ray remote functions
-3. Define a `POST` endpoint in API Gateway to submit this task
-4. Optionally, register this module in your gateway or orchestrator
-
----
-
-## 📈 Performance & Scaling
-
-- **Horizontal Scaling**: Add more Celery workers or Ray nodes
-- **Parquet Format**: Efficient for storing high-frequency data
-- **Fault Tolerance**:
-  - Celery retries failed tasks
-  - Ray recovers failed workers automatically
-
----
-
-## 🔮 Future Enhancements
-
-- Add ML-based signal generation (e.g., PyTorch integration)
-- Use Kubernetes for full orchestration
-- Support additional exchanges (e.g., Coinbase, Kraken)
-
----
-
-## 📧 Contact
-
-For issues, please open a GitHub issue or contact:  
-📮 `x513922066@gmail.com`
-
----
-
-## 🌟 Contributing
-
-Pull requests are welcome! Please focus on:
 ## Contributing
- 
-- Modular, testable design
-- Documentation and clarity
-- Code quality and extensibility
-Pull requests are welcome. Please add tests for new features and keep documentation up to date.
+1. Fork the repository and create a feature branch.
+2. Keep pull requests focused and include relevant documentation updates.
+3. Run linting/tests before submitting (see `pyproject.toml` for available tooling).
+
+---
+## License
+Released under the MIT License. See `LICENSE` (or project metadata) for details.

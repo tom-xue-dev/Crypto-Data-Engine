@@ -1,5 +1,5 @@
 """
-下载任务Repository - 基于BaseRepository的简化版本
+Download task repository - simplified wrapper around BaseRepository.
 """
 from typing import List, Optional, Tuple, Dict
 from ..models.download import DownloadTask, TaskStatus
@@ -7,13 +7,13 @@ from .base import BaseRepository
 
 
 class DownloadTaskRepository(BaseRepository[DownloadTask]):
-    """下载任务Repository - 提供基本的CRUD操作"""
+    """Download task repository providing CRUD operations."""
     _model = DownloadTask
-    # ==================== 插入新记录 ====================
+    # ==================== Insert operations ====================
 
     @classmethod
     def create_task(cls,exchange: str,symbol: str,year: int,month: int,file_name: str = None,**kwargs) -> DownloadTask:
-        """创建下载任务"""
+        """Create a download task."""
         if not file_name:
             file_name = f"{symbol}-aggTrades-{year}-{month:02d}.zip"
 
@@ -29,23 +29,22 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
     @classmethod
     def create_batch_tasks(cls,exchange: str,symbols: List[str],year_month_pairs: List[Tuple[int, int]],**kwargs) \
             -> Tuple[List[DownloadTask], List[Dict]]:
-        """
-        批量创建下载任务
+        """Bulk create download tasks.
         Args:
-            exchange: 交易所名称
-            symbols: 交易对列表
-            year_month_pairs: 年月对列表 [(year, month), ...]
-            priority: 优先级
-            **kwargs: 其他任务属性
+            exchange: exchange name
+            symbols: list of trading pairs
+            year_month_pairs: list of (year, month)
+            priority: task priority
+            **kwargs: extra attributes
 
         Returns:
-            Tuple[List[DownloadTask], List[Dict]]: (创建的任务列表, 跳过的任务信息列表)
+            Tuple[List[DownloadTask], List[Dict]]: (created tasks, skipped tasks info)
         """
         created_tasks = []
         skipped_tasks = []
         for symbol in symbols:
             for year, month in year_month_pairs:
-                # 检查任务是否已存在
+                # Skip if the task already exists
                 if cls.task_exists(exchange, symbol, year, month):
                     skipped_tasks.append({
                         'exchange': exchange,
@@ -73,16 +72,16 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
                         'symbol': symbol,
                         'year': year,
                         'month': month,
-                        'reason': f'创建失败: {str(e)}'
+                        'reason': f'Creation failed: {str(e)}'
                     })
 
         return created_tasks, skipped_tasks
 
-    # ==================== 修改记录的某个字段 ====================
+    # ==================== Update operations ====================
 
     @classmethod
     def update_status(cls, task_id: int, status: TaskStatus) -> Optional[DownloadTask]:
-        """更新任务状态"""
+        """Update task status."""
         return cls.update(task_id, status=status)
 
     @classmethod
@@ -92,7 +91,7 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
         local_path: str = None,
         file_size: int = None
     ) -> Optional[DownloadTask]:
-        """更新文件信息"""
+        """Update file metadata."""
         update_data = {}
         if local_path:
             update_data['local_path'] = local_path
@@ -101,23 +100,23 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
 
         return cls.update(task_id, **update_data) if update_data else None
 
-    # ==================== 删除某个记录 ====================
+    # ==================== Delete operations ====================
 
     @classmethod
     def delete_task(cls, task_id: int) -> bool:
-        """删除任务"""
+        """Delete task by id."""
         return cls.delete(task_id)
 
     @classmethod
     def delete_by_status(cls, status: TaskStatus) -> int:
-        """根据状态删除任务"""
+        """Delete tasks by status."""
         return cls.delete_by_kwargs(status=status)
 
-    # ==================== 查询当前所有记录等 ====================
+    # ==================== Query operations ====================
 
     @classmethod
     def get_all_tasks(cls,exchange: str = None,status: TaskStatus = None)-> List[DownloadTask]:
-        """获取所有任务"""
+        """Retrieve tasks with optional filters."""
         filters = {}
         if exchange:
             filters['exchange'] = exchange
@@ -130,7 +129,7 @@ class DownloadTaskRepository(BaseRepository[DownloadTask]):
 
     @classmethod
     def task_exists(cls, exchange: str, symbol: str, year: int, month: int) -> bool:
-        """检查任务是否存在"""
+        """Check if a task exists."""
         return cls.exists(
             exchange=exchange,
             symbol=symbol,

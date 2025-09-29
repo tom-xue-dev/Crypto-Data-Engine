@@ -25,7 +25,7 @@ def to_snake_case(name: str) -> str:
     return re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower() + ".yaml"
 
 def load_config(cls: Type[BaseModel]) -> BaseModel:
-    """根据类名自动加载对应 YAML 并实例化配置对象"""
+    """Load YAML configuration for the given class and instantiate it."""
     filename = f"{to_snake_case(cls.__name__)}"
     path = CONFIG_ROOT / filename
     if not path.exists():
@@ -37,10 +37,10 @@ def load_config(cls: Type[BaseModel]) -> BaseModel:
     return cls(**filtered_data)
 
 def create_template(instance: BaseModel, output_dir: Path = Path("")) -> None:
-    """create yaml file based on the common instance"""
+    """Create YAML template for the provided settings instance."""
     filename = to_snake_case(instance.__class__.__name__)
     path = output_dir / filename
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         yaml.dump(instance.model_dump(mode="json"), f, sort_keys=False, allow_unicode=True)
-    print(f"✅ create setting template : {path.resolve()}")
+    print(f"✅ Created settings template: {path.resolve()}")

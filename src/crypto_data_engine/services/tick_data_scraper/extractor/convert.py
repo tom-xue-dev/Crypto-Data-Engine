@@ -7,9 +7,9 @@ logger = logging.getLogger(__name__)
 
 def extract_archive(directory: str, file_name: str) -> dict:
     """
-    解压指定目录中的压缩包。
-    支持 zip/tar/tar.gz 等（由 shutil.unpack_archive 决定）。
-    返回：{"archive": <压缩包路径>, "out_dir": <解压目录>, "files": [解压出的文件列表]}
+    Extract an archive located in the target directory.
+    Supports zip/tar/tar.gz (handled by `shutil.unpack_archive`).
+    Returns: {"archive": <archive path>, "out_dir": <extracted directory>, "files": [list of files]}
     """
     directory_p = Path(directory)
     archive = directory_p / file_name
@@ -17,9 +17,9 @@ def extract_archive(directory: str, file_name: str) -> dict:
         raise FileNotFoundError(f"archive not found: {archive}")
     out_dir_p = directory_p / archive.stem
     out_dir_p.mkdir(parents=True, exist_ok=True)
-    # 解压
-    shutil.unpack_archive(str(archive), str(out_dir_p))  # 注意：需要是 str
-    # 收集解压出的文件
+    # Extract files
+    shutil.unpack_archive(str(archive), str(out_dir_p))  # Must be str
+    # Collect extracted files
     files = [str(p) for p in out_dir_p.rglob("*") if p.is_file()]
     logger.info(f"Extracted {archive} -> {out_dir_p}, {len(files)} files")
     return {"archive": str(archive), "out_dir": str(out_dir_p), "files": files}
@@ -33,9 +33,9 @@ def convert_dir_to_parquet(
     parquet_kwargs: dict | None = None,
 ) -> list[str]:
     """
-    将解压目录中匹配 pattern 的文件批量转为 Parquet。
-    默认将 *.csv 转为同名 .parquet；可用 output_dir 覆盖输出目录。
-    返回：生成的 parquet 文件路径列表
+    Convert files matching `pattern` under the extracted directory to Parquet.
+    Defaults to converting *.csv to *.parquet; override output_dir if needed.
+    Returns a list of generated parquet file paths.
     """
     csv_read_kwargs = csv_read_kwargs or {}
     parquet_kwargs = parquet_kwargs or {}
@@ -55,14 +55,14 @@ def convert_dir_to_parquet(
         return parquet_paths
 
     for src in src_files:
-        # 目标路径（保持相对结构）
+        # Target path (preserve relative layout)
         rel = src.relative_to(src_dir) if src.parent != src_dir else src.name
         out_path = out_root / Path(rel).with_suffix(".parquet")
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 读写
-        df = pd.read_csv(src, **csv_read_kwargs)  # 若是 JSON，可改成 read_json
-        df.to_parquet(out_path, **parquet_kwargs)  # 例如 engine="pyarrow", compression="zstd"
+        # Read/write operations
+        df = pd.read_csv(src, **csv_read_kwargs)  # Use read_json for JSON sources
+        df.to_parquet(out_path, **parquet_kwargs)  # e.g. engine="pyarrow", compression="zstd"
 
         parquet_paths.append(str(out_path))
         logger.info(f"Converted {src} -> {out_path}")

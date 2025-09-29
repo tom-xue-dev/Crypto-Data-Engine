@@ -8,13 +8,13 @@ from task_manager.celery_app import celery_app
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/v1/aggregate", tags=["Bar 聚合"])
+router = APIRouter(prefix="/api/v1/aggregate", tags=["Bar Aggregation"])
 
 
 
 
 
-@router.post("/bars", summary="提交 Bar 聚合任务（推送至 Celery）")
+@router.post("/bars", summary="Submit bar aggregation job (dispatch to Celery)")
 def submit_aggregate_job(req: AggregateRequest) -> Dict[str, Any]:
     try:
         # Use defaults if user omitted params
@@ -40,6 +40,6 @@ def submit_aggregate_job(req: AggregateRequest) -> Dict[str, Any]:
             "payload": task_payload,
         }
     except Exception as e:
-        logger.error(f"提交聚合任务失败: {e}")
+        logger.error(f"Failed to submit aggregation job: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

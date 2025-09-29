@@ -37,10 +37,10 @@ class AggregateTaskRepository(BaseRepository[AggregateTask]):
         **kwargs
     ) -> Tuple[List[AggregateTask], List[Dict]]:
         """
-        批量创建聚合任务（与 create_task 参数风格一致）
-        - file_name 不传则按 `{symbol}-{bar_type}{default_ext}` 生成
-        - 若提供 default_output_dir 则自动拼接 file_path
-        - 存在性检查：exchange + symbol + bar_type + (file_name 或 file_path)
+        Bulk create aggregation tasks (mirrors `create_task` parameters).
+        - If `file_name` is absent, generate `{symbol}-{bar_type}{default_ext}`.
+        - When `default_output_dir` is provided, auto-build `file_path`.
+        - Existence check: exchange + symbol + bar_type + (file_name or file_path).
         Returns:
             (created_tasks, skipped_tasks)
         """
@@ -48,7 +48,7 @@ class AggregateTaskRepository(BaseRepository[AggregateTask]):
         skipped: List[Dict] = []
 
         for symbol in symbols:
-            # 1) 生成 file_name / file_path（若未显式传入）
+            # 1) Generate file_name / file_path when not explicitly provided
             file_name = kwargs.get("file_name")
             file_path = kwargs.get("file_path")
 
@@ -58,7 +58,7 @@ class AggregateTaskRepository(BaseRepository[AggregateTask]):
             if not file_path and default_output_dir:
                 file_path = os.path.join(default_output_dir, file_name)
 
-            # 2) 去重：优先用 file_path 判断，其次用 file_name；再不行就用三元组
+            # 2) Deduplicate: prefer file_path > file_name > tuple fallback
             if cls.task_exists(
                 exchange=exchange,
                 symbol=symbol,
@@ -76,7 +76,7 @@ class AggregateTaskRepository(BaseRepository[AggregateTask]):
                 })
                 continue
 
-            # 3) 创建
+            # 3) Create
             try:
                 task = cls.create_task(
                     exchange=exchange,
@@ -94,7 +94,7 @@ class AggregateTaskRepository(BaseRepository[AggregateTask]):
                     "bar_type": bar_type,
                     "file_name": file_name,
                     "file_path": file_path,
-                    "reason": f"创建失败: {str(e)}"
+                    "reason": f"Creation failed: {str(e)}"
                 })
 
         return created, skipped
@@ -102,7 +102,7 @@ class AggregateTaskRepository(BaseRepository[AggregateTask]):
 
     @classmethod
     def get_all_tasks(cls,exchange: str = None,status: TaskStatus = None)-> List[AggregateTask]:
-        """获取所有任务"""
+        """Retrieve all tasks."""
         filters = {}
         if exchange:
             filters['exchange'] = exchange
@@ -117,7 +117,7 @@ class AggregateTaskRepository(BaseRepository[AggregateTask]):
     @with_db_session
     def get_ready_pairs(cls, exchange_name: str, db: Session):
         """
-        下载任务已完成，且不存在任何聚合任务的 (exchange, symbol)
+        Download tasks finished and no aggregation tasks exist for (exchange, symbol)
         """
         A, D = AggregateTask, DownloadTask
         from sqlalchemy import and_
@@ -135,7 +135,7 @@ class AggregateTaskRepository(BaseRepository[AggregateTask]):
             .all()
         )
         return rows  # List[Tuple[str, str]]
-    # ======= 辅助：存在性检查（配合上面的 create_batch_tasks） =======
+    # ======= Helper: existence check (paired with create_batch_tasks) =======
 
     @classmethod
     def task_exists(
@@ -147,10 +147,10 @@ class AggregateTaskRepository(BaseRepository[AggregateTask]):
         file_path: Optional[str] = None
     ) -> bool:
         """
-        存在性检查优先级：
-        1) 若有 file_path：按 (exchange, symbol, bar_type, file_path)
-        2) 否则若有 file_name：按 (exchange, symbol, bar_type, file_name)
-        3) 否则按 (exchange, symbol, bar_type) 粗粒度判断
+        Existence check precedence:
+        1) With file_path → (exchange, symbol, bar_type, file_path)
+        2) else with file_name → (exchange, symbol, bar_type, file_name)
+        3) otherwise fall back to coarse (exchange, symbol, bar_type)
         """
         if file_path:
             return cls.exists(

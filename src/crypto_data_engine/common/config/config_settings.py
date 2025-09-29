@@ -32,7 +32,7 @@ class CeleryConfig(BasicSettings):
     class Config:
         env_prefix = "CELERY_"
         extra = "ignore"
-        # 🔥 添加字段别名映射
+        # Add field alias mapping
         field_aliases = {
             "result_backend": "CELERY_RESULT_BACKEND"
         }
@@ -87,8 +87,8 @@ class Settings:
     aggregator_cfg:AggregationConfig = LazyLoadConfig(AggregationConfig)
 
 def create_all_templates() -> None:
-    """自动实例化所有配置类并生成对应 YAML 模板"""
-    # 👉 在这里添加你需要注册的配置类
+    """Instantiate all configuration classes and generate YAML templates."""
+    # Register all configuration classes that require template generation here
     instances = [
         TickDownloadConfig(),
         CeleryConfig(),

@@ -1,8 +1,8 @@
 """
-重构的下载器配置系统
-- 基础配置 + 交易所特定配置的分离设计
-- 支持多交易所扩展
-- 保持配置的灵活性和可维护性
+Refactored downloader configuration system.
+- Separate base configuration and exchange-specific configuration
+- Support multiple exchanges
+- Preserve flexibility and maintainability
 """
 from __future__ import annotations
 from pathlib import Path
@@ -12,24 +12,24 @@ from crypto_data_engine.common.config.paths import PROJECT_ROOT,DATA_ROOT
 from pydantic import BaseModel, Field, model_validator
 
 class BaseDownloadConfig(BaseSettings):
-    """下载器基础配置 - 通用设置"""
-    # --- 并发控制 ---
+    """Base downloader configuration – shared settings."""
+    # --- Concurrency control ---
     max_threads: int = 16
     convert_processes: int = 4
     queue_size: int = 100
-    # --- 网络设置 ---
+    # --- Network settings ---
     http_timeout: float = 60.0
     rate_limit_per_min: int = 1200
-    # --- 重试策略 ---
+    # --- Retry strategy ---
     max_retries: int = 3
     base_retry_delay: float = 1.0
     exponential_backoff: bool = True
-    # --- 数据处理 ---
+    # --- Data processing ---
     output_format: str = "parquet"  # parquet | csv | json
     compression: str = "brotli"     # brotli | gzip | snappy
     sort_by_timestamp: bool = True
     remove_duplicates: bool = True
-    # --- 监控 ---
+    # --- Monitoring ---
     log_level: str = "INFO"
     enable_progress_bar: bool = True
     class Config:
@@ -40,7 +40,7 @@ class BaseDownloadConfig(BaseSettings):
 
 
 class ExchangeConfig(BaseModel):
-    """单个交易所配置"""
+    """Single exchange configuration."""
     name: str
     base_url: str
     symbol_info_url: str
@@ -57,7 +57,7 @@ class ExchangeConfig(BaseModel):
 
 
 class MultiExchangeDownloadConfig(BaseDownloadConfig):
-    """多交易所下载配置"""
+    """Multiple exchange download configuration."""
     active_exchanges: List[str] = ["binance"]
     exchange_configs: Dict[str, ExchangeConfig] = {
         "binance": ExchangeConfig(
@@ -83,13 +83,13 @@ class MultiExchangeDownloadConfig(BaseDownloadConfig):
         )
     }
     def get_exchange_config(self, exchange_name: str) -> ExchangeConfig:
-        """获取指定交易所配置"""
+        """Return configuration for a specific exchange."""
         if exchange_name not in self.exchange_configs:
-            raise ValueError(f"不支持的交易所: {exchange_name}")
+            raise ValueError(f"Unsupported exchange: {exchange_name}")
         return self.exchange_configs[exchange_name]
 
     def get_merged_config(self, exchange_name: str) -> Dict:
-        """获取合并后的配置（基础配置 + 交易所配置）"""
+        """Merge base settings with exchange-specific configuration."""
         exchange_config = self.get_exchange_config(exchange_name)
 
         return {
@@ -117,7 +117,7 @@ class MultiExchangeDownloadConfig(BaseDownloadConfig):
         }
 
     def list_all_exchanges(self):
-        """打印所有交易所配置"""
+        """Return all exchange configurations."""
         exchanges = {}
         for name, cfg in self.exchange_configs.items():
             exchanges[name] = cfg
@@ -125,21 +125,21 @@ class MultiExchangeDownloadConfig(BaseDownloadConfig):
 
 
 if __name__ == "__main__":
-    # 测试配置
+    # Configuration smoke test
     from config_settings import settings
     download_config = settings.downloader_cfg
-    print("📦 支持的交易所:")
+    print("📦 Supported exchanges:")
     for name in download_config.exchange_configs.keys():
         print(f"  - {name}")
 
-    print(f"\n📊 Binance 配置:")
+    print(f"\n📊 Binance configuration:")
     binance_config = download_config.get_exchange_config("binance")
-    print(binance_config.get_data_dir())
-    # print(f"  数据目录: {binance_config['data_dir']}")
-    # print(f"  下载URL: {binance_config['base_url']}")
+    print(binance_config.data_dir)
+    # print(f"  Data directory: {binance_config['data_dir']}")
+    # print(f"  Download URL: {binance_config['base_url']}")
     #
-    # print(f"\n📊 OKX 配置:")
+    # print(f"\n📊 OKX configuration:")
     # okx_config = download_config.get_exchange_config("okx")
-    # print(f"  数据目录: {okx_config['data_dir']}")
-    # print(f"  下载URL: {okx_config['base_url']}")
+    # print(f"  Data directory: {okx_config['data_dir']}")
+    # print(f"  Download URL: {okx_config['base_url']}")
     pass

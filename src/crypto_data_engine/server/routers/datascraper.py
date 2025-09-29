@@ -1,5 +1,5 @@
 """
-数据抓取API路由 - 基于API文档规范
+Data scraper API routes following the documented schema.
 """
 from datetime import datetime, date
 from fastapi import APIRouter, Body, HTTPException, Query, Path, BackgroundTasks
@@ -12,26 +12,26 @@ from crypto_data_engine.server.constants.response import JobResponse, TaskRespon
 from crypto_data_engine.server.constants.response_code import ResponseCode
 from task_manager.celery_app import celery_app
 
-datascraper_router = APIRouter(prefix="/api/v1/download", tags=["数据抓取"])
+datascraper_router = APIRouter(prefix="/api/v1/download", tags=["Data Scraper"])
 
 logger = get_logger(__name__)
-# ==================== 源管理 ====================
+# ==================== Source management ====================
 
-@datascraper_router.get("/exchanges", summary="获取支持的数据源")
+@datascraper_router.get("/exchanges", summary="List supported data sources")
 async def get_sources():
-    """获取所有支持的数据源"""
+    """Return all supported data sources."""
     from crypto_data_engine.common.config.config_settings import settings
     source = settings.downloader_cfg.list_all_exchanges()
     response = BaseResponse(data=source)
     return response
 
-@datascraper_router.get("/{source}/symbols", summary="获取交易所支持的交易对")
+@datascraper_router.get("/{source}/symbols", summary="List trading pairs for an exchange")
 async def get_source_symbols(
-        source: str = Path(..., description="交易所名称"),
-        limit: int = Query(100, ge=1, le=1000, description="返回数量限制")
+        source: str = Path(..., description="Exchange name"),
+        limit: int = Query(100, ge=1, le=1000, description="Maximum number of symbols")
 ):
     try:
-        # 使用ccxt获取交易所信息
+        # Use ccxt to fetch exchange information
         exchange_class = getattr(ccxt, source.lower())
         exchange = exchange_class()
         markets = exchange.load_markets()
@@ -46,12 +46,12 @@ async def get_source_symbols(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"fail to get the symbol: {str(e)}")
 
-# ==================== 下载任务管理 ====================
+# ==================== Download task management ====================
 
 
-@datascraper_router.post("/downloads/jobs", response_model=JobResponse, summary="创建下载作业")
+@datascraper_router.post("/downloads/jobs", response_model=JobResponse, summary="Create download job")
 async def create_download_job(request: BatchDownloadRequest):
-    """创建批量下载作业并推送给Celery"""
+    """Create a batch download job and submit to Celery."""
     try:
         job_id = f"job_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         year_month_pairs = [(request.year, month) for month in request.months]
@@ -81,7 +81,7 @@ async def create_download_job(request: BatchDownloadRequest):
         return BaseResponse(code=ResponseCode.DB_ERROR,message="DB_ERROR",data=e)
 
     try:
-        # 推送到 Celery
+        # Submit tasks to Celery
         celery_task_ids = []
         for i, task in enumerate(created_tasks):
             celery_config = {
@@ -102,24 +102,24 @@ async def create_download_job(request: BatchDownloadRequest):
                 'celery_task_id': celery_result.id,
                 'status': celery_result.state
             })
-            # 更新任务状态
+            # Update task status
             DownloadTaskRepository.update_status(task.id, TaskStatus.PENDING)
         return JobResponse(
             job_id=job_id,
-            created_tasks=task_responses,  # 使用预构建的响应对象
+            created_tasks=task_responses,  # Use pre-built response objects
             skipped_tasks=skipped,
             total_created=len(created_tasks),
             total_skipped=len(skipped)
         )
 
     except Exception as e:
-        logger.error(f"推送任务失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"创建下载作业失败: {str(e)}")
+        logger.error(f"Failed to dispatch tasks: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create download job: {str(e)}")
 
 
-@datascraper_router.get("/celery/status/{celery_task_id}", summary="查询Celery任务状态")
+@datascraper_router.get("/celery/status/{celery_task_id}", summary="Query Celery task status")
 async def get_celery_task_status(celery_task_id: str):
-    """查询Celery任务的执行状态"""
+    """Return execution status for a Celery task."""
     try:
         from celery.result import AsyncResult
 
@@ -134,5 +134,5 @@ async def get_celery_task_status(celery_task_id: str):
             'failed': result.failed()
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"查询失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to query: {str(e)}")
 

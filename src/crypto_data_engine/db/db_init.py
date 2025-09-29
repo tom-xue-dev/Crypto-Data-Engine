@@ -25,10 +25,10 @@ def init():
     with engine.connect() as conn:
         result = conn.execute(text("SELECT 1 as test")).scalar_one()
         db_info = conn.execute(text("SELECT current_database(), current_user")).fetchone()
-        print(f"✅ 数据库连接成功!")
-        print(f"   测试查询结果: {result}")
-        print(f"   当前数据库: {db_info[0]}")
-        print(f"   当前用户: {db_info[1]}")
+        print("✅ Database connection succeeded!")
+        print(f"   Test query result: {result}")
+        print(f"   Current database: {db_info[0]}")
+        print(f"   Current user: {db_info[1]}")
 
 
 if __name__ == "__main__":

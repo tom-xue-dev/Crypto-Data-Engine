@@ -13,7 +13,7 @@ class BaseResponse(BaseModel):
 
 
 class TaskResponse(BaseModel):
-    """任务响应模型"""
+    """Task response model."""
     id: int
     exchange: str
     symbol: str
@@ -28,7 +28,7 @@ class TaskResponse(BaseModel):
 
 
 class JobResponse(BaseModel):
-    """作业响应模型"""
+    """Job response model."""
     job_id: str
     created_tasks: List[TaskResponse]
     skipped_tasks: List[dict]
@@ -37,7 +37,7 @@ class JobResponse(BaseModel):
 
 
 class MetricsResponse(BaseModel):
-    """指标响应模型"""
+    """Metrics response model."""
     total_tasks: int
     pending_tasks: int
     downloading_tasks: int

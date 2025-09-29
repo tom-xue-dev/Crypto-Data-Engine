@@ -1,5 +1,5 @@
 """
-基础Repository类 - 使用装饰器注入session
+Base repository class with session-aware decorators.
 """
 from typing import Type, TypeVar, Generic, List, Optional, Dict, Any
 from sqlalchemy.orm import Session
@@ -11,22 +11,22 @@ from crypto_data_engine.db.session import with_db_transaction, with_db_session
 ModelType = TypeVar("ModelType")
 
 class BaseRepository(Generic[ModelType]):
-    """基础Repository类，提供通用的CRUD操作"""
+    """Base repository providing common CRUD operations."""
 
     def __init__(self, model: Type[ModelType]):
         self.model = model
 
     @classmethod
     @with_db_transaction
-    def create(cls, **kwargs) -> ModelType:
-        """创建记录"""
-        db: Session = kwargs.pop('db')  # 从装饰器注入的db
+    def create(cls, *args, **kwargs) -> ModelType:
+        """Create record."""
+        db: Session = kwargs.pop('db')  # Injected Session instance
         instance = cls._get_model()(**kwargs)
         db.add(instance)
-        db.flush()  # 获取ID但不提交
-        db.refresh(instance)  # 确保所有属性都被加载
+        db.flush()  # Populate ID without committing
+        db.refresh(instance)  # Ensure all attributes are loaded
 
-        # 🔥 关键修复：让对象脱离 session，但保持属性值
+        # Critical step: detach instance from session while keeping values
         db.expunge(instance)
 
         return instance
@@ -35,14 +35,14 @@ class BaseRepository(Generic[ModelType]):
     @classmethod
     @with_db_session
     def get_by_id(cls, record_id: int, **kwargs) -> Optional[ModelType]:
-        """根据ID获取记录"""
+        """Fetch record by ID."""
         db: Session = kwargs.pop('db')
         return db.query(cls._get_model()).filter(cls._get_model().id == record_id).first()
 
     @classmethod
     @with_db_session
     def get_by_kwargs(cls, **kwargs) -> Optional[ModelType]:
-        """根据关键字参数获取单条记录"""
+        """Fetch single record via filters."""
         db: Session = kwargs.pop('db')
         query = db.query(cls._get_model())
 
@@ -61,7 +61,7 @@ class BaseRepository(Generic[ModelType]):
             desc_order: bool = False,
             **kwargs
     ) -> List[ModelType]:
-        """获取记录列表"""
+        """Retrieve records list."""
         db: Session = kwargs.pop("db")
         model = cls._get_model()
         query = db.query(model)
@@ -69,7 +69,7 @@ class BaseRepository(Generic[ModelType]):
             if hasattr(model, key):
                 col = getattr(model, key)
                 if isinstance(value, (list, tuple)):
-                    if value:  # 避免空 IN ()
+                    if value:  # Avoid empty IN ()
                         query = query.filter(col.in_(value))
                     else:
                         return []
@@ -87,11 +87,11 @@ class BaseRepository(Generic[ModelType]):
     @classmethod
     @with_db_session
     def count(cls, **kwargs) -> int:
-        """统计记录数量"""
+        """Count records."""
         db: Session = kwargs.pop('db')
         query = db.query(cls._get_model())
 
-        # 应用过滤条件
+        # Apply filters
         for key, value in kwargs.items():
             if hasattr(cls._get_model(), key):
                 if isinstance(value, (list, tuple)):
@@ -104,7 +104,7 @@ class BaseRepository(Generic[ModelType]):
     @classmethod
     @with_db_transaction
     def update(cls, record_id: int, **kwargs) -> Optional[ModelType]:
-        """更新记录"""
+        """Update record."""
         db: Session = kwargs.pop('db')
         instance = db.query(cls._get_model()).filter(cls._get_model().id == record_id).first()
         if not instance:
@@ -121,11 +121,11 @@ class BaseRepository(Generic[ModelType]):
     @classmethod
     @with_db_transaction
     def update_by_kwargs(cls, filter_kwargs: Dict[str, Any], **update_kwargs) -> List[ModelType]:
-        """根据条件批量更新"""
+        """Bulk update by filters."""
         db: Session = update_kwargs.pop('db')
         query = db.query(cls._get_model())
 
-        # 构建过滤条件
+        # Build filter conditions
         for key, value in filter_kwargs.items():
             if hasattr(cls._get_model(), key):
                 query = query.filter(getattr(cls._get_model(), key) == value)
@@ -143,7 +143,7 @@ class BaseRepository(Generic[ModelType]):
     @classmethod
     @with_db_transaction
     def delete(cls, record_id: int, **kwargs) -> bool:
-        """删除记录"""
+        """Delete record."""
         db: Session = kwargs.pop('db')
 
         instance = db.query(cls._get_model()).filter(cls._get_model().id == record_id).first()
@@ -156,11 +156,11 @@ class BaseRepository(Generic[ModelType]):
     @classmethod
     @with_db_transaction
     def delete_by_kwargs(cls, **kwargs) -> int:
-        """根据条件批量删除"""
+        """Bulk delete by filters."""
         db: Session = kwargs.pop('db')
         query = db.query(cls._get_model())
 
-        # 构建过滤条件
+        # Build filter conditions
         for key, value in kwargs.items():
             if hasattr(cls._get_model(), key):
                 query = query.filter(getattr(cls._get_model(), key) == value)
@@ -172,7 +172,7 @@ class BaseRepository(Generic[ModelType]):
     @classmethod
     @with_db_transaction
     def bulk_create(cls, data_list: List[Dict[str, Any]], **kwargs) -> List[ModelType]:
-        """批量创建记录"""
+        """Bulk create records."""
         db: Session = kwargs.pop('db')
 
         instances = []
@@ -189,7 +189,7 @@ class BaseRepository(Generic[ModelType]):
     @classmethod
     @with_db_session
     def exists(cls, **kwargs) -> bool:
-        """检查记录是否存在"""
+        """Check record existence."""
         db: Session = kwargs.pop('db')
         query = db.query(cls._get_model())
 
@@ -202,10 +202,10 @@ class BaseRepository(Generic[ModelType]):
     @classmethod
     @with_db_transaction
     def get_or_create(cls, defaults: Optional[Dict[str, Any]] = None, **kwargs) -> tuple[ModelType, bool]:
-        """获取或创建记录，返回(实例, 是否新创建)"""
+        """Get or create record, returning (instance, created_flag)."""
         db: Session = kwargs.pop('db')
 
-        # 先尝试获取
+        # Attempt to fetch first
         query = db.query(cls._get_model())
         for key, value in kwargs.items():
             if hasattr(cls._get_model(), key):
@@ -215,7 +215,7 @@ class BaseRepository(Generic[ModelType]):
         if instance:
             return instance, False
 
-        # 创建新记录
+        # Create new record
         create_kwargs = {**kwargs}
         if defaults:
             create_kwargs.update(defaults)
@@ -228,7 +228,7 @@ class BaseRepository(Generic[ModelType]):
 
     @classmethod
     def _get_model(cls) -> Type[ModelType]:
-        """获取模型类 - 子类需要重写此方法"""
+        """Return model class – subclasses must override or define `_model`."""
         if not hasattr(cls, '_model'):
-            raise NotImplementedError("子类必须定义 _model 属性或重写 _get_model 方法")
+            raise NotImplementedError("Subclasses must define `_model` attribute or override `_get_model`.")
         return cls._model
