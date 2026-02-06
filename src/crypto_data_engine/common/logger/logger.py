@@ -92,8 +92,8 @@ class LoggerManager:
             self._setup_standard_logging_intercept()
 
         self._initialized = True
-        _loguru_logger.bind(module="LoggerManager").info("🚀 Logger initialized successfully")
-        _loguru_logger.bind(module="LoggerManager").info(f"📁 Log files -> {log_file_path}")
+        _loguru_logger.bind(module="LoggerManager").info("Logger initialized successfully")
+        _loguru_logger.bind(module="LoggerManager").info(f"Log files -> {log_file_path}")
 
     def get_module_logger(self, module_name: str):
         """Return module-specific logger with caching."""
@@ -132,8 +132,7 @@ class LoggerManager:
         intercepted_loggers = [
             "uvicorn", "uvicorn.error", "uvicorn.access",
             "fastapi", "httpx", "requests",
-            "celery", "celery.worker", "celery.task",
-            "redis", "sqlalchemy"
+            "redis",
         ]
 
         for logger_name in intercepted_loggers:

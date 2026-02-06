@@ -1,5 +1,6 @@
 from typing import Dict, List
 from .binance import BinanceAdapter
+from .binance_futures import BinanceFuturesAdapter
 from .exchange_adapter import ExchangeAdapter
 from .okx import OKXAdapter
 
@@ -7,9 +8,9 @@ from .okx import OKXAdapter
 class ExchangeFactory:
     """Factory for exchange adapters."""
     _adapters = {
-        'binance': BinanceAdapter,
-        'okx': OKXAdapter,
-        # Add more exchanges here
+        "binance": BinanceAdapter,
+        "binance_futures": BinanceFuturesAdapter,
+        "okx": OKXAdapter,
     }
 
     @classmethod

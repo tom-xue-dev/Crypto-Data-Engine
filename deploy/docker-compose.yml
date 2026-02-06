@@ -1,82 +1,47 @@
 version: "3.9"
 
 services:
+  # ---------------------------------------------------------------------------
+  # Redis - Used for task state storage and caching
+  # ---------------------------------------------------------------------------
   redis:
     image: redis:7.2
-    container_name: redis
+    container_name: quant-redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     command: ["redis-server", "--appendonly", "yes"]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
-  postgres:
-    image: postgres:14
-    container_name: postgres
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_DB: quantdb
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: 123456
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    restart: unless-stopped
-
-  worker:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-    container_name: quant-worker
-    command: >
-      celery -A task_manager.celery_app worker
-      --loglevel=info
-      --queues=io_intensive,cpu,celery
-    environment:
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
-      DB_URL: postgresql+psycopg://admin:123456@postgres:5432/quantdb  # 修改这里
-    depends_on:
-      - redis
-      - postgres
-    volumes:
-      - ../src:/app/src
-      - ../data/config:/app/data/config
-      - ../data/tick_test:/app/data/tick_test
-
+  # ---------------------------------------------------------------------------
+  # API Server - FastAPI with built-in task management
+  # ---------------------------------------------------------------------------
   api:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: quant-api
-    command: [ "python", "-m", "crypto_data_engine.main","start" ]
+    command: ["python", "-m", "crypto_data_engine.main", "serve", "--host", "0.0.0.0", "--port", "8000"]
     ports:
-      - "8080:8080"
+      - "8000:8000"
     environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - DB_URL=postgresql+psycopg://admin:123456@postgres:1234/quantdb
+      - TASK_STORE=redis
+      - TASK_REDIS_URL=redis://redis:6379/0
+      - TASK_MAX_IO_THREADS=16
+      - TASK_MAX_COMPUTE_PROCESSES=8
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
     volumes:
       - ../src:/app/src
-      - ../data/config:/app/data/config
-
-
-  flower:
-    image: mher/flower:2.0.1
-    container_name: quant-flower
-    command: ["celery", "--broker=redis://redis:6379/0", "flower","--port=5555"]
-    ports:
-      - "5555:5555"
-    depends_on:
-      - redis
-      - worker
+      - ../data:/app/data
     restart: unless-stopped
-
 
 volumes:
   redis_data:
-  pg_data:

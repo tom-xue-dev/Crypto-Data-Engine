@@ -49,12 +49,6 @@ tmp/
 *.h5
 *.npz
 
-# Specific reports or outputs
-back_test/*.csv
-back_test/*.txt
-back_test/result.txt
-back_test/transactions.txt
-strategy_report/78bed-main/
 
 # Configs & secrets
 proxies.yml
@@ -63,4 +57,3 @@ proxies.yml
 *~
 *.bak
 *.tmp
-/tests

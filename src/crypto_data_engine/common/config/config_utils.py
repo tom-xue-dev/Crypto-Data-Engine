@@ -1,9 +1,13 @@
+import logging
 import re
 from pathlib import Path
 from typing import Type
 from pydantic import BaseModel
 import yaml
 from crypto_data_engine.common.config.paths import CONFIG_ROOT
+
+# Use stdlib logging here to avoid circular import with project logger
+logger = logging.getLogger(__name__)
 
 
 class LazyLoadConfig:
@@ -43,4 +47,4 @@ def create_template(instance: BaseModel, output_dir: Path = Path("")) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         yaml.dump(instance.model_dump(mode="json"), f, sort_keys=False, allow_unicode=True)
-    print(f"✅ Created settings template: {path.resolve()}")
+    logger.info(f"Created settings template: {path.resolve()}")

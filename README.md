@@ -1,206 +1,406 @@
 # Crypto Data Engine
 
-A modular framework for downloading cryptocurrency tick data, aggregating it into research-ready bars, and running strategy backtests. The stack combines a FastAPI API surface, Celery-based distributed workers, and a structured configuration system so you can orchestrate data pipelines end-to-end.
+> 专业的加密货币量化交易回测系统
+
+一个完整的端到端量化交易系统，从数据下载、Bar聚合到策略回测、结果可视化全流程覆盖。
+
+[![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.128-green.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18-61dafb.svg)](https://react.dev/)
+[![Tests](https://img.shields.io/badge/Tests-60%20passed-success.svg)](./tests/)
 
 ---
-## Highlights
-- **FastAPI service** exposing download and aggregation endpoints under `/api/v1`
-- **Celery workers** for IO-heavy (tick download) and CPU-heavy (bar generation) tasks
-- **Composable configuration** via Pydantic settings + YAML templates
-- **Database persistence** for task state (PostgreSQL via SQLAlchemy)
-- **CLI tooling** powered by Typer for local orchestration and setup
-- **Docker support** for Redis, Postgres, API, and worker processes
+
+## 核心特性
+
+### 📊 数据处理
+- **多交易所支持**: Binance, OKX, Bybit
+- **多种Bar类型**: TickBar, VolumeBar, DollarBar, TimeBar
+- **高性能聚合**: Numba加速 + 多进程并行
+- **灵活存储**: Parquet格式，支持内存映射
+
+### 🎯 回测引擎
+- **三种回测模式**: 横截面、时间序列、多资产时序
+- **完整组合管理**: 多空仓位、杠杆、保证金
+- **精细风控**: 止损、追踪止损、最大回撤限制
+- **真实成本**: 手续费、滑点、资金费率
+
+### 📝 交易日志
+- **全方位记录**: 交易、信号、风控触发、组合快照
+- **多格式导出**: JSON完整日志、CSV表格
+- **实时统计**: 交易摘要、胜率、盈亏分析
+
+### 🎨 可视化前端
+- **React + TypeScript + Ant Design**
+- **ECharts交互式图表**: 净值曲线、回撤图、月度热力图
+- **实时任务监控**: 状态更新、进度追踪
+- **完整日志查询**: 按资产、时间、事件类型筛选
 
 ---
-## Architecture
-```
-Client / CLI
-    ↓
-FastAPI (`crypto_data_engine.server`)
-    ↓ submit tasks
-Celery (Redis broker & backend)
-    ↓ dispatch queues (`io_intensive`, `cpu`)
-Task workers (`task_manager.celery_worker`)
-    ├─ Tick download pipeline
-    └─ Bar aggregation pipeline
-```
-Optional services such as Flower (Celery monitoring) and a Ray cluster can be added when you need extra observability or distributed compute.
 
----
-## Project Structure
-```text
-crypto-data-engine/
-├── deploy/                  # Docker files and compose stack
-├── docs/                    # API reference and design notes
-├── src/
-│   ├── crypto_data_engine/
-│   │   ├── common/          # Config loaders, logging utilities
-│   │   ├── db/              # Models, repositories, session helpers
-│   │   ├── server/          # FastAPI app, routers, request/response schemas
-│   │   └── services/        # Tick downloader, bar aggregator, backtest modules
-│   └── task_manager/
-│       ├── celery_app.py    # Celery configuration
-│       └── celery_worker.py # Registered Celery tasks
-├── data/                    # Local data artifacts (tick, aggregated, configs)
-├── logs/                    # Log output (Loguru)
-├── pyproject.toml           # Poetry project definition
-└── README.md
-```
-> The `data/` directory is intended for local artifacts and is not meant to be checked into version control.
+## 快速开始
 
----
-## Prerequisites
-- Python **3.12**
-- [Poetry](https://python-poetry.org/)
-- Redis (broker/result backend for Celery)
-- PostgreSQL (task metadata store)
-- Optional: Docker & Docker Compose
+### 最简启动（5分钟）
 
----
-## Setup
 ```bash
-# clone the repo
-git clone <repo-url>
-cd crypto-data-engine
-
-# install dependencies
+# 1. 安装依赖
 poetry install
+cd frontend && npm install && cd ..
 
-# activate virtual environment (optional)
-poetry shell
+# 2. 启动后端
+poetry run main start
+
+# 3. 启动前端（新终端）
+cd frontend
+npm run dev
+
+# 4. 访问系统
+# 前端: http://localhost:5173
+# API文档: http://localhost:8000/docs
 ```
 
-### Environment Variables
-Create a `.env` in the project root or export the variables in your shell:
-```
-CELERY_BROKER_URL=redis://localhost:6379/0
-CELERY_RESULT_BACKEND=redis://localhost:6379/1
-DB_URL=postgresql+psycopg://admin:123456@localhost:5432/quantdb
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8080
-```
-Adjust Redis/Postgres credentials to match your environment. Additional configuration values live under `data/config/config_templates/` and can be generated with the CLI command below.
+详细步骤请参考 [QUICKSTART.md](./QUICKSTART.md)
 
 ---
-## CLI Commands
-All commands are exposed through Typer (`crypto_data_engine.main`). Prefix them with `poetry run` if you are not inside a Poetry shell.
 
-- `poetry run main start [--host HOST] [--port PORT]`
-  - Launch the FastAPI server (defaults pulled from `ServerConfig`).
+## 项目架构
 
-- `poetry run main run-worker <module>`
-  - Start a Celery worker bound to `task_manager.celery_app`. The `module` argument is informational; the worker currently consumes all registered queues.
-
-- `poetry run main init-config`
-  - Generate YAML configuration templates under `data/config/config_templates/` based on the Pydantic settings classes.
-
-- `poetry run main init-db`
-  - Initialize database tables required for task tracking.
-
-- `poetry run main dev-all`
-  - Convenience command that spins up three Celery workers (downloader, bar generator, backtest) plus a development FastAPI server. Use only in local environments.
+```
+┌──────────────────────────────────────────────────┐
+│           前端 (React + Vite)                    │
+│    Dashboard | Config | Result | TradeLog       │
+└──────────────────┬───────────────────────────────┘
+                   │ HTTP/REST API
+┌──────────────────▼───────────────────────────────┐
+│              FastAPI 服务                        │
+│   Backtest | Download | Aggregate | Logs        │
+└──────────────────┬───────────────────────────────┘
+                   │
+    ┌──────────────┼──────────────┐
+    │              │              │
+┌───▼────────┐ ┌──▼─────────┐ ┌─▼──────────┐
+│ Backtest   │ │ Bar        │ │ Data       │
+│ Engine     │ │ Aggregator │ │ Downloader │
+│            │ │            │ │            │
+│ Portfolio  │ │ TickBar    │ │ ccxt       │
+│ RiskMgr    │ │ DollarBar  │ │ API        │
+│ TradingLog │ │ VolumeBar  │ │            │
+└────┬───────┘ └─────┬──────┘ └──────┬─────┘
+     │               │                │
+     └───────────────┼────────────────┘
+                     │
+     ┌───────────────┼────────────────┐
+     │               │                │
+┌────▼─────┐  ┌─────▼────┐  ┌────────▼──────┐
+│ Postgres │  │  Redis   │  │ Local Storage │
+│  (任务)  │  │ (Celery) │  │   data/*      │
+└──────────┘  └──────────┘  └───────────────┘
+```
 
 ---
-## Running the Services
-1. **Ensure infrastructure is available**
-   - Redis (for Celery) and PostgreSQL (for task metadata)
-2. **Initialize configs and DB**
-   ```bash
-   poetry run main init-config
-   poetry run main init-db
-   ```
-3. **Start FastAPI**
-   ```bash
-   poetry run main start
-   ```
-4. **Start Celery worker(s)**
-   ```bash
-   poetry run main run-worker downloader
-   ```
-   The worker registers tasks such as `tick.download`, `tick.extract_task`, and `bar.aggregate`. You can run multiple workers and pin them to specific queues via Celery configuration if needed.
 
----
-## API Usage
-### Download Symbols
-```
-curl "http://localhost:8080/api/v1/download/exchanges"
-```
+## 核心功能
 
-### Trigger a Download Job
-```
-curl -X POST "http://localhost:8080/api/v1/download/downloads/jobs" \
+### 1️⃣ 数据服务
+
+```bash
+# 下载Tick数据
+curl -X POST "http://localhost:8000/api/v1/download/downloads/jobs" \
   -H "Content-Type: application/json" \
   -d '{
-        "exchange": "binance",
-        "symbols": ["BTCUSDT"],
-        "year": 2023,
-        "months": [1, 2]
-      }'
-```
-This call creates task entries in the database and enqueues Celery jobs (`tick.download`).
+    "exchange": "binance",
+    "symbols": ["BTCUSDT", "ETHUSDT"],
+    "year": 2024,
+    "months": [1, 2, 3]
+  }'
 
-### Aggregate Bars
-```
-curl -X POST "http://localhost:8080/api/v1/aggregate/bars" \
+# 聚合为Bar数据
+curl -X POST "http://localhost:8000/api/v1/aggregate/bars" \
   -H "Content-Type: application/json" \
   -d '{
-        "exchange": "binance",
-        "bar_type": "volume_bar",
-        "threshold": 1000,
-        "symbols": ["BTCUSDT"]
-      }'
+    "exchange": "binance",
+    "bar_type": "dollar_bar",
+    "threshold": 1000000,
+    "symbols": ["BTCUSDT"]
+  }'
 ```
-The API resolves defaults from `AggregationConfig`, pushes a `bar.aggregate` Celery task, and writes aggregation results under `data/data_aggrate/`.
 
----
----
-## Backtesting Results
+### 2️⃣ 回测引擎
 
-Below are example backtest result snapshots generated from the built-in backtest pipeline (`src/crypto_data_engine/services/back_test/`). These demonstrate end-to-end usage: download → extract → aggregate bars → signal generation → backtest.
+**通过CLI运行**:
 
-![Backtest Result 1](backtest_results/res_1.png)
-
-![Backtest Result 2](backtest_results/res_2.png)
-
-
-
----
-## Data Layout
-- `data/tick_data/` – Downloaded and processed tick data (per exchange/symbol)
-- `data/tick_test/` – Sample archives used for local testing
-- `data/bar_data/` – Generated bar files grouped by bar type
-- `data/config/` – YAML configuration templates and overrides
-
-You can change default locations via the settings classes in `crypto_data_engine.common.config`.
-
----
-## Development Notes
-- Logging is handled by Loguru. Logs are written to `logs/app.log` (see `crypto_data_engine.common.logger`).
-- Database models and repositories live under `crypto_data_engine.db`.
-- Celery task routing is configured in `task_manager.celery_app`.
-
-### Testing
-Pytest is configured in `pyproject.toml`. Once tests are added under `tests/`, run:
 ```bash
-poetry run pytest -q
+poetry run main backtest \
+  --strategy momentum \
+  --mode cross_sectional \
+  --capital 1000000 \
+  --start-date 2024-01-01 \
+  --end-date 2024-06-30
 ```
 
----
-## Docker Compose
-A reference stack is provided in `deploy/docker-compose.yml`.
+**通过API运行**:
+
 ```bash
-# build and start services in detached mode
-cd deploy
-docker compose up -d
+curl -X POST "http://localhost:8000/api/backtest/run" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy": {"name": "long_short", "params": {"long_count": 10, "short_count": 10}},
+    "mode": "cross_sectional",
+    "initial_capital": 1000000,
+    "rebalance_frequency": "W-MON"
+  }'
 ```
-This brings up Redis, Postgres, the API service, a Celery worker, and Flower (Celery dashboard). Bind mounts map the source tree into containers for iterative development.
+
+### 3️⃣ 交易日志
+
+```bash
+# 获取所有交易记录
+curl http://localhost:8000/api/backtest/logs/{task_id}/trades
+
+# 获取策略信号
+curl http://localhost:8000/api/backtest/logs/{task_id}/signals
+
+# 导出完整日志
+curl "http://localhost:8000/api/backtest/logs/{task_id}/export?format=json" \
+  -o backtest_log.json
+```
 
 ---
-## Contributing
-1. Fork the repository and create a feature branch.
-2. Keep pull requests focused and include relevant documentation updates.
-3. Run linting/tests before submitting (see `pyproject.toml` for available tooling).
+
+## CLI命令速查
+
+| 命令 | 说明 |
+|------|------|
+| `main start` | 启动FastAPI服务 |
+| `main init-config` | 生成配置模板 |
+| `main init-db` | 初始化数据库 |
+| `main run-worker <module>` | 启动Celery Worker |
+| `main backtest` | 运行回测（命令行） |
+| `main test` | 运行测试 |
+| `main frontend` | 启动前端开发服务器 |
+
+完整CLI帮助: `poetry run main --help`
 
 ---
-## License
-Released under the MIT License. See `LICENSE` (or project metadata) for details.
+
+## 回测系统亮点
+
+### 🎯 多模式支持
+
+| 模式 | 适用场景 | 调仓频率 |
+|------|----------|----------|
+| 横截面 (Cross-Sectional) | 因子策略、多空对冲 | 固定周期（日/周/月） |
+| 时间序列 (Time-Series) | 趋势跟踪、技术分析 | 每个Bar |
+| 多资产时序 (Multi-Asset) | DollarBar策略 | 非对齐Bar |
+
+### 📊 资产池管理
+
+动态资产选择，支持：
+- 成交额Top K
+- 波动率筛选
+- 流动性筛选
+- 自定义因子排序
+
+示例配置：
+
+```python
+AssetPoolConfig(
+    method="turnover_top_k",
+    top_k=100,              # 选择Top100
+    lookback_days=30,       # 过去30天
+    rebalance_frequency="MS",  # 每月初更新
+)
+```
+
+### 🛡️ 风控系统
+
+- **仓位限制**: 单仓/总敞口/杠杆控制
+- **止损策略**: 固定止损、追踪止损、ATR止损
+- **回撤控制**: 最大回撤、日内亏损限制
+- **风险触发记录**: 完整日志追溯
+
+### 💰 成本模型
+
+- **交易成本**: Maker/Taker费率、滑点
+- **持仓成本**: 资金费率、杠杆利息
+- **周期结算**: 自动计算持仓费用
+
+---
+
+## 测试
+
+```bash
+# 运行全部测试 (60个测试用例)
+poetry run main test
+
+# 运行特定测试
+poetry run main test --file test_trading_log.py
+
+# 生成覆盖率报告
+poetry run main test --coverage
+```
+
+**测试覆盖**:
+- ✅ TradingLogger单元测试 (22个)
+- ✅ BacktestEngine集成测试 (14个)
+- ✅ API端点测试 (24个)
+
+---
+
+## 数据目录结构
+
+```
+data/
+├── tick_data/              # Tick原始数据
+│   └── binance/
+│       └── BTCUSDT/
+│           └── 2024-01.parquet
+│
+├── bar_data/               # 聚合Bar数据
+│   ├── tick_bar/
+│   ├── dollar_bar/
+│   └── volume_bar/
+│
+├── backtest_logs/          # 回测日志
+│   └── {task_id}/
+│       ├── backtest_full_log.json
+│       ├── backtest_trades.csv
+│       └── backtest_snapshots.csv
+│
+└── config/
+    └── config_templates/   # 配置模板
+```
+
+---
+
+## 前端界面预览
+
+### Dashboard - 回测任务管理
+- 任务列表（状态、进度、创建时间）
+- 统计卡片（总任务、已完成、运行中、失败）
+- 快速操作（新建、查看、删除）
+
+### BacktestConfig - 策略配置
+- 策略选择（动量、均值回归、多空对冲）
+- 参数设置（回看周期、持仓数量）
+- 风控配置（止损、最大回撤）
+- 成本设置（手续费、滑点）
+
+### BacktestResult - 结果分析
+- 关键指标卡片（总收益、年化、夏普、回撤、胜率）
+- 净值曲线 + 回撤图（双Y轴联动、可缩放）
+- 月度收益热力图
+- 交易盈亏散点图
+
+### TradeLog - 交易明细
+- 交易记录表（开平仓、价格、盈亏）
+- 策略信号日志（执行/拒绝原因）
+- 持仓快照（NAV、敞口、杠杆）
+- 导出功能（JSON/CSV）
+
+---
+
+## 示例策略
+
+### 周涨幅均值回归策略
+
+每周一调仓:
+- 资产池: 每月1号更新，选择过去30天成交额Top100
+- 做多: 上周涨幅最小（跌幅最大）的10个资产
+- 做空: 上周涨幅最大（跌幅最小）的10个资产
+- 权重: 各50%资金，均仓分配
+
+```python
+from crypto_data_engine.services.back_test.strategies import LongShortStrategy
+
+strategy = LongShortStrategy(
+    long_count=10,
+    short_count=10,
+    factor="weekly_return",
+    reverse_long=True,  # 做多跌幅大的（均值回归）
+)
+```
+
+---
+
+## 技术栈
+
+### 后端
+- **Web框架**: FastAPI 0.128
+- **数据处理**: Pandas, NumPy, PyArrow
+- **加速**: Numba (JIT编译)
+- **数据库**: PostgreSQL + SQLAlchemy
+- **任务队列**: Celery + Redis (可选)
+- **可视化**: Matplotlib
+
+### 前端
+- **框架**: React 18 + TypeScript
+- **UI库**: Ant Design 5
+- **图表**: ECharts
+- **状态管理**: React Query
+- **构建**: Vite
+
+---
+
+## 文档
+
+- [📖 完整项目指南](./docs/PROJECT_GUIDE.md)
+- [🚀 快速启动](./QUICKSTART.md)
+- [🔧 回测系统文档](./docs/BACKTEST_SYSTEM.md)
+- [📡 API文档](http://localhost:8000/docs) (需启动服务)
+
+---
+
+## 性能优化
+
+- ✅ PyArrow + mmap 快速读取Parquet
+- ✅ Numba JIT编译加速Bar聚合
+- ✅ 多进程并行处理多个交易对
+- ✅ Pandas向量化计算
+- ✅ 事件驱动架构减少冗余计算
+
+---
+
+## 开发路线图
+
+- [x] Tick数据下载服务
+- [x] 多种Bar聚合器
+- [x] 横截面/时序回测引擎
+- [x] 资产池动态管理
+- [x] 交易日志系统
+- [x] React前端界面
+- [x] 完整测试套件
+- [ ] 实时数据流（WebSocket）
+- [ ] 分布式回测（Ray）
+- [ ] 策略优化器
+- [ ] PDF报告生成
+- [ ] 参数网格搜索
+
+---
+
+## 贡献
+
+欢迎提交Issue和Pull Request！
+
+1. Fork项目
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 开启Pull Request
+
+---
+
+## 许可证
+
+MIT License
+
+---
+
+## 致谢
+
+本项目整合了多个优秀开源项目的理念和最佳实践。
+
+---
+
+**问题反馈**: GitHub Issues  
+**最后更新**: 2026-01-30

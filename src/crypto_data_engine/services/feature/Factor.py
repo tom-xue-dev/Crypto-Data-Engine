@@ -4,12 +4,14 @@ from sklearn.linear_model import LinearRegression
 import talib
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-import utils as u
 import pandas as pd
 import numpy as np
 from scipy.stats import skew, kurtosis
 import inspect
 from functools import partial
+from crypto_data_engine.common.logger.logger import get_logger
+
+logger = get_logger(__name__)
 
 class FactorConstructor:
     def __init__(self, df):
@@ -32,12 +34,12 @@ class FactorConstructor:
         }
 
         for name, func in alpha_funcs.items():
-            print(f"Computing {name}...")
+            logger.info(f"Computing {name}...")
             self.df[name] = self._compute_alpha_parallel(func, n_jobs=n_jobs, **kwargs)[name]
 
     def run_all_alphas(self, n_jobs=16, **kwargs):
         """
-        自动运行所有以 alpha 开头的静态方法
+        自动运行所有以 alpha 开头的静态方法，结果累积合并到 df。
         """
         alpha_funcs = [
             (name, method)
@@ -47,8 +49,10 @@ class FactorConstructor:
 
         df_out = self.df.copy()
         for name, func in alpha_funcs:
-            print(f"Computing {name}...")
-            df_out = self._compute_alpha_parallel(func, n_jobs=n_jobs, **kwargs)
+            logger.info(f"Computing {name}...")
+            computed = self._compute_alpha_parallel(func, n_jobs=n_jobs, **kwargs)
+            if name in computed.columns:
+                df_out[name] = computed[name]
         return df_out
 
     def get_data(self):
@@ -108,7 +112,7 @@ class FactorConstructor:
         df['MA'] = df['close'].rolling(window=window).mean()
         df['std'] = df['close'].rolling(window=window).std()/df['close'].rolling(window=window*5).std()
         volume = df['volume'].rolling(window=window).mean()
-        df['alpha3'] = (-(df['close'] - df['MA']) / df['MA']) * df['std']#过滤低波噪声
+        df['alpha3'] = (-(df['close'] - df['MA']) / df['MA']) * df['std']
         # df['alpha3'] = (-(df['close'] - df['MA']) / df['MA'])*volume_ratio
         df.drop(columns=['MA'], inplace=True)
         return df  # 如果只需要返回这个因子
@@ -345,7 +349,7 @@ class FactorConstructor:
             原 df 的复制，增加一列 `out_col`
         """
         sign = np.where(df[dir_col] == 0, 1.0, -1.0)
-        impact = np.where(df[impact_col]!=np.nan,df[impact_col],0)
+        impact = np.where(pd.notna(df[impact_col]), df[impact_col], 0)
         signed_imp =  impact * sign
         bar_score = signed_imp * df[vol_ratio_col].to_numpy()
         df["_bar_score"] = bar_score
@@ -400,7 +404,6 @@ class FactorConstructor:
     @staticmethod
     def alpha22(df, window=120):
         df = df.copy()
-        # 回归斜率
         x = np.arange(window)
         slopes = []
         for i in range(window, len(df)):
@@ -409,8 +412,6 @@ class FactorConstructor:
             slopes.append(coef)
         slopes = [np.nan] * window + slopes
         df['slope'] = slopes
-
-        # 波动率（标准差）
         df['vol'] = df['close'].rolling(window).std()
 
         df['alpha22'] = -df['slope'] / df['vol']
@@ -478,122 +479,10 @@ def compute_zscore(group: pd.DataFrame, column: str, window: int) -> pd.DataFram
     return group
 
 
-def alpha1(df):
-    """
-    Alpha#1
-    (rank(Ts_ArgMax(SignedPower(((returns < 0) ? stddev(returns, 20) : close), 2.), 5)) - 0.5)
 
-    :param df: dataframe
-    :return:
-    """
-    temp1 = pd.Series(np.where((df.returns < 0), u.stddev(df.returns, 20), df.close), index=df.index)
-    df['alpha1'] = (u.ts_argmax(temp1 ** 2, 5)) - 0.5
-    return df
-
-
-def alpha2(df):
-    """
-    Alpha#2
-    (-1 * correlation(rank(delta(log(volume), 2)), rank(((close - open) / open)), 6))
-    """
-
-    tmp_1 = u.delta(np.log(df.volume + 1e-6), 2)
-    tmp_2 = ((df.close - df.open) / df.open)
-    df['alpha2'] = -1 * u.corr(tmp_1, tmp_2, 10)
-
-    return df
-
-
-
-
-
-def alpha9(df, window=1200):
-    """
-    Alpha#9
-    ((0 < ts_min(delta(close, 1), 5)) ? delta(close, 1) :
-    ((ts_max(delta(close, 1), 5) < 0) ? delta(close, 1) : (-1 * delta(close, 1))))
-    """
-    tempd1 = df.close.pct_change()
-    tempmin = u.ts_min(tempd1, 5)
-    tempmax = u.ts_max(tempd1, 5)
-    df['alpha9'] = pd.Series(np.where(tempmin > 0, tempd1, np.where(tempmax < 0, tempd1, (-1 * tempd1))), df.index)
-    df = compute_zscore(df, 'alpha9', window)
-    df = df.drop(columns=['alpha9'])
-    df = df.rename(columns={'zscore_alpha9': 'alpha9'})
-    return df
-
-
-def alpha25(df, window=1200):
-    """
-    Alpha#25
-    rank(((((-1 * returns) * adv20) * vwap) * (high - close)))
-    """
-    df['alpha25'] = (((-1 * df.returns) * u.adv(df, 20)) * df.vwap) * (df.high - df.close)
-    df = compute_zscore(df, 'alpha25', window)
-    df = df.drop(columns=['alpha25'])
-    df = df.rename(columns={'zscore_alpha25': 'alpha25'})
-    return df
-
-
-def alpha32(df):
-    """
-    Alpha#32
-    (scale(((sum(close, 7) / 7) - close)) +
-    (20 * scale(correlation(vwap, delay(close, 5), 230))))
-    """
-    temp1 = u.scale(((u.ts_sum(df.close, 7) / 7) - df.close))
-    temp2 = (20 * u.scale(u.corr(df.vwap, u.delay(df.close, 5), 230)))
-    df['alpha32'] = temp1 + temp2
-    return df
-
-
-def alpha46(df):
-    """
-    Alpha#46
-    ((0.25 < (((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close, 10) - close) / 10))) ? (-1 * 1) :
-    (((((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close, 10) - close) / 10)) < 0) ? 1 :
-    ((-1 * 1) * (close - delay(close, 1)))))
-    """
-    decision1 = (0.25 < (
-            ((u.delay(df.log_close, 20) - u.delay(df.log_close, 10)) / 10) - (
-            (u.delay(df.log_close, 10) - df.log_close) / 10)))
-    decision2 = ((((u.delay(df.log_close, 20) - u.delay(df.log_close, 10)) / 10) - (
-            (u.delay(df.log_close, 10) - df.log_close) / 10)) < 0)
-    iffalse = ((-1 * 1) * (df.log_close - u.delay(df.log_close, 1)))
-    df['alpha46'] = pd.Series(np.where(decision1, (-1 * 1), np.where(decision2, 1, iffalse)), index=df.index)
-    return df
-
-
-def alpha51(df):
-    """
-    Alpha#51
-    (((((delay(close, 20) - delay(close, 10)) / 10) - ((delay(close, 10) - close) / 10))
-    < (-1 * 0.05)) ? 1 : ((-1 * 1) * (close - delay(close, 1))))
-    """
-    condition = ((((u.delay(df.log_close, 20) - u.delay(df.log_close, 10)) / 10)
-                  - ((u.delay(df.log_close, 10) - df.log_close) / 10)) < (-1 * 0.05))
-    df['alpha51'] = pd.Series(np.where(condition, 1, ((-1 * 1) * (df.log_close - u.delay(df.log_close, 1)))), df.index)
-    return df
-
-
-def alpha35(df):
-    """
-    Alpha#35
-    ((Ts_Rank(volume, 32) * (1 - Ts_Rank(((close + high) - low), 16))) *
-    (1 - Ts_Rank(returns, 32)))
-    """
-    df['alpha35'] = ((u.ts_rank(df.volume, 32) * (1 - u.ts_rank(((df.close + df.high) - df.low), 16)))
-                     * (1 - u.ts_rank(df.returns, 32)))
-    return df
-
-
-def alpha95(df, window=1200):
-    temp1 = (df.open - u.ts_min(df.open, 12))
-    df['alpha95'] = temp1
-    df = compute_zscore(df, 'alpha95', window)
-    df = df.drop(columns=['alpha95'])
-    df = df.rename(columns={'zscore_alpha95': 'alpha95'})
-    return df
+# Note: Legacy WorldQuant 101 alpha implementations were removed.
+# They depended on a non-existent 'utils' module.
+# Use FactorConstructor class methods (alpha1-alpha26) instead.
 
 
 

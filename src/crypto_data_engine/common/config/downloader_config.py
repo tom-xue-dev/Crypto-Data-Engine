@@ -58,29 +58,38 @@ class ExchangeConfig(BaseModel):
 
 class MultiExchangeDownloadConfig(BaseDownloadConfig):
     """Multiple exchange download configuration."""
-    active_exchanges: List[str] = ["binance"]
+    active_exchanges: List[str] = ["binance", "binance_futures"]
     exchange_configs: Dict[str, ExchangeConfig] = {
         "binance": ExchangeConfig(
             name="binance",
             base_url="https://data.binance.vision/data/spot/monthly/aggTrades",
             symbol_info_url="https://api.binance.com/api/v3/exchangeInfo",
             supports_checksum=True,
-            checksum_url_format="https://data.binance.vision/data/spot/monthly/aggTrades/{symbol}-aggTrades-{year}-{month:02d}.zip.CHECKSUM"
+            checksum_url_format="https://data.binance.vision/data/spot/monthly/aggTrades/{symbol}-aggTrades-{year}-{month:02d}.zip.CHECKSUM",
+        ),
+        "binance_futures": ExchangeConfig(
+            name="binance_futures",
+            base_url="https://data.binance.vision/data/futures/um/monthly/aggTrades",
+            symbol_info_url="https://fapi.binance.com/fapi/v1/exchangeInfo",
+            data_dir=Path("E:/data/binance_futures"),
+            supports_checksum=True,
+            file_name_format="{symbol}-aggTrades-{year}-{month:02d}.zip",
+            checksum_url_format="https://data.binance.vision/data/futures/um/monthly/aggTrades/{symbol}/{symbol}-aggTrades-{year}-{month:02d}.zip.CHECKSUM",
         ),
         "okx": ExchangeConfig(
             name="okx",
             base_url="https://static.okx.com/cdn/okex/traderecords",
             symbol_info_url="https://www.okx.com/api/v5/public/instruments?instType=SPOT",
             supports_checksum=False,
-            file_name_format="{symbol}_{year}{month:02d}.zip"
+            file_name_format="{symbol}_{year}{month:02d}.zip",
         ),
         "bybit": ExchangeConfig(
             name="bybit",
             base_url="https://public.bybit.com/trading",
             symbol_info_url="https://api.bybit.com/v5/market/instruments-info?category=spot",
             supports_checksum=False,
-            file_name_format="{symbol}_{year}_{month:02d}.zip"
-        )
+            file_name_format="{symbol}_{year}_{month:02d}.zip",
+        ),
     }
     def get_exchange_config(self, exchange_name: str) -> ExchangeConfig:
         """Return configuration for a specific exchange."""

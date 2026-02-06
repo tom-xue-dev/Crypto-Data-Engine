@@ -17,5 +17,5 @@ ENV PYTHONPATH=/app/src
 
 WORKDIR /app/src
 
-# 默认命令
-CMD ["python", "-c", "import task_manager.celery_app; print('OK')"]
+# Default: start the API server
+CMD ["python", "-m", "crypto_data_engine.main", "serve", "--host", "0.0.0.0", "--port", "8000"]

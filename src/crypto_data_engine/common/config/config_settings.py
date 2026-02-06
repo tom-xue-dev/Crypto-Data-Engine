@@ -9,6 +9,7 @@ from crypto_data_engine.common.config.config_utils import create_template, LazyL
 from crypto_data_engine.common.config.paths import CONFIG_ROOT, PROJECT_ROOT
 from crypto_data_engine.common.config.downloader_config import MultiExchangeDownloadConfig
 from crypto_data_engine.common.config.aggregation_config import AggregationConfig
+from crypto_data_engine.common.config.task_config import TaskConfig
 
 # ------------------define ur common here ------------------
 
@@ -17,25 +18,6 @@ class BasicSettings(BaseSettings):
         env_file = PROJECT_ROOT/".env"
         env_file_encoding = "utf-8"
         extra = "allow"
-
-class CeleryConfig(BasicSettings):
-    broker_url: str = "redis://redis:6379/0"
-    result_backend: str = "redis://redis:6379/1"
-
-    task_serializer: str = "json"
-    result_serializer: str = "json"
-    accept_content: list[str] = ["json"]
-    task_default_queue: str = "cpu"
-    worker_max_tasks_per_child: int = 200
-    task_acks_late: bool = True
-
-    class Config:
-        env_prefix = "CELERY_"
-        extra = "ignore"
-        # Add field alias mapping
-        field_aliases = {
-            "result_backend": "CELERY_RESULT_BACKEND"
-        }
 
 
 class TickDownloadConfig(BasicSettings):
@@ -60,41 +42,21 @@ class ServerConfig(BasicSettings):
         env_prefix = "Server_"
         frozen = True
 
-class DbConfig(BasicSettings):
-    db_url: str = "postgresql+psycopg://admin:123456@postgres:5432/quantdb"
-    db_pool_size: int = 10
-    db_pool_timeout: int = 30
-    db_pool_recycle: int = 3600
-    db_echo: bool = False
-
-    class Config:
-        env_prefix = "DB_"
-        field_aliases = {
-            "db_url": "DB_URL",
-            "db_pool_size": "DB_POOL_SIZE",
-            "db_pool_timeout": "DB_POOL_TIMEOUT",
-            "db_pool_recycle": "DB_POOL_RECYCLE",
-            "db_echo": "DB_ECHO"
-        }
-
-
 class Settings:
     server_cfg = LazyLoadConfig(ServerConfig)
-    celery_cfg:CeleryConfig = LazyLoadConfig(CeleryConfig)
-    tick_download_cfg:TickDownloadConfig = LazyLoadConfig(TickDownloadConfig)
-    downloader_cfg:MultiExchangeDownloadConfig = LazyLoadConfig(MultiExchangeDownloadConfig)
-    db_cfg = LazyLoadConfig(DbConfig)
-    aggregator_cfg:AggregationConfig = LazyLoadConfig(AggregationConfig)
+    task_cfg: TaskConfig = LazyLoadConfig(TaskConfig)
+    tick_download_cfg: TickDownloadConfig = LazyLoadConfig(TickDownloadConfig)
+    downloader_cfg: MultiExchangeDownloadConfig = LazyLoadConfig(MultiExchangeDownloadConfig)
+    aggregator_cfg: AggregationConfig = LazyLoadConfig(AggregationConfig)
 
 def create_all_templates() -> None:
     """Instantiate all configuration classes and generate YAML templates."""
     # Register all configuration classes that require template generation here
     instances = [
         TickDownloadConfig(),
-        CeleryConfig(),
+        TaskConfig(),
         ServerConfig(),
         MultiExchangeDownloadConfig(),
-        DbConfig(),
         AggregationConfig(),
     ]
     for inst in instances:
