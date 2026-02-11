@@ -38,7 +38,11 @@ def convert_dir_to_parquet(
     Returns a list of generated parquet file paths.
     """
     csv_read_kwargs = csv_read_kwargs or {}
-    parquet_kwargs = parquet_kwargs or {}
+    parquet_kwargs = parquet_kwargs or {
+        "engine": "pyarrow",
+        "compression": "zstd",
+        "index": False,
+    }
 
     src_dir = Path(extracted_dir)
     if not src_dir.exists():

@@ -29,7 +29,18 @@ def to_snake_case(name: str) -> str:
     return re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower() + ".yaml"
 
 def load_config(cls: Type[BaseModel]) -> BaseModel:
-    """Load YAML configuration for the given class and instantiate it."""
+    """Load configuration for the given class.
+    
+    - For BaseSettings subclasses: instantiate directly (reads from .env + YAML).
+    - For regular BaseModel: load from YAML only.
+    """
+    from pydantic_settings import BaseSettings
+    
+    # If it's a BaseSettings subclass, let pydantic-settings handle .env + YAML
+    if issubclass(cls, BaseSettings):
+        return cls()
+    
+    # Otherwise, load from YAML file (for regular BaseModel)
     filename = f"{to_snake_case(cls.__name__)}"
     path = CONFIG_ROOT / filename
     if not path.exists():

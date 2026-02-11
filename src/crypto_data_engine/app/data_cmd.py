@@ -1,13 +1,15 @@
 """
-Data CLI commands: download, list, info.
+Data CLI commands: download, list, info, convert.
 """
+import concurrent.futures
 from pathlib import Path
 from typing import List, Optional
 
 import pandas as pd
 import typer
+from tqdm import tqdm
 
-data_app = typer.Typer(help="Tick data management (download / list / inspect)")
+data_app = typer.Typer(help="Tick data management (download / list / inspect / convert)")
 
 
 @data_app.command(help="Download tick data from exchange")
@@ -73,6 +75,90 @@ def list_data(
 
     if len(symbols) > 20:
         typer.echo(f"  ... and {len(symbols) - 20} more symbols")
+
+
+@data_app.command(help="Extract ZIP files and convert to Parquet")
+def convert(
+    data_dir: str = typer.Option("E:/data/binance_futures", help="Root directory containing symbol sub-folders with ZIP files"),
+    symbol: Optional[str] = typer.Option(None, help="Only convert a specific symbol (e.g. BTCUSDT)"),
+    workers: int = typer.Option(4, help="Number of parallel conversion processes"),
+    force: bool = typer.Option(False, help="Re-convert even if Parquet already exists"),
+):
+    """
+    Scan data directory for ZIP files, extract and convert to Parquet.
+
+    Useful when ZIP downloads completed but Parquet conversion was skipped or interrupted.
+
+    Examples:
+        data convert --data-dir E:/data/binance_futures
+        data convert --symbol BTCUSDT --force
+        data convert --workers 8
+    """
+    root_path = Path(data_dir)
+    if not root_path.exists():
+        typer.echo(f"[!] Data directory not found: {data_dir}")
+        raise typer.Exit(code=1)
+
+    # Collect symbol directories
+    if symbol:
+        symbol_dirs = [root_path / symbol.upper()]
+        if not symbol_dirs[0].exists():
+            typer.echo(f"[!] Symbol directory not found: {symbol_dirs[0]}")
+            raise typer.Exit(code=1)
+    else:
+        symbol_dirs = sorted([d for d in root_path.iterdir() if d.is_dir()])
+
+    # Scan for ZIP files that need conversion
+    pending_zips: List[Path] = []
+    skipped_count = 0
+
+    for symbol_dir in symbol_dirs:
+        for zip_file in sorted(symbol_dir.glob("*.zip")):
+            # Parquet should be at the same level as ZIP: {symbol_dir}/{stem}.parquet
+            expected_parquet = symbol_dir / f"{zip_file.stem}.parquet"
+
+            if expected_parquet.exists() and not force:
+                skipped_count += 1
+            else:
+                pending_zips.append(zip_file)
+
+    typer.echo(f"[*] Scanned {len(symbol_dirs)} symbol directories")
+    typer.echo(f"[*] Found {len(pending_zips)} ZIP files to convert, {skipped_count} already have Parquet (skipped)")
+
+    if not pending_zips:
+        typer.echo("[+] Nothing to convert")
+        return
+
+    # Reuse the module-level function from downloader (Windows-safe for ProcessPoolExecutor)
+    from crypto_data_engine.services.tick_data_scraper.downloader.downloader import (
+        _process_single_zip,
+    )
+
+    zip_path_strings = [str(zp) for zp in pending_zips]
+    successful = 0
+    failed = 0
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(_process_single_zip, zip_str): zip_str
+            for zip_str in zip_path_strings
+        }
+        with tqdm(total=len(zip_path_strings), desc="[Extract & Convert]") as progress_bar:
+            for future in concurrent.futures.as_completed(futures):
+                zip_str = futures[future]
+                try:
+                    result = future.result()
+                    if result:
+                        successful += 1
+                    else:
+                        failed += 1
+                        typer.echo(f"  [!] Failed: {Path(zip_str).name}")
+                except Exception as error:
+                    failed += 1
+                    typer.echo(f"  [!] Error: {Path(zip_str).name}: {error}")
+                progress_bar.update(1)
+
+    typer.echo(f"[+] Convert completed: {successful} succeeded, {failed} failed")
 
 
 @data_app.command(help="Show data info for a symbol")

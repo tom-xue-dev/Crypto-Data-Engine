@@ -139,6 +139,11 @@ def _aggregate_dataframe(
     symbol: str = "UNKNOWN",
 ) -> pd.DataFrame:
     """Aggregate a DataFrame of tick data."""
+    from .tick_normalizer import normalize_tick_data
+
+    # Normalize column names, timestamp units, and dtypes
+    data = normalize_tick_data(data)
+
     # Determine best method – Numba now covers TIME_BAR as well
     should_use_numba = (
         use_numba

@@ -317,6 +317,243 @@ def _aggregate_time_bars_numba(
 
 
 @jit(nopython=True, cache=True)
+def _aggregate_dollar_bars_numba(
+    prices: np.ndarray,
+    quantities: np.ndarray,
+    timestamps: np.ndarray,
+    is_buyer_maker: np.ndarray,
+    threshold: float,
+    include_advanced: bool,
+    bar_mode: int,
+) -> Tuple:
+    """Single-pass Numba kernel for dollar/volume bar aggregation.
+
+    Accumulates dollar volume (or raw volume) per bar and flushes when
+    the running total exceeds ``threshold``.  All basic and advanced
+    statistics are computed inline, identical to the time-bar kernel.
+
+    Args:
+        bar_mode: 0 = dollar_bar (accumulate price*qty), 1 = volume_bar (accumulate qty).
+
+    Returns the same tuple layout as ``_aggregate_time_bars_numba``.
+    """
+    n = len(prices)
+    if n == 0:
+        empty = np.empty(0, dtype=np.float64)
+        empty_i = np.empty(0, dtype=np.int64)
+        return (empty, empty, empty, empty, empty, empty,
+                empty, empty, empty, empty, empty_i, empty,
+                empty, empty, empty, empty, empty_i,
+                empty, empty, empty, empty,
+                empty, empty)
+
+    # Estimate max bars: total_value / threshold + 1
+    if bar_mode == 0:
+        total_value = 0.0
+        for i in range(n):
+            total_value += prices[i] * quantities[i]
+    else:
+        total_value = 0.0
+        for i in range(n):
+            total_value += quantities[i]
+
+    estimated_bars = int(total_value / threshold) + 2 if threshold > 0 else n
+    max_bars = min(estimated_bars, n)
+
+    # Pre-allocate output arrays
+    start_times = np.empty(max_bars, dtype=np.float64)
+    end_times = np.empty(max_bars, dtype=np.float64)
+    opens = np.empty(max_bars, dtype=np.float64)
+    highs = np.empty(max_bars, dtype=np.float64)
+    lows = np.empty(max_bars, dtype=np.float64)
+    closes = np.empty(max_bars, dtype=np.float64)
+    volumes = np.empty(max_bars, dtype=np.float64)
+    buy_vols = np.empty(max_bars, dtype=np.float64)
+    sell_vols = np.empty(max_bars, dtype=np.float64)
+    vwaps = np.empty(max_bars, dtype=np.float64)
+    tick_counts = np.empty(max_bars, dtype=np.int64)
+    dollar_vols = np.empty(max_bars, dtype=np.float64)
+    # Advanced
+    price_stds_out = np.empty(max_bars, dtype=np.float64)
+    volume_stds_out = np.empty(max_bars, dtype=np.float64)
+    up_ratios_out = np.empty(max_bars, dtype=np.float64)
+    down_ratios_out = np.empty(max_bars, dtype=np.float64)
+    reversals_out = np.empty(max_bars, dtype=np.int64)
+    imbalances_out = np.empty(max_bars, dtype=np.float64)
+    max_vols_out = np.empty(max_bars, dtype=np.float64)
+    max_ratios_out = np.empty(max_bars, dtype=np.float64)
+    interval_means_out = np.empty(max_bars, dtype=np.float64)
+    path_eff_out = np.empty(max_bars, dtype=np.float64)
+    impact_den_out = np.empty(max_bars, dtype=np.float64)
+
+    bar_count = 0
+
+    # Running accumulators
+    bar_start_ts = timestamps[0]
+    bar_end_ts = timestamps[0]
+    bar_open = prices[0]
+    bar_high = prices[0]
+    bar_low = prices[0]
+    bar_close = prices[0]
+    bar_volume = 0.0
+    bar_buy_vol = 0.0
+    bar_sell_vol = 0.0
+    bar_dollar_vol = 0.0
+    bar_tick_count = 0
+    bar_cum_value = 0.0  # cumulative value for threshold check
+    # Advanced accumulators
+    bar_price_sum = 0.0
+    bar_price_sq_sum = 0.0
+    bar_vol_sum = 0.0
+    bar_vol_sq_sum = 0.0
+    bar_up_moves = 0
+    bar_down_moves = 0
+    bar_prev_direction = 0
+    bar_reversals = 0
+    bar_max_vol = 0.0
+    bar_path_length = 0.0
+    bar_interval_sum = 0.0
+    bar_interval_count = 0
+    bar_prev_price = prices[0]
+
+    for i in range(n):
+        p = prices[i]
+        q = quantities[i]
+
+        # Accumulate tick into current bar
+        bar_end_ts = timestamps[i]
+        bar_close = p
+        if p > bar_high:
+            bar_high = p
+        if p < bar_low:
+            bar_low = p
+        bar_volume += q
+        bar_dollar_vol += p * q
+        bar_tick_count += 1
+
+        if bar_mode == 0:
+            bar_cum_value += p * q
+        else:
+            bar_cum_value += q
+
+        if is_buyer_maker[i]:
+            bar_sell_vol += q
+        else:
+            bar_buy_vol += q
+
+        if include_advanced:
+            bar_price_sum += p
+            bar_price_sq_sum += p * p
+            bar_vol_sum += q
+            bar_vol_sq_sum += q * q
+            if q > bar_max_vol:
+                bar_max_vol = q
+
+            if bar_tick_count > 1:
+                diff = p - bar_prev_price
+                abs_diff = diff if diff >= 0 else -diff
+                bar_path_length += abs_diff
+                if diff > 0:
+                    bar_up_moves += 1
+                    direction = 1
+                elif diff < 0:
+                    bar_down_moves += 1
+                    direction = -1
+                else:
+                    direction = bar_prev_direction
+                if direction != 0 and bar_prev_direction != 0 and direction != bar_prev_direction:
+                    bar_reversals += 1
+                bar_prev_direction = direction
+
+                interval_val = timestamps[i] - timestamps[i - 1]
+                bar_interval_sum += interval_val
+                bar_interval_count += 1
+
+            bar_prev_price = p
+
+        # Check if threshold reached → flush bar
+        if bar_cum_value >= threshold:
+            vwap_val = bar_dollar_vol / bar_volume if bar_volume > 0.0 else bar_close
+            total_moves = bar_up_moves + bar_down_moves
+
+            start_times[bar_count] = bar_start_ts
+            end_times[bar_count] = bar_end_ts
+            opens[bar_count] = bar_open
+            highs[bar_count] = bar_high
+            lows[bar_count] = bar_low
+            closes[bar_count] = bar_close
+            volumes[bar_count] = bar_volume
+            buy_vols[bar_count] = bar_buy_vol
+            sell_vols[bar_count] = bar_sell_vol
+            vwaps[bar_count] = vwap_val
+            tick_counts[bar_count] = bar_tick_count
+            dollar_vols[bar_count] = bar_dollar_vol
+
+            if include_advanced:
+                pmean = bar_price_sum / bar_tick_count if bar_tick_count > 0 else 0.0
+                pvar = bar_price_sq_sum / bar_tick_count - pmean * pmean if bar_tick_count > 0 else 0.0
+                price_stds_out[bar_count] = np.sqrt(pvar) if pvar > 0.0 else 0.0
+                vmean = bar_vol_sum / bar_tick_count if bar_tick_count > 0 else 0.0
+                vvar = bar_vol_sq_sum / bar_tick_count - vmean * vmean if bar_tick_count > 0 else 0.0
+                volume_stds_out[bar_count] = np.sqrt(vvar) if vvar > 0.0 else 0.0
+                up_ratios_out[bar_count] = bar_up_moves / total_moves if total_moves > 0 else 0.5
+                down_ratios_out[bar_count] = bar_down_moves / total_moves if total_moves > 0 else 0.5
+                reversals_out[bar_count] = bar_reversals
+                imbalances_out[bar_count] = (bar_buy_vol - bar_sell_vol) / bar_volume if bar_volume > 0.0 else 0.0
+                max_vols_out[bar_count] = bar_max_vol
+                max_ratios_out[bar_count] = bar_max_vol / bar_volume if bar_volume > 0.0 else 0.0
+                interval_means_out[bar_count] = bar_interval_sum / bar_interval_count if bar_interval_count > 0 else 0.0
+                net_move = bar_close - bar_open
+                abs_net = net_move if net_move >= 0 else -net_move
+                path_eff_out[bar_count] = abs_net / bar_path_length if bar_path_length > 0.0 else 0.0
+                impact_den_out[bar_count] = abs_net / bar_dollar_vol if bar_dollar_vol > 0.0 else 0.0
+
+            bar_count += 1
+
+            # Reset accumulators for next bar
+            if i + 1 < n:
+                bar_start_ts = timestamps[i + 1] if i + 1 < n else timestamps[i]
+                bar_open = prices[i + 1] if i + 1 < n else p
+                bar_high = prices[i + 1] if i + 1 < n else p
+                bar_low = prices[i + 1] if i + 1 < n else p
+            bar_close = p
+            bar_volume = 0.0
+            bar_buy_vol = 0.0
+            bar_sell_vol = 0.0
+            bar_dollar_vol = 0.0
+            bar_tick_count = 0
+            bar_cum_value = 0.0
+            bar_price_sum = 0.0
+            bar_price_sq_sum = 0.0
+            bar_vol_sum = 0.0
+            bar_vol_sq_sum = 0.0
+            bar_up_moves = 0
+            bar_down_moves = 0
+            bar_prev_direction = 0
+            bar_reversals = 0
+            bar_max_vol = 0.0
+            bar_path_length = 0.0
+            bar_interval_sum = 0.0
+            bar_interval_count = 0
+            bar_prev_price = p
+
+    # Don't flush leftover partial bar (incomplete threshold)
+
+    return (
+        start_times[:bar_count], end_times[:bar_count],
+        opens[:bar_count], highs[:bar_count], lows[:bar_count], closes[:bar_count],
+        volumes[:bar_count], buy_vols[:bar_count], sell_vols[:bar_count],
+        vwaps[:bar_count], tick_counts[:bar_count], dollar_vols[:bar_count],
+        price_stds_out[:bar_count], volume_stds_out[:bar_count],
+        up_ratios_out[:bar_count], down_ratios_out[:bar_count],
+        reversals_out[:bar_count], imbalances_out[:bar_count],
+        max_vols_out[:bar_count], max_ratios_out[:bar_count],
+        interval_means_out[:bar_count],
+        path_eff_out[:bar_count], impact_den_out[:bar_count],
+    )
+
+
+@jit(nopython=True, cache=True)
 def _cumsum_threshold_indices(values: np.ndarray, threshold: float) -> np.ndarray:
     """
     Find indices where cumulative sum exceeds threshold (Numba-accelerated).
@@ -611,79 +848,37 @@ class FastBarAggregator:
         bar_type: BarType,
         threshold: Union[int, float]
     ) -> pd.DataFrame:
-        """Aggregate using Numba-accelerated functions."""
-        # Prepare arrays
+        """Aggregate dollar/volume bars using single-pass Numba kernel."""
+        # Prepare contiguous numpy arrays
         prices = data["price"].values.astype(np.float64)
         quantities = data["quantity"].values.astype(np.float64)
         timestamps = data["timestamp"].values.astype(np.float64)
-        
-        if "isBuyerMaker" in data.columns:
+
+        if "is_buyer_maker" in data.columns:
+            is_buyer = data["is_buyer_maker"].values.astype(bool)
+        elif "isBuyerMaker" in data.columns:
             is_buyer = data["isBuyerMaker"].values.astype(bool)
         else:
             is_buyer = np.zeros(len(data), dtype=bool)
-        
-        # Get split indices
-        if bar_type == BarType.VOLUME_BAR:
-            indices = _cumsum_threshold_indices(quantities, float(threshold))
-        elif bar_type == BarType.DOLLAR_BAR:
-            dollar_vol = prices * quantities
-            indices = _cumsum_threshold_indices(dollar_vol, float(threshold))
-        else:
-            raise ValueError(f"Numba acceleration not supported for {bar_type}")
-        
-        # Build bars
-        bars = []
-        start_idx = 0
-        
-        for end_idx in indices:
-            end_idx = int(end_idx)
-            if end_idx < start_idx:
-                continue
-            
-            # Slice arrays
-            p = prices[start_idx:end_idx + 1]
-            q = quantities[start_idx:end_idx + 1]
-            b = is_buyer[start_idx:end_idx + 1]
-            t = timestamps[start_idx:end_idx + 1]
-            
-            # Compute basic stats
-            stats = _compute_bar_stats(p, q, b, t)
-            
-            bar = {
-                "start_time": self._convert_timestamp(t[0]),
-                "end_time": self._convert_timestamp(t[-1]),
-                "open": stats[0],
-                "high": stats[1],
-                "low": stats[2],
-                "close": stats[3],
-                "volume": stats[4],
-                "buy_volume": stats[5],
-                "sell_volume": stats[6],
-                "vwap": stats[7],
-                "tick_count": stats[8],
-                "dollar_volume": stats[9],
-            }
-            
-            if self.include_advanced:
-                adv_stats = _compute_advanced_stats(p, q, b, t)
-                bar.update({
-                    "price_std": adv_stats[0],
-                    "volume_std": adv_stats[1],
-                    "up_move_ratio": adv_stats[2],
-                    "down_move_ratio": adv_stats[3],
-                    "reversals": adv_stats[4],
-                    "buy_sell_imbalance": adv_stats[5],
-                    "max_trade_volume": adv_stats[6],
-                    "max_trade_ratio": adv_stats[7],
-                    "tick_interval_mean": adv_stats[8],
-                    "path_efficiency": adv_stats[9],
-                    "impact_density": adv_stats[10],
-                })
-            
-            bars.append(bar)
-            start_idx = end_idx + 1
-        
-        return pd.DataFrame(bars)
+
+        # Ensure sorted by timestamp
+        if len(timestamps) > 1 and not np.all(timestamps[:-1] <= timestamps[1:]):
+            sort_order = np.argsort(timestamps)
+            prices = prices[sort_order]
+            quantities = quantities[sort_order]
+            timestamps = timestamps[sort_order]
+            is_buyer = is_buyer[sort_order]
+
+        # bar_mode: 0 = dollar_bar, 1 = volume_bar
+        bar_mode = 0 if bar_type == BarType.DOLLAR_BAR else 1
+
+        result = _aggregate_dollar_bars_numba(
+            prices, quantities, timestamps, is_buyer,
+            float(threshold), self.include_advanced, bar_mode,
+        )
+
+        # Unpack and build DataFrame (same layout as time bar kernel)
+        return self._unpack_bar_result(result)
     
     def _aggregate_time_bars(
         self,
@@ -698,12 +893,14 @@ class FastBarAggregator:
         """
         interval_ms = _interval_to_ms(str(threshold))
 
-        # Prepare contiguous numpy arrays (sorted by timestamp is assumed)
+        # Prepare contiguous numpy arrays (assumes data has been normalized by tick_normalizer)
         prices = data["price"].values.astype(np.float64)
         quantities = data["quantity"].values.astype(np.float64)
         timestamps = data["timestamp"].values.astype(np.float64)
 
-        if "isBuyerMaker" in data.columns:
+        if "is_buyer_maker" in data.columns:
+            is_buyer = data["is_buyer_maker"].values.astype(bool)
+        elif "isBuyerMaker" in data.columns:
             is_buyer = data["isBuyerMaker"].values.astype(bool)
         else:
             is_buyer = np.zeros(len(data), dtype=bool)
@@ -721,13 +918,19 @@ class FastBarAggregator:
             interval_ms, self.include_advanced,
         )
 
-        # Unpack result arrays
+        return self._unpack_bar_result(result)
+
+    def _unpack_bar_result(self, result: Tuple) -> pd.DataFrame:
+        """Convert Numba kernel output tuple into a pandas DataFrame.
+
+        Shared by both time-bar and dollar/volume-bar kernels, which
+        return the same 23-element tuple of numpy arrays.
+        """
         (start_ts, end_ts, opens, highs, lows, closes,
          vols, buy_v, sell_v, vwap_arr, tick_cnts, dollar_v,
          p_stds, v_stds, up_r, down_r, revs, imbs,
          max_v, max_r, int_means, pe_arr, iid_arr) = result
 
-        # Convert timestamps to datetime
         bar_count = len(start_ts)
         start_dts = np.empty(bar_count, dtype="datetime64[ms]")
         end_dts = np.empty(bar_count, dtype="datetime64[ms]")

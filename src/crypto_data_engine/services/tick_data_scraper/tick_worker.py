@@ -1,8 +1,8 @@
 """
 Tick data download worker.
 
-Provides a simple entry point for downloading exchange data.
-Supports both spot and futures markets.
+Provides the entry point for downloading exchange data.
+Supports CLI invocation and API-triggered execution with TaskManager.
 """
 from typing import List, Optional
 
@@ -17,11 +17,14 @@ def run_download(
     start_date: str = "2020-01",
     end_date: str = "2020-01",
     max_threads: int = 8,
-) -> None:
+    task_id: Optional[str] = None,
+    task_manager=None,
+) -> dict:
     """
     Download tick data for the given exchange and date range.
 
-    Handles the full pipeline: download -> extract -> convert to Parquet.
+    Handles the full pipeline: download → extract → convert to Parquet
+    using Redis-backed queue communication.
 
     Args:
         exchange_name: Exchange adapter name (e.g. "binance", "binance_futures").
@@ -29,6 +32,11 @@ def run_download(
         start_date: Start date in "YYYY-MM" format.
         end_date: End date in "YYYY-MM" format.
         max_threads: Number of concurrent download threads.
+        task_id: Optional TaskManager task ID for API progress tracking.
+        task_manager: Optional TaskManager instance for API integration.
+
+    Returns:
+        Pipeline summary dict with download/convert counts.
     """
     from crypto_data_engine.common.config.config_settings import settings
     from crypto_data_engine.services.tick_data_scraper.downloader.downloader import (
@@ -41,15 +49,24 @@ def run_download(
 
     config = settings.downloader_cfg.get_merged_config(exchange_name)
     config["max_threads"] = max_threads
+    redis_url = settings.task_cfg.redis_url
     logger.info(f"Data root: {config['data_dir']}")
     logger.info(f"Threads: {max_threads}")
 
     try:
         context = DownloadContext(config, start_date, end_date, symbols)
-        downloader = FileDownloader(context)
-        downloader.run_download_pipeline()
+        downloader = FileDownloader(context, redis_url=redis_url)
+        downloader.run_download_pipeline(
+            task_id=task_id,
+            task_manager=task_manager,
+        )
         logger.info(f"File location: {config['data_dir']}")
         logger.info(f"{exchange_name.upper()} data download completed!")
+
+        # Return progress summary if available
+        job_id = task_id or f"dl_{exchange_name}_{int(__import__('time').time())}"
+        progress = downloader.get_pipeline_progress(job_id)
+        return progress or {"status": "completed"}
     except Exception as error:
         logger.error(f"Download failed: {error}")
         raise
