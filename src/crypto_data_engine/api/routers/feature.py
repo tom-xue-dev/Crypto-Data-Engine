@@ -98,10 +98,14 @@ async def submit_feature_calculation(request: FeatureCalculateRequest):
         task_manager = get_task_manager()
         task_payload = request.model_dump()
 
-        task_id = task_manager.submit(
-            name="feature_calculation",
-            func=_run_feature_calculation,
-            kwargs={"payload": task_payload},
+        task_state = task_manager.create_task(
+            metadata={"name": "feature_calculation", "payload": task_payload}
+        )
+        task_id = task_state.task_id
+        task_manager.submit_compute_task(
+            task_id,
+            _run_feature_calculation,
+            payload=task_payload,
         )
 
         return {

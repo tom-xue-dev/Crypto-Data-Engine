@@ -28,6 +28,7 @@ from crypto_data_engine.app.aggregate_cmd import aggregate_app
 from crypto_data_engine.app.feature_cmd import feature_app
 from crypto_data_engine.app.backtest_cmd import backtest_app
 from crypto_data_engine.app.pipeline_cmd import pipeline_app
+from crypto_data_engine.app.enrich_cmd import enrich_app
 
 app = typer.Typer(
     help="Crypto Data Engine - Quantitative Trading CLI",
@@ -43,6 +44,7 @@ app.add_typer(aggregate_app, name="aggregate")
 app.add_typer(feature_app, name="features")
 app.add_typer(backtest_app, name="backtest")
 app.add_typer(pipeline_app, name="pipeline")
+app.add_typer(enrich_app, name="enrich")
 
 
 # ============================================================================

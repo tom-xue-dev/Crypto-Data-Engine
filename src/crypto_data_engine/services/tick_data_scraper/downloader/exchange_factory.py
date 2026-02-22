@@ -3,6 +3,7 @@ from .binance import BinanceAdapter
 from .binance_futures import BinanceFuturesAdapter
 from .exchange_adapter import ExchangeAdapter
 from .okx import OKXAdapter
+from .okx_futures import OKXFuturesAdapter
 
 
 class ExchangeFactory:
@@ -11,6 +12,7 @@ class ExchangeFactory:
         "binance": BinanceAdapter,
         "binance_futures": BinanceFuturesAdapter,
         "okx": OKXAdapter,
+        "okx_futures": OKXFuturesAdapter,
     }
 
     @classmethod

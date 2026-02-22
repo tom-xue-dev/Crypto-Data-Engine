@@ -38,3 +38,10 @@ class ExchangeAdapter(ABC):
     def process_raw_data(self, data: pd.DataFrame) -> pd.DataFrame:
         """Process raw data format."""
         pass
+
+    def get_symbol_list_time(self, symbol: str) -> Optional[int]:
+        """Return the listing timestamp (milliseconds since epoch) for a given symbol.
+        Used to automatically determine the `start_date` for data downloading.
+        Returns None if not supported by the adapter.
+        """
+        return None

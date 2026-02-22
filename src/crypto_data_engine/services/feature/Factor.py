@@ -90,9 +90,10 @@ class FactorConstructor:
         ret = df['close'].pct_change(window)
         df['return'] = ret
         df['dollar'] = df['volume'] * df['vwap']
-        df['amount'] = np.log10(df['dollar'].rolling(window=window).sum())
+        dollar_sum = df['dollar'].rolling(window=window).sum()
+        df['amount'] = np.where(dollar_sum > 0, np.log10(dollar_sum), np.nan)
         df['factor'] = np.where(
-            df['amount'] == 0,
+            np.isnan(df['amount']) | (df['amount'] == 0),
             np.nan,
             df['return'] *1e3/ df['amount']
         )
@@ -127,6 +128,7 @@ class FactorConstructor:
         short_range = (5,10)
         注意这类策略需要把持有窗口期和atr稍微开大一些
         """
+        df = df.copy()
         df['return'] = (df['close'] - df['close'].shift(window)) / df['close']
         buyer = df['buy_volume']
         seller = df['volume'] - df['buy_volume']
@@ -178,15 +180,16 @@ class FactorConstructor:
         group['log_range'] = np.log(group['high'] / group['low'])
         cov = group['log_range'].rolling(window).cov(group['mid_price'])
         var = group['mid_price'].rolling(window).var()
-        beta = np.where(var == 0, np.nan, cov / var)
+        beta = np.where((var == 0) | (var.isna()), np.nan, cov / var.replace(0, np.nan))
         group['alpha8'] = beta
 
         return group
 
     @staticmethod
     def alpha9(df,window=20):
+        df = df.copy()
         df['ret'] = df['close'].pct_change()
-        df['reverse_signal'] = -df['ret'].rolling(20).mean()
+        df['reverse_signal'] = -df['ret'].rolling(window).mean()
         df['alpha9'] = (df['reverse_signal'] - df['reverse_signal'].rolling(200).mean()) / df[
             'reverse_signal'].rolling(200).std()
         return df
@@ -197,6 +200,7 @@ class FactorConstructor:
         买入强度因子
         好像没啥卵用
         """
+        df = df.copy()
         reversed = df['reversals'] / df['tick_nums']
         ticks = df['tick_nums']
         total_reverse = reversed.rolling(window).sum()#买入卖出转变占比
@@ -221,6 +225,7 @@ class FactorConstructor:
         """
         # 目前来看在tick数据上表现不太好
         # 复制数据，防止对原数据修改
+        df = df.copy()
         df['alpha11'] = -talib.ROC(df['close'], timeperiod=window)
         return df
 
@@ -294,7 +299,8 @@ class FactorConstructor:
         std_up = squared_up.rolling(window=window).sum().apply(np.sqrt)
         squared_down = returns.where(returns < 0, 0) ** 2
         std_down = squared_down.rolling(window=window).sum().apply(np.sqrt)
-        df['alpha17'] = -(std_up-std_down)/(std_up+std_down)
+        denom = std_up + std_down
+        df['alpha17'] = -(std_up-std_down) / denom.replace(0, np.nan)
 
         return df
 
@@ -306,8 +312,9 @@ class FactorConstructor:
         price = df['close']
         net_change = price.diff(window*100)
         total_movement = price.diff().abs().rolling(window=window*100).sum()
-        trend_strength = net_change / total_movement
-        volume_score = df['volume'].rolling(window=window).mean()/df['volume']
+        trend_strength = net_change / total_movement.replace(0, np.nan)
+        vol_mean = df['volume'].rolling(window=window).mean()
+        volume_score = vol_mean / df['volume'].replace(0, np.nan)
         df['alpha18'] = trend_strength * volume_score
         return df
 
@@ -431,10 +438,12 @@ class FactorConstructor:
         return df
     @staticmethod
     def alpha24(df, window=20):
+        df = df.copy()
         df['alpha24'] = df['kurtosis']
         return df
     @staticmethod
     def alpha25(df, window=20):
+        df = df.copy()
         df['alpha25'] = df['up_move_ratio']
         return df
     @staticmethod
@@ -446,6 +455,7 @@ class FactorConstructor:
         long_range = (1,5),short_range = (-5,-1),window = 100
         参数2同上，window改为200
         """
+        df = df.copy()
         df['return'] = (df['close'] - df['close'].shift(window)) / df['close']
         tick_inv_norm = 1 / df['tick_interval_mean']
         tick_inv_norm = (tick_inv_norm - tick_inv_norm.rolling(window).mean()) / tick_inv_norm.rolling(window).std()
@@ -570,24 +580,11 @@ def alpha107(df):
 
 
 def apply_pca(df, cols, n_components=3):
-    group = df.copy()
-    X = group[cols].dropna()
-    if len(X) < 10:
-        return np.full(len(group), np.nan)
-
-    split = len(X) // 2
-    X_train = X.iloc[:split]
-    X_test = X.iloc[split:]
-
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-
-    pca = PCA(n_components=n_components)
-    X_train_pca = pca.fit_transform(X_train_scaled)
-    X_test_pca = pca.transform(X_test_scaled)
-
-    X_pca_full = np.vstack([X_train_pca, X_test_pca])
-    result = np.full(len(group), np.nan)
-    result[-len(X_pca_full):] = X_pca_full[:, 0]  # 提取第一主成分
-    return result
+    """
+    DEPRECATED: Arbitrary 50/50 train/test split causes look-ahead bias.
+    Use expanding-window or rolling-window PCA instead.
+    """
+    raise NotImplementedError(
+        "apply_pca is removed due to look-ahead bias. "
+        "Use expanding-window or rolling-window PCA instead."
+    )

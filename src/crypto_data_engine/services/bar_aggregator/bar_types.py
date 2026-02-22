@@ -145,10 +145,13 @@ class BaseBarBuilder(ABC):
             raise ValueError(f"Missing required columns: {missing}")
 
         # Only copy if we need to add isBuyerMaker (avoids 2x memory)
-        needs_buyer_col = "isBuyerMaker" not in data.columns
+        needs_buyer_col = "isBuyerMaker" not in data.columns and "is_buyer_maker" not in data.columns
         if needs_buyer_col:
             data = data.copy()
             data["isBuyerMaker"] = False
+        elif "is_buyer_maker" in data.columns and "isBuyerMaker" not in data.columns:
+            data = data.copy()
+            data["isBuyerMaker"] = data["is_buyer_maker"]
 
         # Inplace sort avoids creating another full-size DataFrame
         if not data["timestamp"].is_monotonic_increasing:
@@ -204,9 +207,21 @@ class BaseBarBuilder(ABC):
         down_moves = (price_diff < 0).sum()
         total_moves = up_moves + down_moves
         
-        # Direction changes (reversals)
-        direction = np.sign(price_diff)
-        reversals = np.count_nonzero(direction.diff().fillna(0))
+        # Direction changes (reversals) — match Numba path: carry forward last
+        # non-zero direction and only count true sign flips
+        direction = np.sign(price_diff.values)
+        prev_dir = 0
+        reversals = 0
+        for d in direction:
+            if np.isnan(d):
+                continue
+            d = int(d)
+            if d == 0:
+                d = prev_dir
+            if d != 0 and prev_dir != 0 and d != prev_dir:
+                reversals += 1
+            if d != 0:
+                prev_dir = d
         
         # Returns for higher moments
         returns = price.pct_change().dropna()
@@ -235,8 +250,8 @@ class BaseBarBuilder(ABC):
         impact_density = abs_net_move / dollar_volume if dollar_volume > 0 else 0.0
 
         return {
-            "price_std": price.std(),
-            "volume_std": qty.std(),
+            "price_std": price.std(ddof=0),
+            "volume_std": qty.std(ddof=0),
             "up_move_ratio": up_moves / total_moves if total_moves > 0 else 0.5,
             "down_move_ratio": down_moves / total_moves if total_moves > 0 else 0.5,
             "reversals": reversals,

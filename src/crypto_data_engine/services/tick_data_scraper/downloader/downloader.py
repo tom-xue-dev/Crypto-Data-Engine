@@ -114,23 +114,29 @@ class FileDownloader:
     def download_file(self, symbol: str, year: int, month: int) -> Optional[str]:
         """Download a single file with retry logic. Returns local path on success."""
         file_name = self.adapter.get_file_name(symbol, year, month)
-        url = self.adapter.build_download_url(symbol, year, month)
         symbol_dir = self.context.save_dir / symbol
         symbol_dir.mkdir(parents=True, exist_ok=True)
-        local_file_path = symbol_dir / file_name
-
-        # Skip if parquet already exists (final output)
         parquet_path = symbol_dir / (Path(file_name).stem + ".parquet")
+
         if parquet_path.exists():
             return None
 
-        # Skip download if ZIP already valid (needs conversion only, handled by scanner)
+        if getattr(self.adapter, "supports_api_fetch", False):
+            result = self.adapter.fetch_via_api(
+                symbol, year, month, str(self.context.save_dir)
+            )
+            return result
+
+        url = self.adapter.build_download_url(symbol, year, month)
+        local_file_path = symbol_dir / file_name
+
         if local_file_path.exists() and local_file_path.stat().st_size > 0:
             return None
 
         for attempt in range(1, self.max_retries + 1):
             try:
-                head_response = requests.head(url, timeout=10)
+                headers = {"User-Agent": "Mozilla/5.0"}
+                head_response = requests.head(url, timeout=10, headers=headers)
                 if head_response.status_code == 404:
                     logger.debug(f"File not found (404): {symbol} {year}-{month:02d}")
                     return None
@@ -142,7 +148,7 @@ class FileDownloader:
                     self._wait_before_retry(attempt)
                     continue
 
-                response = requests.get(url, stream=True, timeout=self.http_timeout)
+                response = requests.get(url, stream=True, timeout=self.http_timeout, headers=headers)
                 response.raise_for_status()
 
                 with open(local_file_path, "wb") as file_handle:
@@ -430,8 +436,32 @@ class FileDownloader:
         parquet_found_count = 0
 
         for symbol in symbols:
-            current_date = datetime.strptime(start_date, "%Y-%m")
-            end_dt = datetime.strptime(end_date, "%Y-%m")
+            # Determine start date
+            if start_date.lower() == "auto":
+                list_time_ms = hasattr(self.adapter, "get_symbol_list_time") and self.adapter.get_symbol_list_time(symbol)
+                if list_time_ms:
+                    sym_start = datetime.fromtimestamp(list_time_ms / 1000.0)
+                else:
+                    logger.warning(f"Adapter doesn't support auto start date for {symbol}, defaulting to 2020-01")
+                    sym_start = datetime(2020, 1, 1)
+            else:
+                sym_start = datetime.strptime(start_date, "%Y-%m")
+
+            # Determine end date
+            if end_date.lower() == "auto":
+                # Current month
+                now = datetime.now()
+                sym_end = datetime(now.year, now.month, 1)
+            else:
+                sym_end = datetime.strptime(end_date, "%Y-%m")
+
+            # Force dates to start-of-month for clean iteration
+            current_date = datetime(sym_start.year, sym_start.month, 1)
+            end_dt = datetime(sym_end.year, sym_end.month, 1)
+
+            if current_date > end_dt:
+                logger.warning(f"Start date {current_date.strftime('%Y-%m')} is after end date {end_dt.strftime('%Y-%m')} for {symbol}")
+                continue
 
             while current_date <= end_dt:
                 file_name = self.adapter.get_file_name(
@@ -518,12 +548,20 @@ class FileDownloader:
 def _process_single_zip(zip_path: str) -> Optional[str]:
     """Extract ZIP, convert CSV to Parquet, then delete ZIP and temp files.
 
+    If zip_path is a .parquet file (API-fetched, e.g. OKX), no-op and return success.
     The .parquet is placed directly in the symbol directory (same level as ZIP).
     After successful conversion, both the extracted directory and the original
     ZIP are removed.
 
     Defined at module level for ProcessPoolExecutor pickle compatibility.
     """
+    try:
+        file_path = Path(zip_path)
+        if file_path.suffix.lower() == ".parquet" and file_path.exists():
+            return f"{file_path.name}: already parquet (API fetch)"
+    except Exception:
+        pass
+
     from crypto_data_engine.services.tick_data_scraper.extractor.convert import (
         extract_archive,
         convert_dir_to_parquet,

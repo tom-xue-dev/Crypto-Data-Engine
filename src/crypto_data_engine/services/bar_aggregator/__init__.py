@@ -37,6 +37,10 @@ from .feature_calculator import (
     FeatureConfig, RollingFeatureCalculator, CrossSectionalFeatureCalculator,
     FeaturePipeline, calculate_weekly_returns, calculate_monthly_turnover
 )
+from .tick_feature_enricher import (
+    TickFeatureEnricher, TickFeatureEnricherConfig, TICK_FEATURE_COLUMNS,
+    enrich_file_pair_worker,
+)
 
 __all__ = [
     # Unified API (recommended)
@@ -69,4 +73,9 @@ __all__ = [
     "FeaturePipeline",
     "calculate_weekly_returns",
     "calculate_monthly_turnover",
+    # Tick feature enricher
+    "TickFeatureEnricher",
+    "TickFeatureEnricherConfig",
+    "TICK_FEATURE_COLUMNS",
+    "enrich_file_pair_worker",
 ]

@@ -1,16 +1,19 @@
 """
 Visualization API router.
 
-Endpoints for retrieving chart data from backtest results.
+Endpoints for retrieving chart data from backtest results and bar OHLCV for charts.
 """
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter(prefix="/viz", tags=["visualization"])
+
+DEFAULT_BAR_DIR = "E:/data/dollar_bar/bars"
 
 # Shared task storage (no circular imports)
 from ..storage import backtest_tasks as _tasks
@@ -412,4 +415,77 @@ async def get_performance_summary(task_id: str):
                 + metrics["total_leverage_fees"]
             ),
         },
+    }
+
+
+@router.get("/bars")
+async def get_bars(
+    symbol: str = Query(..., description="Symbol, e.g. BTCUSDT"),
+    bar_dir: Optional[str] = Query(default=None, description="Bar directory (default: E:/data/dollar_bar/bars)"),
+    limit: int = Query(default=500, ge=1, le=5000, description="Max number of bars to return (most recent)"),
+):
+    """
+    Get dollar bar OHLCV data for visualization (candlestick chart).
+
+    Reads parquet from bar_dir/symbol/*.parquet, sorts by start_time, returns last `limit` bars.
+    """
+    import pandas as pd
+
+    root = Path(bar_dir or DEFAULT_BAR_DIR)
+    symbol_dir = root / symbol
+    if not symbol_dir.exists() or not symbol_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Symbol directory not found: {symbol_dir}")
+
+    files = sorted(symbol_dir.glob("*.parquet"))
+    if not files:
+        raise HTTPException(status_code=404, detail=f"No parquet files in {symbol_dir}")
+
+    frames = []
+    for path in files:
+        df = pd.read_parquet(path)
+        if len(df) > 0:
+            frames.append(df)
+    if not frames:
+        raise HTTPException(status_code=404, detail=f"No rows in parquet files for {symbol}")
+
+    combined = pd.concat(frames, ignore_index=True)
+    if "start_time" in combined.columns:
+        combined["start_time"] = pd.to_datetime(combined["start_time"], utc=True)
+        combined = combined.sort_values("start_time").reset_index(drop=True)
+
+    required = ["open", "high", "low", "close"]
+    missing = [c for c in required if c not in combined.columns]
+    if missing:
+        raise HTTPException(status_code=500, detail=f"Missing columns: {missing}")
+
+    combined = combined.tail(limit)
+
+    time_col = "start_time" if "start_time" in combined.columns else combined.index
+    times = combined["start_time"] if "start_time" in combined.columns else combined.index.astype(str)
+
+    bars: List[Dict[str, Any]] = []
+    for i in range(len(combined)):
+        ts = times.iloc[i]
+        if hasattr(ts, "isoformat"):
+            ts_str = ts.isoformat().replace("+00:00", "Z")
+        else:
+            ts_str = str(ts)
+        row = {
+            "time": ts_str,
+            "open": float(combined["open"].iloc[i]),
+            "high": float(combined["high"].iloc[i]),
+            "low": float(combined["low"].iloc[i]),
+            "close": float(combined["close"].iloc[i]),
+        }
+        if "volume" in combined.columns:
+            row["volume"] = float(combined["volume"].iloc[i])
+        if "dollar_volume" in combined.columns:
+            row["dollar_volume"] = float(combined["dollar_volume"].iloc[i])
+        bars.append(row)
+
+    return {
+        "symbol": symbol,
+        "bar_dir": str(root),
+        "bars": bars,
+        "count": len(bars),
     }

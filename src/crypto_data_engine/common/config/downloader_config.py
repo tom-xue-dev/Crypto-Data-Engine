@@ -76,12 +76,14 @@ class MultiExchangeDownloadConfig(BaseDownloadConfig):
             file_name_format="{symbol}-aggTrades-{year}-{month:02d}.zip",
             checksum_url_format="https://data.binance.vision/data/futures/um/monthly/aggTrades/{symbol}/{symbol}-aggTrades-{year}-{month:02d}.zip.CHECKSUM",
         ),
-        "okx": ExchangeConfig(
-            name="okx",
-            base_url="https://static.okx.com/cdn/okex/traderecords",
-            symbol_info_url="https://www.okx.com/api/v5/public/instruments?instType=SPOT",
+        "okx_futures": ExchangeConfig(
+            name="okx_futures",
+            base_url="https://www.okx.com/cdn/okex/traderecords/trades/monthly",
+            symbol_info_url="https://www.okx.com/api/v5/public/instruments?instType=SWAP",
+            data_dir=Path("E:/data"),
             supports_checksum=False,
-            file_name_format="{symbol}_{year}{month:02d}.zip",
+            file_name_format="{symbol}-trades-{year}-{month:02d}.zip",
+            checksum_url_format=None,
         ),
         "bybit": ExchangeConfig(
             name="bybit",

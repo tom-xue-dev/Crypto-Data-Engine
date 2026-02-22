@@ -129,7 +129,7 @@ class UnifiedFeatureCalculator:
         
         # Post-processing
         if self.config.normalize:
-            df = self._normalize_features(df)
+            pass  # Removed: full-dataset normalization causes look-ahead bias
         
         if self.config.drop_na:
             df = df.dropna()
@@ -427,29 +427,14 @@ class UnifiedFeatureCalculator:
         return df
     
     def _normalize_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Normalize feature columns."""
-        feature_cols = [c for c in df.columns if c not in [
-            "timestamp", "start_time", "end_time", "asset",
-            "open", "high", "low", "close", "volume",
-            "buy_volume", "sell_volume", "vwap",
-        ]]
-        
-        for col in feature_cols:
-            if df[col].dtype in [np.float64, np.float32, np.int64, np.int32]:
-                mean = df[col].mean()
-                std = df[col].std()
-                
-                if std > 0:
-                    df[col] = (df[col] - mean) / std
-                    
-                    # Winsorize
-                    if self.config.winsorize_std:
-                        df[col] = df[col].clip(
-                            lower=-self.config.winsorize_std,
-                            upper=self.config.winsorize_std,
-                        )
-        
-        return df
+        """
+        DEPRECATED: Full-dataset normalization causes look-ahead bias.
+        Use rolling normalization or train-set-only normalization instead.
+        """
+        raise NotImplementedError(
+            "_normalize_features is removed due to look-ahead bias. "
+            "Use rolling z-score normalization or normalize on training data only."
+        )
 
 
 def calculate_features(
@@ -525,11 +510,12 @@ def select_features_by_correlation(
     min_correlation: float = 0.05,
 ) -> List[str]:
     """
-    Select top features by correlation with target.
+    DEPRECATED: Full-dataset correlation selection causes look-ahead bias.
+    Use only with training data, never with full backtest dataset.
     
     Args:
-        features: Feature DataFrame
-        target: Target variable
+        features: Feature DataFrame (should be TRAINING data only)
+        target: Target variable (should be TRAINING data only)
         top_n: Number of features to select
         min_correlation: Minimum absolute correlation
         

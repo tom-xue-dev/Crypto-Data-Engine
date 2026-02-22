@@ -289,13 +289,14 @@ class RankSignalGenerator(BaseSignalGenerator):
         weights = {}
         strengths = {}
         
-        # Top assets (long if ascending=False, short if ascending=True)
-        top_assets = ranked.tail(self.top_n_long).index.tolist()
-        bottom_assets = ranked.head(self.top_n_short).index.tolist()
+        # For ascending=False (descending sort): head = highest, tail = lowest
+        # For ascending=True (ascending sort): head = lowest, tail = highest
+        top_assets = ranked.head(self.top_n_long).index.tolist()
+        bottom_assets = ranked.tail(self.top_n_short).index.tolist()
         
         # Assign signals and weights
         if not self.ascending:
-            # High is good → long top, short bottom
+            # High is good → long top (head of descending), short bottom (tail of descending)
             long_assets = top_assets
             short_assets = bottom_assets
         else:

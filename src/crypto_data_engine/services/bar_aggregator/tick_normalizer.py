@@ -42,8 +42,10 @@ COLUMN_ALIAS_MAP: Dict[str, str] = {
     "T": "timestamp",
     # Price variants
     "p": "price",
+    "px": "price",
     # Quantity variants
     "qty": "quantity",
+    "sz": "quantity",
     "q": "quantity",
     "size": "quantity",
     "amount": "quantity",
@@ -52,6 +54,8 @@ COLUMN_ALIAS_MAP: Dict[str, str] = {
     "is_buyer": "is_buyer_maker",
     "buyer_maker": "is_buyer_maker",
     "m": "is_buyer_maker",
+    # OKX specific variants
+    "created_time": "timestamp",
 }
 
 # Binance aggTrades CSV has no header; when converted to parquet the columns
@@ -117,6 +121,9 @@ def normalize_tick_data(
 
     if "is_buyer_maker" in result.columns:
         result["is_buyer_maker"] = result["is_buyer_maker"].astype(bool)
+    elif "side" in result.columns:
+        result["is_buyer_maker"] = result["side"].str.lower().eq("sell")
+        result = result.drop(columns=["side"], errors="ignore")
     else:
         result["is_buyer_maker"] = False
 

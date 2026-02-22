@@ -537,7 +537,44 @@ def _aggregate_dollar_bars_numba(
             bar_interval_count = 0
             bar_prev_price = p
 
-    # Don't flush leftover partial bar (incomplete threshold)
+    # Flush leftover partial bar if it has enough ticks (consistent with Pandas path)
+    if bar_tick_count >= 2:
+        vwap_val = bar_dollar_vol / bar_volume if bar_volume > 0.0 else bar_close
+        total_moves = bar_up_moves + bar_down_moves
+
+        start_times[bar_count] = bar_start_ts
+        end_times[bar_count] = bar_end_ts
+        opens[bar_count] = bar_open
+        highs[bar_count] = bar_high
+        lows[bar_count] = bar_low
+        closes[bar_count] = bar_close
+        volumes[bar_count] = bar_volume
+        buy_vols[bar_count] = bar_buy_vol
+        sell_vols[bar_count] = bar_sell_vol
+        vwaps[bar_count] = vwap_val
+        tick_counts[bar_count] = bar_tick_count
+        dollar_vols[bar_count] = bar_dollar_vol
+
+        if include_advanced:
+            pmean = bar_price_sum / bar_tick_count if bar_tick_count > 0 else 0.0
+            pvar = bar_price_sq_sum / bar_tick_count - pmean * pmean if bar_tick_count > 0 else 0.0
+            price_stds_out[bar_count] = np.sqrt(pvar) if pvar > 0.0 else 0.0
+            vmean = bar_vol_sum / bar_tick_count if bar_tick_count > 0 else 0.0
+            vvar = bar_vol_sq_sum / bar_tick_count - vmean * vmean if bar_tick_count > 0 else 0.0
+            volume_stds_out[bar_count] = np.sqrt(vvar) if vvar > 0.0 else 0.0
+            up_ratios_out[bar_count] = bar_up_moves / total_moves if total_moves > 0 else 0.5
+            down_ratios_out[bar_count] = bar_down_moves / total_moves if total_moves > 0 else 0.5
+            reversals_out[bar_count] = bar_reversals
+            imbalances_out[bar_count] = (bar_buy_vol - bar_sell_vol) / bar_volume if bar_volume > 0.0 else 0.0
+            max_vols_out[bar_count] = bar_max_vol
+            max_ratios_out[bar_count] = bar_max_vol / bar_volume if bar_volume > 0.0 else 0.0
+            interval_means_out[bar_count] = bar_interval_sum / bar_interval_count if bar_interval_count > 0 else 0.0
+            net_move = bar_close - bar_open
+            abs_net = net_move if net_move >= 0 else -net_move
+            path_eff_out[bar_count] = abs_net / bar_path_length if bar_path_length > 0.0 else 0.0
+            impact_den_out[bar_count] = abs_net / bar_dollar_vol if bar_dollar_vol > 0.0 else 0.0
+
+        bar_count += 1
 
     return (
         start_times[:bar_count], end_times[:bar_count],
@@ -1128,21 +1165,23 @@ class StreamingAggregator:
         bars_df = builder.build_bars(data)
         
         if len(bars_df) > 0:
-            # Keep last partial bar in buffer
-            last_bar_end = bars_df["end_time"].iloc[-1]
-            
-            # Find remaining data after last complete bar
-            if "timestamp" in data.columns:
-                remaining = data[data["timestamp"] > last_bar_end.timestamp() * 1000]
-            else:
-                remaining = pd.DataFrame()
-            
-            # Update buffer
-            self._buffer = [remaining] if len(remaining) > 0 else []
-            
             # Store bars (except potentially incomplete last one)
             complete_bars = bars_df.iloc[:-1].to_dict("records")
             self._bars.extend(complete_bars)
+            
+            # Find remaining data after last COMPLETE bar (not the discarded one)
+            if len(bars_df) > 1:
+                last_complete_end = bars_df["end_time"].iloc[-2]
+                if "timestamp" in data.columns:
+                    remaining = data[data["timestamp"] > last_complete_end.timestamp() * 1000]
+                else:
+                    remaining = pd.DataFrame()
+            else:
+                # Only one bar produced (which we discard as incomplete), keep all data
+                remaining = data
+            
+            # Update buffer
+            self._buffer = [remaining] if len(remaining) > 0 else []
             
             return complete_bars
         

@@ -3,7 +3,17 @@
     "allow": [
       "Bash(dir:*)",
       "Bash(python3:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(poetry run python:*)",
+      "Bash(find:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(del \"D:\\\\github\\\\crypto-data-engine\\\\scripts\\\\_temp_monthly_dd.py\")",
+      "WebSearch",
+      "WebFetch(domain:developers.binance.com)",
+      "Bash(poetry run main data --help:*)",
+      "Bash(1:*)",
+      "Bash(poetry run main:*)",
+      "Bash(ls:*)"
     ]
   }
 }

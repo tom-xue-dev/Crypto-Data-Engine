@@ -1,5 +1,5 @@
 """
-Data CLI commands: download, list, info, convert.
+Data CLI commands: download, list, info, convert, funding-rate.
 """
 import concurrent.futures
 from pathlib import Path
@@ -14,10 +14,15 @@ data_app = typer.Typer(help="Tick data management (download / list / inspect / c
 
 @data_app.command(help="Download tick data from exchange")
 def download(
-    exchange: str = typer.Option("binance_futures", help="Exchange name (binance, binance_futures, okx)"),
+    exchange: str = typer.Option("binance_futures", help="Exchange name (binance, binance_futures, okx_futures)"),
     symbols: Optional[List[str]] = typer.Option(None, help="Symbols to download (default: all)"),
-    start_date: str = typer.Option(..., help="Start date in YYYY-MM format"),
-    end_date: str = typer.Option(..., help="End date in YYYY-MM format"),
+    start_date: str = typer.Option("auto", help="Start date in YYYY-MM format, or 'auto' for earliest pair data"),
+    end_date: str = typer.Option("auto", help="End date in YYYY-MM format, or 'auto' for current month"),
+    data_dir: Optional[str] = typer.Option(
+        None,
+        "--data-dir",
+        help="Override output directory (e.g. E:/data/okx_futures)",
+    ),
     threads: int = typer.Option(8, help="Number of concurrent download threads"),
 ):
     """
@@ -26,6 +31,7 @@ def download(
     Examples:
         data download --start-date 2025-01 --end-date 2025-06
         data download --exchange binance --symbols BTCUSDT ETHUSDT --start-date 2025-01 --end-date 2025-03
+        data download --exchange okx_futures --start-date auto --end-date auto
     """
     from crypto_data_engine.services.tick_data_scraper.tick_worker import run_download
 
@@ -34,6 +40,8 @@ def download(
         typer.echo(f"[*] Symbols: {', '.join(symbols)}")
     else:
         typer.echo("[*] Symbols: all available")
+    if data_dir:
+        typer.echo(f"[*] Output dir: {data_dir}")
     typer.echo(f"[*] Threads: {threads}")
 
     try:
@@ -42,6 +50,7 @@ def download(
             symbols=symbols,
             start_date=start_date,
             end_date=end_date,
+            data_dir=data_dir,
             max_threads=threads,
         )
         typer.echo("[+] Download completed")
@@ -193,3 +202,76 @@ def info(
             typer.echo(f"  Total estimated rows: ~{len(sample_df) * len(files):,}")
         except Exception as error:
             typer.echo(f"  [!] Error reading file: {error}")
+
+
+@data_app.command(name="funding-rate", help="Download Binance Futures funding rate history")
+def funding_rate(
+    symbols: Optional[List[str]] = typer.Option(
+        None, help="Symbols to download (default: all perpetual USDT)"
+    ),
+    start_date: str = typer.Option(..., help="Start date in YYYY-MM format"),
+    end_date: str = typer.Option(..., help="End date in YYYY-MM format"),
+    threads: int = typer.Option(4, help="Number of concurrent download threads"),
+    output_dir: str = typer.Option(
+        "E:/data/funding_rate",
+        help="Output directory for funding rate parquet files",
+    ),
+):
+    """
+    Download Binance Futures funding rate data via REST API.
+
+    Data is paginated from /fapi/v1/fundingRate and stored as monthly Parquet
+    files. Supports incremental downloads (skips existing months).
+
+    Examples:
+        data funding-rate --start-date 2020-01 --end-date 2025-12
+        data funding-rate --symbols BTCUSDT ETHUSDT --start-date 2024-01 --end-date 2024-12
+    """
+    from crypto_data_engine.services.funding_rate.downloader import (
+        FundingRateDownloader,
+    )
+
+    out_path = Path(output_dir)
+    downloader = FundingRateDownloader(output_dir=out_path)
+
+    if symbols:
+        sym_list = [s.upper() for s in symbols]
+    else:
+        typer.echo("[*] Fetching all perpetual USDT-M futures symbols...")
+        sym_list = downloader.get_symbols()
+
+    typer.echo(f"[*] Downloading funding rates for {len(sym_list)} symbols")
+    typer.echo(f"[*] Date range: {start_date} -> {end_date}")
+    typer.echo(f"[*] Output: {out_path}")
+    typer.echo(f"[*] Threads: {threads}")
+
+    total_new = 0
+    total_skipped = 0
+    errors = 0
+
+    def _download_one(sym: str):
+        try:
+            count = downloader.download_symbol_range(sym, start_date, end_date)
+            return sym, count, None
+        except Exception as e:
+            return sym, 0, str(e)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+        futures = {executor.submit(_download_one, s): s for s in sym_list}
+        with tqdm(total=len(sym_list), desc="[Funding Rate]") as pbar:
+            for future in concurrent.futures.as_completed(futures):
+                sym, count, err = future.result()
+                if err:
+                    errors += 1
+                    typer.echo(f"  [!] {sym}: {err}")
+                elif count > 0:
+                    total_new += count
+                else:
+                    total_skipped += 1
+                pbar.update(1)
+
+    typer.echo(
+        f"[+] Funding rate download complete: "
+        f"{total_new} new months, {total_skipped} symbols up-to-date, "
+        f"{errors} errors"
+    )

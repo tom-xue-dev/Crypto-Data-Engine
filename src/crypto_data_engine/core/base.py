@@ -265,22 +265,16 @@ class RollingFeatureCalculator(FeatureCalculator):
 def calculate_performance_metrics(
     nav_series: pd.Series,
     risk_free_rate: float = 0.0,
-    periods_per_year: int = 252
+    periods_per_year: int = 252,
 ) -> Dict[str, float]:
     """
     Calculate performance metrics from NAV series.
-    
-    Args:
-        nav_series: Series of Net Asset Values indexed by datetime
-        risk_free_rate: Annual risk-free rate
-        periods_per_year: Number of trading periods per year
-    
-    Returns:
-        Dictionary of performance metrics
+
+    Uses calendar-time aware annualization:
+    - Annual return based on elapsed time between first/last timestamps
+    - Sharpe/Sortino computed on daily returns (resampled) when possible
     """
-    returns = nav_series.pct_change().dropna()
-    
-    if len(returns) < 2:
+    if nav_series is None or len(nav_series) < 2:
         return {
             "total_return": 0.0,
             "annual_return": 0.0,
@@ -289,38 +283,48 @@ def calculate_performance_metrics(
             "max_drawdown": 0.0,
             "calmar_ratio": 0.0,
         }
-    
-    # Total return
-    total_return = (nav_series.iloc[-1] / nav_series.iloc[0]) - 1
-    
-    # Annualized return
-    num_years = len(returns) / periods_per_year
-    annual_return = (1 + total_return) ** (1 / num_years) - 1 if num_years > 0 else 0
-    
-    # Sharpe ratio
-    excess_returns = returns - risk_free_rate / periods_per_year
-    sharpe_ratio = (
-        np.sqrt(periods_per_year) * excess_returns.mean() / excess_returns.std()
-        if excess_returns.std() > 0 else 0
-    )
-    
-    # Sortino ratio (downside deviation)
-    downside_returns = returns[returns < 0]
-    downside_std = downside_returns.std() if len(downside_returns) > 0 else 0
-    sortino_ratio = (
-        np.sqrt(periods_per_year) * excess_returns.mean() / downside_std
-        if downside_std > 0 else 0
-    )
-    
-    # Max drawdown
-    cumulative = (1 + returns).cumprod()
-    running_max = cumulative.cummax()
-    drawdown = (cumulative - running_max) / running_max
-    max_drawdown = abs(drawdown.min())
-    
-    # Calmar ratio
-    calmar_ratio = annual_return / max_drawdown if max_drawdown > 0 else 0
-    
+
+    # Ensure datetime index and sorted
+    s = nav_series.copy()
+    try:
+        s.index = pd.to_datetime(s.index)
+    except Exception:
+        pass
+    s = s.sort_index()
+
+    # Total and annualized return by elapsed time
+    total_return = float(s.iloc[-1] / s.iloc[0] - 1.0)
+    elapsed_years = max((s.index[-1] - s.index[0]).total_seconds() / (365.25 * 24 * 3600), 0.0) 
+    annual_return = (1.0 + total_return) ** (1.0 / elapsed_years) - 1.0 if elapsed_years > 0 else 0.0
+
+    # Daily returns for risk ratios when timestamps are datetime-like
+    try:
+        daily_nav = s.resample("1D").last().dropna()
+        daily_rets = daily_nav.pct_change().dropna()
+    except Exception:
+        daily_rets = s.pct_change().dropna()
+
+    if len(daily_rets) < 2:
+        sharpe_ratio = 0.0
+        sortino_ratio = 0.0
+        max_drawdown = 0.0
+    else:
+        excess = daily_rets - risk_free_rate / periods_per_year
+        vol = excess.std(ddof=0)
+        sharpe_ratio = float(np.sqrt(periods_per_year) * excess.mean() / vol) if vol > 0 else 0.0
+
+        downside = excess[excess < 0]
+        downside_vol = downside.std(ddof=0) if len(downside) > 0 else 0.0
+        sortino_ratio = float(np.sqrt(periods_per_year) * excess.mean() / downside_vol) if downside_vol > 0 else 0.0
+
+        # Max drawdown on daily series
+        cumulative = (1.0 + daily_rets).cumprod()
+        running_max = cumulative.cummax()
+        drawdown = (cumulative - running_max) / running_max
+        max_drawdown = float(abs(drawdown.min())) if len(drawdown) else 0.0
+
+    calmar_ratio = float(annual_return / max_drawdown) if max_drawdown > 0 else 0.0
+
     return {
         "total_return": total_return,
         "annual_return": annual_return,

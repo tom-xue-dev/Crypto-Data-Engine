@@ -30,6 +30,7 @@ class BinanceFuturesAdapter(ExchangeAdapter):
             "symbol_info_url", BINANCE_FUTURES_EXCHANGE_INFO_URL
         )
         self.supports_checksum = config.get("supports_checksum", True)
+        self._list_time_cache: Dict[str, int] = {}
 
     def get_all_symbols(self, suffix_filter: Optional[str] = None) -> List[str]:
         """Retrieve all TRADING-status USDT-M perpetual futures symbols.
@@ -48,15 +49,17 @@ class BinanceFuturesAdapter(ExchangeAdapter):
             logger.error(f"Failed to fetch Binance Futures exchange info: {request_error}")
             raise
 
-        symbols = [
-            symbol_info["symbol"]
-            for symbol_info in data.get("symbols", [])
+        symbols = []
+        for symbol_info in data.get("symbols", []):
             if (
                 symbol_info.get("status") == "TRADING"
                 and symbol_info.get("contractType") == "PERPETUAL"
                 and symbol_info.get("quoteAsset") == "USDT"
-            )
-        ]
+            ):
+                sym = symbol_info["symbol"]
+                symbols.append(sym)
+                # Cache the onboard date (ms timestamp)
+                self._list_time_cache[sym] = symbol_info.get("onboardDate")
 
         if suffix_filter:
             symbols = [s for s in symbols if s.endswith(suffix_filter)]
@@ -64,6 +67,12 @@ class BinanceFuturesAdapter(ExchangeAdapter):
         symbols.sort()
         logger.info(f"Found {len(symbols)} USDT-M perpetual futures symbols")
         return symbols
+
+    def get_symbol_list_time(self, symbol: str) -> Optional[int]:
+        """Return the listing timestamp (ms)."""
+        if not self._list_time_cache:
+            self.get_all_symbols()
+        return self._list_time_cache.get(symbol)
 
     def get_top_symbols_by_volume(self, top_n: int = 100) -> List[str]:
         """Get top N symbols ranked by 24h quote volume.
