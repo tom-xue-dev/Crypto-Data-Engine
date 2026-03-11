@@ -1,277 +1,159 @@
 """
-Data CLI commands: download, list, info, convert, funding-rate.
+Data CLI commands: list symbols, inspect data, load preview.
 """
-import concurrent.futures
 from pathlib import Path
 from typing import List, Optional
 
-import pandas as pd
 import typer
-from tqdm import tqdm
 
-data_app = typer.Typer(help="Tick data management (download / list / inspect / convert)")
+data_app = typer.Typer(help="Data loading and inspection", no_args_is_help=True)
 
 
-@data_app.command(help="Download tick data from exchange")
-def download(
-    exchange: str = typer.Option("binance_futures", help="Exchange name (binance, binance_futures, okx_futures)"),
-    symbols: Optional[List[str]] = typer.Option(None, help="Symbols to download (default: all)"),
-    start_date: str = typer.Option("auto", help="Start date in YYYY-MM format, or 'auto' for earliest pair data"),
-    end_date: str = typer.Option("auto", help="End date in YYYY-MM format, or 'auto' for current month"),
-    data_dir: Optional[str] = typer.Option(
-        None,
-        "--data-dir",
-        help="Override output directory (e.g. E:/data/okx_futures)",
-    ),
-    threads: int = typer.Option(8, help="Number of concurrent download threads"),
+@data_app.command(name="list", help="List available symbols")
+def list_symbols(
+    bar_type: str = typer.Option("time", help="Bar type"),
+    interval: str = typer.Option("1h", help="Bar interval"),
+    source: str = typer.Option("bar", help="Data source: bar or tick"),
 ):
     """
-    Download tick data and convert to Parquet.
+    List all available symbols.
 
     Examples:
-        data download --start-date 2025-01 --end-date 2025-06
-        data download --exchange binance --symbols BTCUSDT ETHUSDT --start-date 2025-01 --end-date 2025-03
-        data download --exchange okx_futures --start-date auto --end-date auto
+        data list
+        data list --source tick
+        data list --interval 5m
     """
-    from crypto_data_engine.services.tick_data_scraper.tick_worker import run_download
+    from crypto_data_engine.services.data_manager import BarDataLoader, TickDataLoader
 
-    typer.echo(f"[*] Downloading {exchange} tick data ({start_date} -> {end_date})")
-    if symbols:
-        typer.echo(f"[*] Symbols: {', '.join(symbols)}")
+    if source == "tick":
+        loader = TickDataLoader()
+        symbols = loader.list_symbols()
     else:
-        typer.echo("[*] Symbols: all available")
-    if data_dir:
-        typer.echo(f"[*] Output dir: {data_dir}")
-    typer.echo(f"[*] Threads: {threads}")
+        loader = BarDataLoader()
+        symbols = loader.list_symbols(bar_type=bar_type, interval=interval)
 
-    try:
-        run_download(
-            exchange_name=exchange,
-            symbols=symbols,
-            start_date=start_date,
-            end_date=end_date,
-            data_dir=data_dir,
-            max_threads=threads,
-        )
-        typer.echo("[+] Download completed")
-    except Exception as error:
-        typer.echo(f"[!] Download failed: {error}")
+    if not symbols:
+        typer.echo("[!] No symbols found")
         raise typer.Exit(code=1)
 
-
-@data_app.command(name="list", help="List available tick data")
-def list_data(
-    data_dir: str = typer.Option("./data/tick_data", help="Tick data directory"),
-    symbol: Optional[str] = typer.Option(None, help="Filter by symbol"),
-):
-    """List available tick data files."""
-    data_path = Path(data_dir)
-    if not data_path.exists():
-        typer.echo(f"[!] Data directory not found: {data_dir}")
-        return
-
-    symbols = sorted([d.name for d in data_path.iterdir() if d.is_dir()])
-
-    if symbol:
-        symbols = [s for s in symbols if symbol.upper() in s]
-
-    typer.echo(f"[*] Found {len(symbols)} symbols in {data_dir}")
-
-    for symbol_name in symbols[:20]:
-        symbol_dir = data_path / symbol_name
-        files = list(symbol_dir.glob("*.parquet"))
-        typer.echo(f"  {symbol_name}: {len(files)} files")
-
-    if len(symbols) > 20:
-        typer.echo(f"  ... and {len(symbols) - 20} more symbols")
+    typer.echo(f"Available symbols ({len(symbols)}):\n")
+    # Print in columns
+    cols = 5
+    for i in range(0, len(symbols), cols):
+        row = symbols[i : i + cols]
+        typer.echo("  ".join(f"{s:<16}" for s in row))
 
 
-@data_app.command(help="Extract ZIP files and convert to Parquet")
-def convert(
-    data_dir: str = typer.Option("E:/data/binance_futures", help="Root directory containing symbol sub-folders with ZIP files"),
-    symbol: Optional[str] = typer.Option(None, help="Only convert a specific symbol (e.g. BTCUSDT)"),
-    workers: int = typer.Option(4, help="Number of parallel conversion processes"),
-    force: bool = typer.Option(False, help="Re-convert even if Parquet already exists"),
-):
-    """
-    Scan data directory for ZIP files, extract and convert to Parquet.
-
-    Useful when ZIP downloads completed but Parquet conversion was skipped or interrupted.
-
-    Examples:
-        data convert --data-dir E:/data/binance_futures
-        data convert --symbol BTCUSDT --force
-        data convert --workers 8
-    """
-    root_path = Path(data_dir)
-    if not root_path.exists():
-        typer.echo(f"[!] Data directory not found: {data_dir}")
-        raise typer.Exit(code=1)
-
-    # Collect symbol directories
-    if symbol:
-        symbol_dirs = [root_path / symbol.upper()]
-        if not symbol_dirs[0].exists():
-            typer.echo(f"[!] Symbol directory not found: {symbol_dirs[0]}")
-            raise typer.Exit(code=1)
-    else:
-        symbol_dirs = sorted([d for d in root_path.iterdir() if d.is_dir()])
-
-    # Scan for ZIP files that need conversion
-    pending_zips: List[Path] = []
-    skipped_count = 0
-
-    for symbol_dir in symbol_dirs:
-        for zip_file in sorted(symbol_dir.glob("*.zip")):
-            # Parquet should be at the same level as ZIP: {symbol_dir}/{stem}.parquet
-            expected_parquet = symbol_dir / f"{zip_file.stem}.parquet"
-
-            if expected_parquet.exists() and not force:
-                skipped_count += 1
-            else:
-                pending_zips.append(zip_file)
-
-    typer.echo(f"[*] Scanned {len(symbol_dirs)} symbol directories")
-    typer.echo(f"[*] Found {len(pending_zips)} ZIP files to convert, {skipped_count} already have Parquet (skipped)")
-
-    if not pending_zips:
-        typer.echo("[+] Nothing to convert")
-        return
-
-    # Reuse the module-level function from downloader (Windows-safe for ProcessPoolExecutor)
-    from crypto_data_engine.services.tick_data_scraper.downloader.downloader import (
-        _process_single_zip,
-    )
-
-    zip_path_strings = [str(zp) for zp in pending_zips]
-    successful = 0
-    failed = 0
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {
-            executor.submit(_process_single_zip, zip_str): zip_str
-            for zip_str in zip_path_strings
-        }
-        with tqdm(total=len(zip_path_strings), desc="[Extract & Convert]") as progress_bar:
-            for future in concurrent.futures.as_completed(futures):
-                zip_str = futures[future]
-                try:
-                    result = future.result()
-                    if result:
-                        successful += 1
-                    else:
-                        failed += 1
-                        typer.echo(f"  [!] Failed: {Path(zip_str).name}")
-                except Exception as error:
-                    failed += 1
-                    typer.echo(f"  [!] Error: {Path(zip_str).name}: {error}")
-                progress_bar.update(1)
-
-    typer.echo(f"[+] Convert completed: {successful} succeeded, {failed} failed")
-
-
-@data_app.command(help="Show data info for a symbol")
+@data_app.command(name="info", help="Show date range and shape for a symbol")
 def info(
-    symbol: str = typer.Argument(..., help="Symbol to inspect (e.g., BTCUSDT)"),
-    data_dir: str = typer.Option("./data/tick_data", help="Tick data directory"),
-):
-    """Show detailed info about tick data for a symbol."""
-    data_path = Path(data_dir) / symbol.upper()
-    if not data_path.exists():
-        typer.echo(f"[!] Symbol directory not found: {data_path}")
-        return
-
-    files = sorted(data_path.glob("*.parquet"))
-    typer.echo(f"\n[*] {symbol.upper()} tick data:")
-    typer.echo(f"  Directory: {data_path}")
-    typer.echo(f"  Files: {len(files)}")
-
-    if files:
-        dates = []
-        for file in files:
-            parts = file.stem.split("-")
-            if len(parts) >= 4:
-                dates.append(f"{parts[-2]}-{parts[-1]}")
-
-        if dates:
-            typer.echo(f"  Date range: {min(dates)} to {max(dates)}")
-
-        try:
-            sample_df = pd.read_parquet(files[0])
-            typer.echo(f"  Rows per file: ~{len(sample_df):,}")
-            typer.echo(f"  Total estimated rows: ~{len(sample_df) * len(files):,}")
-        except Exception as error:
-            typer.echo(f"  [!] Error reading file: {error}")
-
-
-@data_app.command(name="funding-rate", help="Download Binance Futures funding rate history")
-def funding_rate(
-    symbols: Optional[List[str]] = typer.Option(
-        None, help="Symbols to download (default: all perpetual USDT)"
-    ),
-    start_date: str = typer.Option(..., help="Start date in YYYY-MM format"),
-    end_date: str = typer.Option(..., help="End date in YYYY-MM format"),
-    threads: int = typer.Option(4, help="Number of concurrent download threads"),
-    output_dir: str = typer.Option(
-        "E:/data/funding_rate",
-        help="Output directory for funding rate parquet files",
-    ),
+    symbol: str = typer.Argument(..., help="Symbol name (e.g. BTCUSDT)"),
+    bar_type: str = typer.Option("time", help="Bar type"),
+    interval: str = typer.Option("1h", help="Bar interval"),
 ):
     """
-    Download Binance Futures funding rate data via REST API.
-
-    Data is paginated from /fapi/v1/fundingRate and stored as monthly Parquet
-    files. Supports incremental downloads (skips existing months).
+    Show data info for a symbol.
 
     Examples:
-        data funding-rate --start-date 2020-01 --end-date 2025-12
-        data funding-rate --symbols BTCUSDT ETHUSDT --start-date 2024-01 --end-date 2024-12
+        data info BTCUSDT
+        data info ETHUSDT --interval 5m
     """
-    from crypto_data_engine.services.funding_rate.downloader import (
-        FundingRateDownloader,
-    )
+    from crypto_data_engine.services.data_manager import BarDataLoader
 
-    out_path = Path(output_dir)
-    downloader = FundingRateDownloader(output_dir=out_path)
+    loader = BarDataLoader()
+    try:
+        first, last = loader.get_date_range(symbol, bar_type=bar_type, interval=interval)
+    except FileNotFoundError as exc:
+        typer.echo(f"[!] {exc}")
+        raise typer.Exit(code=1)
 
-    if symbols:
-        sym_list = [s.upper() for s in symbols]
+    typer.echo(f"Symbol:    {symbol}")
+    typer.echo(f"Bar type:  {bar_type}/{interval}")
+    typer.echo(f"Range:     {first} -> {last}")
+
+    # Load one month to show columns
+    data = loader.load([symbol], first, first, bar_type=bar_type, interval=interval)
+    if data and symbol in data:
+        df = data[symbol]
+        typer.echo(f"Rows:      {len(df)} (first month)")
+        typer.echo(f"Columns:   {len(df.columns)}")
+        typer.echo(f"\nColumn list:")
+        cols = list(df.columns)
+        per_row = 4
+        for i in range(0, len(cols), per_row):
+            row = cols[i : i + per_row]
+            typer.echo("  " + ", ".join(row))
+
+
+@data_app.command(name="head", help="Preview first N rows of bar data")
+def head(
+    symbol: Optional[str] = typer.Argument(None, help="Symbol name (omit for panel view)"),
+    start_date: str = typer.Option(..., "--start", help="Start date (YYYY-MM)"),
+    end_date: Optional[str] = typer.Option(None, "--end", help="End date (default: same as start)"),
+    rows: int = typer.Option(10, "-n", help="Number of rows to show"),
+    columns: Optional[List[str]] = typer.Option(
+        None, "-c", help="Columns to show (default: OHLCV)"
+    ),
+    bar_type: str = typer.Option("time", help="Bar type"),
+    interval: str = typer.Option("1h", help="Bar interval"),
+):
+    """
+    Preview bar data. Omit symbol to show panel (all symbols, MultiIndex).
+
+    Examples:
+        data head BTCUSDT --start 2024-06
+        data head BTCUSDT --start 2024-06 -n 20 -c close -c volume -c amihud
+        data head --start 2024-06 -n 20
+    """
+    from crypto_data_engine.services.data_manager import BarDataLoader
+
+    loader = BarDataLoader()
+    end = end_date or start_date
+    col_list = list(columns) if columns else ["open", "high", "low", "close", "volume"]
+
+    if symbol:
+        data = loader.load(
+            [symbol], start_date, end,
+            bar_type=bar_type, interval=interval, columns=col_list,
+        )
+        if not data or symbol not in data:
+            typer.echo(f"[!] No data for {symbol} in {start_date} -> {end}")
+            raise typer.Exit(code=1)
+        df = data[symbol]
+        typer.echo(f"{symbol} ({start_date} -> {end}): {len(df)} rows total\n")
+        typer.echo(df.head(rows).to_string())
     else:
-        typer.echo("[*] Fetching all perpetual USDT-M futures symbols...")
-        sym_list = downloader.get_symbols()
+        panel = loader.load_panel(
+            None, start_date, end,
+            bar_type=bar_type, interval=interval, columns=col_list,
+        )
+        if panel.empty:
+            typer.echo(f"[!] No data in {start_date} -> {end}")
+            raise typer.Exit(code=1)
+        n_symbols = panel.index.get_level_values("symbol").nunique()
+        typer.echo(f"Panel ({start_date} -> {end}): {len(panel)} rows, {n_symbols} symbols\n")
+        typer.echo(panel.head(rows).to_string())
 
-    typer.echo(f"[*] Downloading funding rates for {len(sym_list)} symbols")
-    typer.echo(f"[*] Date range: {start_date} -> {end_date}")
-    typer.echo(f"[*] Output: {out_path}")
-    typer.echo(f"[*] Threads: {threads}")
 
-    total_new = 0
-    total_skipped = 0
-    errors = 0
+@data_app.command(name="tick-head", help="Preview tick data")
+def tick_head(
+    symbol: str = typer.Argument(..., help="Symbol name"),
+    start_date: str = typer.Option(..., "--start", help="Start date (YYYY-MM)"),
+    rows: int = typer.Option(10, "-n", help="Number of rows"),
+):
+    """
+    Preview raw tick (aggTrades) data.
 
-    def _download_one(sym: str):
-        try:
-            count = downloader.download_symbol_range(sym, start_date, end_date)
-            return sym, count, None
-        except Exception as e:
-            return sym, 0, str(e)
+    Examples:
+        data tick-head BTCUSDT --start 2024-06
+    """
+    from crypto_data_engine.services.data_manager import TickDataLoader
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
-        futures = {executor.submit(_download_one, s): s for s in sym_list}
-        with tqdm(total=len(sym_list), desc="[Funding Rate]") as pbar:
-            for future in concurrent.futures.as_completed(futures):
-                sym, count, err = future.result()
-                if err:
-                    errors += 1
-                    typer.echo(f"  [!] {sym}: {err}")
-                elif count > 0:
-                    total_new += count
-                else:
-                    total_skipped += 1
-                pbar.update(1)
+    loader = TickDataLoader()
+    df = loader.load(symbol, start_date, start_date)
 
-    typer.echo(
-        f"[+] Funding rate download complete: "
-        f"{total_new} new months, {total_skipped} symbols up-to-date, "
-        f"{errors} errors"
-    )
+    if df.empty:
+        typer.echo(f"[!] No tick data for {symbol} in {start_date}")
+        raise typer.Exit(code=1)
+
+    typer.echo(f"{symbol} ticks ({start_date}): {len(df):,} rows total\n")
+    typer.echo(df.head(rows).to_string())

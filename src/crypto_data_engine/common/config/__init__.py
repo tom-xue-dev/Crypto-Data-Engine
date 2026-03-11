@@ -6,16 +6,6 @@ Provides centralized configuration management with support for:
 - YAML configuration files
 - Default values
 """
-from crypto_data_engine.common.config.config_settings import (
-    Settings,
-    settings,
-    create_all_templates,
-    BasicSettings,
-    ServerConfig,
-    TickDownloadConfig,
-)
-from crypto_data_engine.common.config.task_config import TaskConfig
-from crypto_data_engine.common.config.aggregation_config import AggregationConfig
 from crypto_data_engine.common.config.downloader_config import (
     BaseDownloadConfig,
     ExchangeConfig,
@@ -26,6 +16,13 @@ from crypto_data_engine.common.config.paths import (
     DATA_ROOT,
     CONFIG_ROOT,
 )
+from crypto_data_engine.common.config.factor_config import (
+    BUILTIN_FACTORS,
+    AnalysisConfig,
+    FactorConfig,
+    FactorType,
+    RollingMethod,
+)
 
 __all__ = [
     # Settings
@@ -33,11 +30,6 @@ __all__ = [
     "settings",
     "create_all_templates",
     # Config classes
-    "BasicSettings",
-    "ServerConfig",
-    "TickDownloadConfig",
-    "TaskConfig",
-    "AggregationConfig",
     "BaseDownloadConfig",
     "ExchangeConfig",
     "MultiExchangeDownloadConfig",
@@ -45,4 +37,10 @@ __all__ = [
     "PROJECT_ROOT",
     "DATA_ROOT",
     "CONFIG_ROOT",
+    # Factor config
+    "BUILTIN_FACTORS",
+    "AnalysisConfig",
+    "FactorConfig",
+    "FactorType",
+    "RollingMethod",
 ]
