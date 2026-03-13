@@ -28,7 +28,8 @@ dependencies = [
     "numba (>=0.61.2,<0.62.0)",
     "scipy (>=1.16.1,<2.0.0)",
     "matplotlib (>=3.9.0,<4.0.0)",
-    "alphalens-reloaded (>=0.4.6,<0.5.0)"
+    "alphalens-reloaded (>=0.4.6,<0.5.0)",
+    "pyyaml (>=6.0,<7.0)"
 ]
 
 packages = [{ include = "crypto_data_engine", from = "src" }]

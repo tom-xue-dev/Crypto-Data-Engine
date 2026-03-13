@@ -54,24 +54,19 @@ def run_download(
     if data_dir:
         config["data_dir"] = Path(data_dir)
     config["max_threads"] = max_threads
-    redis_url = settings.task_cfg.redis_url
     logger.info(f"Data root: {config['data_dir']}")
     logger.info(f"Threads: {max_threads}")
 
     try:
         context = DownloadContext(config, start_date, end_date, symbols)
-        downloader = FileDownloader(context, redis_url=redis_url)
+        downloader = FileDownloader(context)
         downloader.run_download_pipeline(
             task_id=task_id,
             task_manager=task_manager,
         )
         logger.info(f"File location: {config['data_dir']}")
         logger.info(f"{exchange_name.upper()} data download completed!")
-
-        # Return progress summary if available
-        job_id = task_id or f"dl_{exchange_name}_{int(__import__('time').time())}"
-        progress = downloader.get_pipeline_progress(job_id)
-        return progress or {"status": "completed"}
+        return {"status": "completed"}
     except Exception as error:
         logger.error(f"Download failed: {error}")
         raise

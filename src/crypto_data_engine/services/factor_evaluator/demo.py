@@ -15,39 +15,41 @@ from crypto_data_engine.services.factor_evaluator.analyzer import FactorAnalyzer
 from crypto_data_engine.services.factor_evaluator.backtester import BacktestConfig
 from crypto_data_engine.services.factor_evaluator.pipeline import FactorPipeline
 
-OUTPUT_DIR = Path("./data/factor_reports")
+OUTPUT_DIR = Path(r"D:\github\quant\Crypto-Data-Engine\data\factor_reports")
 
 
 def main():
     configs = [
         FactorConfig(
-            name="LM_T24_consensus_extreme_168",
+            name="amihud_168",
             factor_type=FactorType.CUSTOM,
-            func=lambda df: (df["buy_volume"] / df["volume"] - 0.5).rolling(168, min_periods=1).mean(),
+            func=lambda df: (
+                df["amihud"].rolling(168, min_periods=6).mean()
+            ),
         ),
     ]
 
     pipeline = FactorPipeline(
         analyzer=FactorAnalyzer(AnalysisConfig(
-            periods=(1,3,5),
+            periods=(1,),
             quantiles=5,
-            rebalance_freq=168,  # weekly rebalancing with 1h bars
+            rebalance_freq=168,
         )),
     )
 
     batch_results, summary = pipeline.run(
-        start_date="2020-01",
-        end_date="2025-06",
+        start_date="2025-06",
+        end_date="2026-01",
         factor_configs=configs,
         symbols=None,
-        warmup_periods=72,
+        warmup_periods=168,
         bar_type="time",
         interval="1h",
-        columns=["buy_volume", "volume"],
+        columns=["amihud"],
         workers=12,
         output_dir=OUTPUT_DIR,
         charts=True,
-        backtest=BacktestConfig(cost_bps=0),
+        backtest=BacktestConfig(cost_bps=10),
     )
 
     print(f"\nResults: {len(batch_results)} factors")

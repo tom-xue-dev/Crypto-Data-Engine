@@ -1,6 +1,6 @@
 """
 Enhanced file downloader with:
-- Redis-backed queue for download → convert pipeline
+- Thread-safe queue for download → convert pipeline
 - Retry logic with exponential backoff
 - Resume support (checks parquet existence, not ZIP)
 - Deletes ZIP after successful Parquet conversion
@@ -8,6 +8,7 @@ Enhanced file downloader with:
 """
 import hashlib
 import os
+import queue
 import shutil
 import threading
 import time
@@ -17,7 +18,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import redis
 import requests
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
@@ -26,10 +26,6 @@ from crypto_data_engine.common.logger.logger import get_logger
 from .exchange_factory import ExchangeFactory
 
 logger = get_logger(__name__)
-
-# Redis key prefixes for download pipeline
-CONVERT_QUEUE_KEY = "download:convert_queue"
-PROGRESS_KEY_PREFIX = "download:progress"
 
 
 class DownloadContext:
@@ -56,9 +52,9 @@ class DownloadContext:
 
 
 class FileDownloader:
-    """Enhanced downloader with Redis-backed pipeline, retry, and resume."""
+    """Enhanced downloader with thread-safe pipeline, retry, and resume."""
 
-    def __init__(self, context: DownloadContext, redis_url: Optional[str] = None):
+    def __init__(self, context: DownloadContext):
         self.context = context
         self.adapter = context.exchange_adapter
         self.max_retries: int = context.config.get("max_retries", 3)
@@ -66,36 +62,6 @@ class FileDownloader:
         self.exponential_backoff: bool = context.config.get("exponential_backoff", True)
         self.http_timeout: float = context.config.get("http_timeout", 60.0)
         self.convert_workers: int = context.config.get("convert_processes", 4)
-        self._redis_url = redis_url
-        self._redis: Optional[redis.Redis] = None
-
-    @property
-    def redis_client(self) -> redis.Redis:
-        """Lazy-connect to Redis using config settings.
-        
-        Raises:
-            redis.ConnectionError: If Redis is not running or unreachable.
-        """
-        if self._redis is None:
-            url = self._redis_url
-            if url is None:
-                from crypto_data_engine.common.config.config_settings import settings
-                url = settings.task_cfg.redis_url
-            try:
-                self._redis = redis.from_url(url, decode_responses=True)
-                self._redis.ping()
-                logger.info(f"Connected to Redis at {url}")
-            except redis.ConnectionError as error:
-                logger.error(f"Failed to connect to Redis at {url}: {error}")
-                raise ConnectionError(
-                    f"Redis is required for download pipeline but connection failed.\n"
-                    f"Redis URL: {url}\n"
-                    f"Error: {error}\n\n"
-                    f"Please start Redis:\n"
-                    f"  - Docker: docker run -d -p 6379:6379 redis:7.2\n"
-                    f"  - Or: docker-compose -f deploy/docker-compose.yml up redis -d"
-                ) from error
-        return self._redis
 
     # =========================================================================
     # Download logic
@@ -216,7 +182,7 @@ class FileDownloader:
             return False
 
     # =========================================================================
-    # Pipeline: Redis-backed download → convert
+    # Pipeline: thread-safe download → convert
     # =========================================================================
 
     def run_download_pipeline(
@@ -225,11 +191,11 @@ class FileDownloader:
         task_id: Optional[str] = None,
         task_manager=None,
     ):
-        """Run pipelined download → extract → convert with Redis queue.
+        """Run pipelined download → extract → convert with in-process queue.
 
-        - Downloads push completed ZIP paths to a Redis List.
-        - Conversion worker threads BRPOP from the list and process immediately.
-        - Progress is tracked in a Redis Hash for API queries.
+        - Downloads push completed ZIP paths to a thread-safe Queue.
+        - Conversion worker threads consume from the queue and process immediately.
+        - Progress is tracked in a thread-safe dict.
         - Supports resume: ZIPs without parquet are re-queued for conversion.
 
         Args:
@@ -268,24 +234,11 @@ class FileDownloader:
             return
 
         pipeline_start = time.time()
-        job_id = task_id or f"dl_{self.adapter.name}_{int(time.time())}"
-        convert_queue_key = f"{CONVERT_QUEUE_KEY}:{job_id}"
-        progress_key = f"{PROGRESS_KEY_PREFIX}:{job_id}"
 
-        redis_client = self.redis_client
-
-        # Clean up any leftover queue from a previous run with same job_id
-        redis_client.delete(convert_queue_key)
-
-        # Push resume ZIPs directly into convert queue
-        if resume_zips:
-            redis_client.lpush(convert_queue_key, *resume_zips)
-            logger.info(f"Resumed {len(resume_zips)} ZIPs from previous incomplete run")
-
-        # Initialize progress hash in Redis
-        redis_client.hset(progress_key, mapping={
-            "job_id": job_id,
-            "exchange": self.adapter.name,
+        # Thread-safe queue and progress tracking
+        convert_queue: queue.Queue = queue.Queue()
+        progress_lock = threading.Lock()
+        progress = {
             "total_download": total_download,
             "total_convert": total_convert,
             "downloaded": 0,
@@ -293,15 +246,18 @@ class FileDownloader:
             "download_skipped": 0,
             "converted": 0,
             "convert_failed": 0,
-            "status": "running",
-            "started_at": datetime.now().isoformat(),
-        })
-        redis_client.expire(progress_key, 86400)  # TTL 24h
+        }
+
+        # Push resume ZIPs directly into convert queue
+        for zip_path in resume_zips:
+            convert_queue.put(zip_path)
+        if resume_zips:
+            logger.info(f"Resumed {len(resume_zips)} ZIPs from previous incomplete run")
 
         # Sentinel flag: downloads done
         downloads_complete = threading.Event()
 
-        # Progress bars (CLI only, safe if stdout isn't a terminal)
+        # Progress bars
         download_bar = tqdm(
             total=total_download, desc=f"[{self.adapter.name} Download]", position=0
         ) if total_download > 0 else None
@@ -312,26 +268,28 @@ class FileDownloader:
         # ------- Consumer: Conversion workers -------
         def conversion_worker():
             while True:
-                result = redis_client.brpop(convert_queue_key, timeout=2)
-                if result is None:
-                    # Queue empty — check if downloads are done and queue drained
-                    if downloads_complete.is_set() and redis_client.llen(convert_queue_key) == 0:
+                try:
+                    zip_path = convert_queue.get(timeout=2)
+                except queue.Empty:
+                    if downloads_complete.is_set() and convert_queue.empty():
                         break
                     continue
-                _, zip_path = result
                 try:
                     convert_result = _process_single_zip(zip_path)
-                    if convert_result:
-                        redis_client.hincrby(progress_key, "converted", 1)
-                    else:
-                        redis_client.hincrby(progress_key, "convert_failed", 1)
+                    with progress_lock:
+                        if convert_result:
+                            progress["converted"] += 1
+                        else:
+                            progress["convert_failed"] += 1
                 except Exception as error:
                     logger.warning(f"Conversion failed for {zip_path}: {error}")
-                    redis_client.hincrby(progress_key, "convert_failed", 1)
+                    with progress_lock:
+                        progress["convert_failed"] += 1
                 finally:
                     convert_bar.update(1)
+                    convert_queue.task_done()
                     self._sync_task_manager_progress(
-                        task_manager, task_id, redis_client, progress_key, total_convert,
+                        task_manager, task_id, progress, progress_lock, total_convert,
                     )
 
         conversion_threads = []
@@ -340,19 +298,22 @@ class FileDownloader:
             thread.start()
             conversion_threads.append(thread)
 
-        # ------- Producer: Download and push to Redis queue -------
+        # ------- Producer: Download and push to queue -------
         def download_and_enqueue(symbol: str, year: int, month: int):
             try:
                 result_path = self.download_file(symbol, year, month)
                 if result_path:
-                    redis_client.hincrby(progress_key, "downloaded", 1)
-                    redis_client.lpush(convert_queue_key, result_path)
+                    with progress_lock:
+                        progress["downloaded"] += 1
+                    convert_queue.put(result_path)
                 else:
-                    redis_client.hincrby(progress_key, "download_skipped", 1)
+                    with progress_lock:
+                        progress["download_skipped"] += 1
                     convert_bar.update(1)  # No conversion needed
             except Exception as error:
                 logger.warning(f"Download failed for {symbol} {year}-{month}: {error}")
-                redis_client.hincrby(progress_key, "download_failed", 1)
+                with progress_lock:
+                    progress["download_failed"] += 1
                 convert_bar.update(1)
             finally:
                 if download_bar:
@@ -378,22 +339,16 @@ class FileDownloader:
             download_bar.close()
         convert_bar.close()
 
-        # Finalize progress
+        # Finalize
         elapsed = time.time() - pipeline_start
-        progress = redis_client.hgetall(progress_key)
-        redis_client.hset(progress_key, mapping={
-            "status": "completed",
-            "completed_at": datetime.now().isoformat(),
-            "elapsed_seconds": f"{elapsed:.1f}",
-        })
 
         logger.info(
             f"{self.adapter.name} pipeline finished: "
-            f"downloaded={progress.get('downloaded', 0)}, "
-            f"skipped={progress.get('download_skipped', 0)}, "
-            f"failed_dl={progress.get('download_failed', 0)}, "
-            f"converted={progress.get('converted', 0)}, "
-            f"failed_cv={progress.get('convert_failed', 0)}, "
+            f"downloaded={progress['downloaded']}, "
+            f"skipped={progress['download_skipped']}, "
+            f"failed_dl={progress['download_failed']}, "
+            f"converted={progress['converted']}, "
+            f"failed_cv={progress['convert_failed']}, "
             f"elapsed={elapsed:.1f}s"
         )
 
@@ -404,16 +359,13 @@ class FileDownloader:
                 task_id,
                 status=TaskStatus.COMPLETED,
                 progress=1.0,
-                message=f"Done: {progress.get('converted', 0)}/{total_convert} converted",
+                message=f"Done: {progress['converted']}/{total_convert} converted",
                 result={
-                    "downloaded": int(progress.get("downloaded", 0)),
-                    "converted": int(progress.get("converted", 0)),
+                    "downloaded": progress["downloaded"],
+                    "converted": progress["converted"],
                     "elapsed_seconds": round(elapsed, 1),
                 },
             )
-
-        # Cleanup Redis queue key (progress key kept for API queries)
-        redis_client.delete(convert_queue_key)
 
     # =========================================================================
     # Task scanning (replaces _generate_download_tasks)
@@ -480,11 +432,17 @@ class FileDownloader:
                 else:
                     # Remove corrupt/partial ZIP if present, then add to download list
                     if zip_path.exists():
-                        logger.warning(
-                            f"Corrupt/incomplete ZIP removed: {zip_path} "
-                            f"({zip_path.stat().st_size} bytes)"
-                        )
-                        zip_path.unlink(missing_ok=True)
+                        try:
+                            size = zip_path.stat().st_size
+                            zip_path.unlink()
+                            logger.warning(
+                                f"Corrupt/incomplete ZIP removed: {zip_path} "
+                                f"({size} bytes)"
+                            )
+                        except OSError as e:
+                            logger.warning(
+                                f"Cannot remove corrupt ZIP (file locked?): {zip_path}: {e}"
+                            )
                     download_tasks.append((symbol, current_date.year, current_date.month))
 
                 current_date += relativedelta(months=1)
@@ -511,16 +469,17 @@ class FileDownloader:
     def _sync_task_manager_progress(
         task_manager,
         task_id: Optional[str],
-        redis_client: redis.Redis,
-        progress_key: str,
+        progress: Dict,
+        progress_lock: threading.Lock,
         total_convert: int,
     ) -> None:
-        """Push current Redis progress to TaskManager (for API polling)."""
+        """Push current progress to TaskManager (for API polling)."""
         if not task_manager or not task_id:
             return
         try:
-            converted = int(redis_client.hget(progress_key, "converted") or 0)
-            failed = int(redis_client.hget(progress_key, "convert_failed") or 0)
+            with progress_lock:
+                converted = progress["converted"]
+                failed = progress["convert_failed"]
             done = converted + failed
             progress_ratio = done / total_convert if total_convert > 0 else 0.0
             task_manager.update_task(
@@ -530,15 +489,6 @@ class FileDownloader:
             )
         except Exception:
             pass  # Non-critical, don't block conversion
-
-    def get_pipeline_progress(self, job_id: str) -> Optional[Dict]:
-        """Query live pipeline progress from Redis.
-
-        Returns dict with all progress counters, or None if job not found.
-        """
-        progress_key = f"{PROGRESS_KEY_PREFIX}:{job_id}"
-        progress = self.redis_client.hgetall(progress_key)
-        return progress if progress else None
 
 
 # =============================================================================

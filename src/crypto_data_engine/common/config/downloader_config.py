@@ -39,6 +39,14 @@ class BaseDownloadConfig(BaseSettings):
         extra = "ignore"
 
 
+class DataTypeConfig(BaseModel):
+    """Configuration for a specific data type (aggTrades, bookTicker, etc.)."""
+    base_url: Optional[str] = None  # Override exchange base_url if set
+    file_name_format: str = "{symbol}-aggTrades-{year}-{month:02d}.zip"
+    checksum_url_format: Optional[str] = None
+    sub_dir: Optional[str] = None  # Subdirectory under data_dir for this data type
+
+
 class ExchangeConfig(BaseModel):
     """Single exchange configuration."""
     name: str
@@ -48,12 +56,23 @@ class ExchangeConfig(BaseModel):
     supports_checksum: bool = True
     file_name_format: str = "{symbol}-aggTrades-{year}-{month:02d}.zip"
     checksum_url_format: Optional[str] = None
+    data_types: Dict[str, DataTypeConfig] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def set_data_dir(cls, values):
         if values.data_dir is None:
             values.data_dir = DATA_ROOT / values.name
         return values
+
+    def get_data_type_config(self, data_type: str) -> DataTypeConfig:
+        """Get config for a specific data type, falling back to exchange defaults."""
+        if data_type in self.data_types:
+            return self.data_types[data_type]
+        # Fall back: construct from exchange-level defaults
+        return DataTypeConfig(
+            file_name_format=self.file_name_format,
+            checksum_url_format=self.checksum_url_format,
+        )
 
 
 class MultiExchangeDownloadConfig(BaseDownloadConfig):
@@ -75,6 +94,27 @@ class MultiExchangeDownloadConfig(BaseDownloadConfig):
             supports_checksum=True,
             file_name_format="{symbol}-aggTrades-{year}-{month:02d}.zip",
             checksum_url_format="https://data.binance.vision/data/futures/um/monthly/aggTrades/{symbol}/{symbol}-aggTrades-{year}-{month:02d}.zip.CHECKSUM",
+            data_types={
+                "aggTrades": DataTypeConfig(
+                    file_name_format="{symbol}-aggTrades-{year}-{month:02d}.zip",
+                    checksum_url_format="https://data.binance.vision/data/futures/um/monthly/aggTrades/{symbol}/{symbol}-aggTrades-{year}-{month:02d}.zip.CHECKSUM",
+                ),
+                "bookTicker": DataTypeConfig(
+                    base_url="https://data.binance.vision/data/futures/um/monthly/bookTicker",
+                    file_name_format="{symbol}-bookTicker-{year}-{month:02d}.zip",
+                    checksum_url_format="https://data.binance.vision/data/futures/um/monthly/bookTicker/{symbol}/{symbol}-bookTicker-{year}-{month:02d}.zip.CHECKSUM",
+                    sub_dir="bookTicker",
+                ),
+            },
+        ),
+        "binance_futures_bookticker": ExchangeConfig(
+            name="binance_futures_bookticker",
+            base_url="https://data.binance.vision/data/futures/um/monthly/bookTicker",
+            symbol_info_url="https://fapi.binance.com/fapi/v1/exchangeInfo",
+            data_dir=Path("E:/data/binance_futures/bookTicker"),
+            supports_checksum=True,
+            file_name_format="{symbol}-bookTicker-{year}-{month:02d}.zip",
+            checksum_url_format="https://data.binance.vision/data/futures/um/monthly/bookTicker/{symbol}/{symbol}-bookTicker-{year}-{month:02d}.zip.CHECKSUM",
         ),
         "okx_futures": ExchangeConfig(
             name="okx_futures",

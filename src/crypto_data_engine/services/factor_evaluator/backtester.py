@@ -71,7 +71,7 @@ def backtest_long_short(
         dates = dates.tz_localize(None)
 
     nav = 1.0
-    nav_records = []
+    nav_records = [(dates[0], nav)]  # include initial NAV=1.0
     return_records = []
     turnover_records = []
     prev_weights: Dict[str, float] = {}
@@ -144,7 +144,7 @@ def backtest_long_short(
     perf = calculate_performance_metrics(nav_series)
     perf["total_cost"] = float(returns_df["cost"].sum())
     perf["avg_turnover"] = float(turnover_series.mean())
-    perf["n_rebalances"] = len(nav_records)
+    perf["n_rebalances"] = len(return_records)
     perf["long_quantile"] = long_q
     perf["short_quantile"] = short_q
 

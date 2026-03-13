@@ -12,6 +12,7 @@ import sys
 
 import typer
 
+from crypto_data_engine.app.bar_cmd import bar_app
 from crypto_data_engine.app.data_cmd import data_app
 from crypto_data_engine.app.factor_cmd import factor_app
 
@@ -21,6 +22,7 @@ app = typer.Typer(
 )
 
 app.add_typer(data_app, name="data")
+app.add_typer(bar_app, name="bar")
 app.add_typer(factor_app, name="factor")
 
 

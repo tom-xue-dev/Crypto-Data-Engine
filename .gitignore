@@ -58,3 +58,5 @@ proxies.yml
 *.bak
 *.tmp
 /scripts
+/.cache
+/bin
